@@ -1,0 +1,1 @@
+"""Medusa Analyzer desktop application."""
