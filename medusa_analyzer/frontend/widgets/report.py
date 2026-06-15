@@ -40,9 +40,11 @@ class ReportWidget(QScrollArea):
         self.root.addWidget(title)
         self.root.addWidget(subtitle)
 
-        metadata = self.state.get("metadata")
+        metadata_list = self.state.get("metadata_list") or []
+        if not metadata_list and self.state.get("metadata") is not None:
+            metadata_list = [self.state["metadata"]]
         if self.config.get("include_metadata", True):
-            self.root.addWidget(self._metadata_section(metadata))
+            self.root.addWidget(self._metadata_section(metadata_list))
 
         if self.config.get("include_preprocessing_summary", True):
             self.root.addWidget(self._preprocessing_section())
@@ -52,18 +54,42 @@ class ReportWidget(QScrollArea):
 
         self.root.addStretch()
 
-    def _metadata_section(self, metadata: MetadataSummary | None) -> QFrame:
-        if metadata is None:
+    def _metadata_section(self, metadata_list: list[MetadataSummary]) -> QFrame:
+        if not metadata_list:
             return self._section("Metadata", [("Status", "No EDF loaded yet.")])
+
+        sampling_rates = {
+            metadata.sampling_rate
+            for metadata in metadata_list
+            if metadata.sampling_rate is not None
+        }
+        sampling_rate = (
+            f"{next(iter(sampling_rates)):g} Hz"
+            if len(sampling_rates) == 1
+            else "Mixed"
+        )
+        channels = list(
+            dict.fromkeys(
+                channel
+                for metadata in metadata_list
+                for channel in metadata.channels
+            )
+        )
         return self._section(
             "Metadata",
             [
-                ("File", metadata.file_name),
-                ("Path", metadata.file_path),
-                ("Channels", ", ".join(metadata.channels)),
-                ("Sampling rate", f"{metadata.sampling_rate:g} Hz" if metadata.sampling_rate is not None else "-"),
-                ("Duration", f"{metadata.duration_seconds:g} s" if metadata.duration_seconds is not None else "-"),
-                ("Samples", str(metadata.n_samples) if metadata.n_samples is not None else "-"),
+                ("Files", ", ".join(metadata.file_name for metadata in metadata_list)),
+                ("Paths", ", ".join(metadata.file_path for metadata in metadata_list)),
+                ("Channels", ", ".join(channels)),
+                ("Sampling rate", sampling_rate),
+                (
+                    "Total duration",
+                    f"{sum(metadata.duration_seconds or 0 for metadata in metadata_list):g} s",
+                ),
+                (
+                    "Total samples",
+                    str(sum(metadata.n_samples or 0 for metadata in metadata_list)),
+                ),
             ],
         )
 

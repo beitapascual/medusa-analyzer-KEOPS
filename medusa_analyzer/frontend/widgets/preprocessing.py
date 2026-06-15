@@ -1,25 +1,17 @@
 from __future__ import annotations
-
 from copy import deepcopy
 from typing import Any, Literal
-
 import numpy as np
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFrame,
-    QGridLayout, QHBoxLayout, QLabel, QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
+    QGridLayout, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QSpinBox,
+    QVBoxLayout, QWidget)
 from scipy import signal
-
 from medusa_analyzer.frontend.widgets.filter_preview_plot import FilterPreviewPlot, FilterResponse
 from medusa_analyzer.frontend.widgets.frequency_band_editor import FrequencyBandEditor
 
 
 FilterMode = Literal["bandpass", "bandstop"]
-
 
 def _normalize_choice(choice: Any) -> tuple[str, str]:
     if isinstance(choice, dict):
@@ -34,11 +26,9 @@ def _normalize_fir_order(value: int, require_odd: bool = False) -> int:
     return order
 
 
-def _build_filter_defaults(
-    config: dict[str, Any],
-    filter_options: dict[str, Any],
-    mode: FilterMode,
-) -> dict[str, Any]:
+def _build_filter_defaults(config: dict[str, Any],
+    filter_options: dict[str, Any], mode: FilterMode) -> dict[str, Any]:
+
     common_fir = filter_options.get("fir", {})
     specific_fir = config.get("fir", {})
     common_iir = filter_options.get("iir", {})
@@ -90,11 +80,8 @@ def _build_filter_defaults(
     }
 
 
-def _compute_filter_response(
-    config: dict[str, Any],
-    fs: float,
-    mode: FilterMode,
-) -> FilterResponse | None:
+def _compute_filter_response(config: dict[str, Any],
+    fs: float, mode: FilterMode) -> FilterResponse | None:
     if not config.get("enabled", True):
         return FilterResponse([0.0, fs / 2], [0.0, 0.0])
 
@@ -485,9 +472,18 @@ class PreprocessingWidget(QScrollArea):
     def _sync(self) -> None:
         self.values["car_checked"] = self.car_checkbox.isChecked()
         fs = 1000.0
-        metadata = self.state.get("metadata")
-        if metadata is not None and metadata.sampling_rate is not None:
-            fs = metadata.sampling_rate
+        metadata_list = self.state.get("metadata_list") or []
+        sampling_rates = [
+            metadata.sampling_rate
+            for metadata in metadata_list
+            if metadata.sampling_rate is not None
+        ]
+        if sampling_rates:
+            fs = min(sampling_rates)
+        else:
+            metadata = self.state.get("metadata")
+            if metadata is not None and metadata.sampling_rate is not None:
+                fs = metadata.sampling_rate
         notch_response = _compute_filter_response(
             self.values["notch"],
             fs,

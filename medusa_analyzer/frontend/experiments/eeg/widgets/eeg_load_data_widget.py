@@ -9,5 +9,5 @@ class EEGLoadDataWidget(LoadDataWidget):
             state=state,
             loader=load_edf_file,
             title="Load EEG data",
-            description="Select one EDF file to inspect its metadata before configuring the workflow.",
+            description="Select one or more EDF files to inspect their metadata before configuring the workflow.",
         )

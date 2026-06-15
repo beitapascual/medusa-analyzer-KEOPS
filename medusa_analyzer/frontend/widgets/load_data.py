@@ -21,6 +21,22 @@ from medusa_analyzer.frontend.widgets.loading_overlay import LoadingOverlay
 from medusa_analyzer.frontend.workers import TaskRunner, Worker
 
 
+def _load_files(
+    loader: Callable[..., dict],
+    paths: list[str],
+    progress_callback: Callable[[int], None] | None = None,
+) -> list[dict]:
+    results = []
+    file_count = len(paths)
+    for index, path in enumerate(paths):
+        def report_progress(value: int, file_index: int = index) -> None:
+            if progress_callback:
+                progress_callback(int((file_index * 100 + value) / file_count))
+
+        results.append(loader(path, progress_callback=report_progress))
+    return results
+
+
 class LoadDataWidget(QWidget):
     changed = Signal()
 
@@ -53,13 +69,13 @@ class LoadDataWidget(QWidget):
         panel.setProperty("role", "surface-panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(24, 22, 24, 22)
-        self.select_button = QPushButton("Select EDF file")
+        self.select_button = QPushButton("Select EDF files")
         self.select_button.setProperty("variant", "secondary")
-        self.select_button.clicked.connect(self._select_file)
+        self.select_button.clicked.connect(self._select_files)
         self.files = QListWidget()
         self.files.setMinimumHeight(125)
         self.files.setProperty("role", "file-list")
-        self.status_label = QLabel("Choose one recording to load its metadata.")
+        self.status_label = QLabel("Choose one or more recordings to load their metadata.")
         self.status_label.setObjectName("selectionStatus")
         self.status_label.setProperty("status", "idle")
         layout.addWidget(self.select_button)
@@ -76,28 +92,33 @@ class LoadDataWidget(QWidget):
         root.addStretch()
 
         self.overlay = LoadingOverlay(self)
-        metadata = self.state.get("metadata")
-        if metadata is not None:
-            self.files.addItem(metadata.file_name)
-            self._show_metadata(metadata)
+        metadata_list = self.state.get("metadata_list") or []
+        if not metadata_list and self.state.get("metadata") is not None:
+            metadata_list = [self.state["metadata"]]
+        if metadata_list:
+            self.files.addItems([metadata.file_name for metadata in metadata_list])
+            self._show_metadata(metadata_list)
 
-    def _select_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
+    def _select_files(self) -> None:
+        paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Select recording",
+            "Select recordings",
             "",
             self._dialog_filter(),
         )
-        if not path:
+        if not paths:
             return
+        self._clear_loaded_state()
         self.files.clear()
-        self.files.addItem(Path(path).name)
-        self.status_label.setText("Reading EDF metadata...")
+        self.files.addItems([Path(path).name for path in paths])
+        self.metadata_panel.hide()
+        self.status_label.setText(f"Reading {len(paths)} recording(s)...")
         self.status_label.setProperty("status", "idle")
         self._refresh_status_style()
+        self.changed.emit()
         self.select_button.setEnabled(False)
-        self.overlay.show_loading("Reading EDF file...")
-        worker = Worker(self.loader, path)
+        self.overlay.show_loading("Reading recordings...")
+        worker = Worker(_load_files, self.loader, paths)
         worker.signals.progress.connect(self.overlay.progress.setValue)
         worker.signals.result.connect(self._loaded)
         worker.signals.error.connect(self._failed)
@@ -109,15 +130,36 @@ class LoadDataWidget(QWidget):
         patterns = " ".join(f"*{extension}" for extension in extensions)
         return f"Supported files ({patterns});;All files (*.*)"
 
-    def _loaded(self, result: dict) -> None:
-        metadata = MetadataSummary.from_loader_result(result)
-        self.state["loaded_file_path"] = result.get("path")
-        self.state["loader_result"] = result
-        self.state["metadata"] = metadata
-        self.status_label.setText("EDF loaded successfully.")
+    def _clear_loaded_state(self) -> None:
+        self.state["loaded_file_paths"] = []
+        self.state["loader_results"] = []
+        self.state["metadata_list"] = []
+        self.state["loaded_file_path"] = None
+        self.state["loader_result"] = None
+        self.state["metadata"] = None
+
+    def _loaded(self, results: list[dict]) -> None:
+        metadata_list = [
+            MetadataSummary.from_loader_result(result)
+            for result in results
+        ]
+        self.state["loaded_file_paths"] = [
+            result.get("path")
+            for result in results
+        ]
+        self.state["loader_results"] = results
+        self.state["metadata_list"] = metadata_list
+
+        first_result = results[0]
+        first_metadata = metadata_list[0]
+        self.state["loaded_file_path"] = first_result.get("path")
+        self.state["loader_result"] = first_result
+        self.state["metadata"] = first_metadata
+
+        self.status_label.setText(f"{len(results)} recording(s) loaded successfully.")
         self.status_label.setProperty("status", "ready")
         self._refresh_status_style()
-        self._show_metadata(metadata)
+        self._show_metadata(metadata_list)
         self.changed.emit()
 
     def _failed(self, error: str) -> None:
@@ -133,24 +175,50 @@ class LoadDataWidget(QWidget):
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
-    def _show_metadata(self, metadata: MetadataSummary) -> None:
+    def _show_metadata(self, metadata_list: list[MetadataSummary]) -> None:
         while self.metadata_layout.count():
             item = self.metadata_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+        sampling_rates = {
+            metadata.sampling_rate
+            for metadata in metadata_list
+            if metadata.sampling_rate is not None
+        }
+        sampling_rate = (
+            f"{next(iter(sampling_rates)):g} Hz"
+            if len(sampling_rates) == 1
+            else "Mixed"
+        )
+        channel_counts = [len(metadata.channels) for metadata in metadata_list]
+        channel_count = (
+            str(channel_counts[0])
+            if len(set(channel_counts)) == 1
+            else f"{min(channel_counts)}-{max(channel_counts)} per file"
+        )
+        duration = sum(
+            metadata.duration_seconds or 0.0
+            for metadata in metadata_list
+        )
+        samples = sum(
+            metadata.n_samples or 0
+            for metadata in metadata_list
+        )
+        channels = list(
+            dict.fromkeys(
+                channel
+                for metadata in metadata_list
+                for channel in metadata.channels
+            )
+        )
         values = [
-            ("Number of files", "1"),
-            (
-                "Sampling rate",
-                f"{metadata.sampling_rate:g} Hz" if metadata.sampling_rate is not None else "-",
-            ),
-            ("Channels", str(len(metadata.channels))),
-            (
-                "Duration",
-                f"{metadata.duration_seconds:g} s" if metadata.duration_seconds is not None else "-",
-            ),
-            ("Samples", str(metadata.n_samples) if metadata.n_samples is not None else "-"),
-            ("Channel list", ", ".join(metadata.channels) or "-"),
+            ("Number of files", str(len(metadata_list))),
+            ("Sampling rate", sampling_rate),
+            ("Channels", channel_count),
+            ("Total duration", f"{duration:g} s"),
+            ("Total samples", str(samples)),
+            ("Channel list", ", ".join(channels) or "-"),
         ]
         for index, (label, value) in enumerate(values):
             name = QLabel(label)
@@ -163,4 +231,4 @@ class LoadDataWidget(QWidget):
         self.metadata_panel.show()
 
     def can_continue(self) -> bool:
-        return self.state.get("metadata") is not None
+        return bool(self.state.get("metadata_list") or self.state.get("metadata"))
