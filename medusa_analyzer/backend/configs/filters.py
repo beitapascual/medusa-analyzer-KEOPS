@@ -12,7 +12,9 @@ class FilterConfig:
     fir_order: int = 1001
     fir_window: str = "hamming"
     iir_order: int = 4
-    iir_design: str = "butterworth"
+    iir_design: str = "butter"
+    iir_rp_db: float = 1.0
+    iir_rs_db: float = 40.0
 
 
 @dataclass(slots=True)

@@ -81,6 +81,16 @@ class ProcessingSummaryPage(QScrollArea):
             if config.filter_type == "fir"
             else f"order {config.iir_order}, {config.iir_design}"
         )
+        if config.filter_type == "fir":
+            detail = f"order {config.fir_order}, {config.fir_window} window"
+        else:
+            parts = [f"order {config.iir_order}", config.iir_design]
+            if config.iir_design in {"cheby1", "ellip"}:
+                parts.append(f"rp={config.iir_rp_db:g} dB")
+            if config.iir_design in {"cheby2", "ellip"}:
+                parts.append(f"rs={config.iir_rs_db:g} dB")
+            detail = ", ".join(parts)
+
         return f"{config.low_cut:g}–{config.high_cut:g} Hz, {config.filter_type.upper()}, {detail}"
 
     @staticmethod

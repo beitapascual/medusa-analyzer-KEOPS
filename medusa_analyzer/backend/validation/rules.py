@@ -54,13 +54,16 @@ def valid_iir_order(data: dict, context: ValidationContext) -> list[ValidationEr
 def valid_window(data: dict, context: ValidationContext) -> list[ValidationError]:
     if data.get("filter_type") != "fir":
         return []
-    return [] if data.get("fir_window") in {"hamming", "hann", "blackman"} else _error("fir_window", "Unsupported FIR window.")
+    return [] if data.get("fir_window") in {"hamming", "barthann", "bartlett", "blackman", "blackmanharris", "bohman", "boxcar",
+                              "cosine", "exponential", "flattop", "hann", "lanczos", "nuttall", "parzen", "taylor",
+                              "triang"} \
+        else _error("fir_window", "Unsupported FIR window.")
 
 
 def valid_iir_design(data: dict, context: ValidationContext) -> list[ValidationError]:
     if data.get("filter_type") != "iir":
         return []
-    return [] if data.get("iir_design") in {"butterworth"} else _error("iir_design", "Unsupported IIR design.")
+    return [] if data.get("iir_design") in {"butter", "cheby1", "cheby2", "ellip", "bessel"} else _error("iir_design", "Unsupported IIR design.")
 
 
 def band_inside_bandpass_range(data: dict, context: ValidationContext) -> list[ValidationError]:
@@ -68,6 +71,24 @@ def band_inside_bandpass_range(data: dict, context: ValidationContext) -> list[V
         return _error("frequency_band", "Enabled band must stay inside the active bandpass range.")
     return []
 
+def valid_iir_rp(data: dict, context: ValidationContext) -> list[ValidationError]:
+    if data.get("filter_type") != "iir":
+        return []
+    if data.get("iir_design") not in {"cheby1", "ellip"}:
+        return []
+    return [] if float(data.get("iir_rp_db", 0)) > 0 else _error(
+        "iir_rp_db", "Passband ripple must be greater than 0 dB."
+    )
+
+
+def valid_iir_rs(data: dict, context: ValidationContext) -> list[ValidationError]:
+    if data.get("filter_type") != "iir":
+        return []
+    if data.get("iir_design") not in {"cheby2", "ellip"}:
+        return []
+    return [] if float(data.get("iir_rs_db", 0)) > 0 else _error(
+        "iir_rs_db", "Stopband attenuation must be greater than 0 dB."
+    )
 
 RULES: dict[str, Rule] = {
     name: rule for name, rule in {
@@ -77,6 +98,8 @@ RULES: dict[str, Rule] = {
         "valid_filter_type": valid_filter_type, "valid_fir_order": valid_fir_order,
         "valid_iir_order": valid_iir_order, "valid_window": valid_window,
         "valid_iir_design": valid_iir_design,
+        "valid_iir_rp": valid_iir_rp,
+        "valid_iir_rs": valid_iir_rs,
         "band_inside_bandpass_range": band_inside_bandpass_range,
     }.items()
 }

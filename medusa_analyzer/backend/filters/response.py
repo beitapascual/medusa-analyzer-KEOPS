@@ -27,16 +27,22 @@ def compute_filter_response(config: FilterConfig, fs: float) -> FilterResponse:
         )
         frequencies, response = signal.freqz(coefficients, worN=1024, fs=fs)
     else:
-        coefficients = signal.butter(
+        iir_kwargs = {}
+        if config.iir_design in {"cheby1", "ellip"}:
+            iir_kwargs["rp"] = config.iir_rp_db
+        if config.iir_design in {"cheby2", "ellip"}:
+            iir_kwargs["rs"] = config.iir_rs_db
+
+        coefficients = signal.iirfilter(
             config.iir_order,
             [config.low_cut, config.high_cut],
             btype="bandstop" if is_notch else "bandpass",
             fs=fs,
+            ftype=config.iir_design,
             output="sos",
+            **iir_kwargs,
         )
-        frequencies, response = signal.sosfreqz(
-            coefficients, worN=1024, fs=fs
-        )
+        frequencies, response = signal.sosfreqz(coefficients, worN=1024, fs=fs)
 
     magnitude = 20 * np.log10(np.maximum(np.abs(response), 1e-8))
     return FilterResponse(frequencies.tolist(), magnitude.tolist())
