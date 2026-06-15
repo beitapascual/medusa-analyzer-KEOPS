@@ -1,12 +1,11 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget
 
-from medusa_analyzer.frontend.pages.dashboard_page import DashboardPage
-from medusa_analyzer.frontend.pages.eeg.eeg_workflow_page import EEGWorkflowPage
+from medusa_analyzer.frontend.dashboard import DashboardPage, build_dashboard_catalog
+from medusa_analyzer.frontend.experiments import create_experiment_page, discover_experiments
 from medusa_analyzer.frontend.router import Router
 
 
@@ -16,15 +15,31 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Medusa Analyzer")
         self.resize(1200, 800)
         self.setMinimumSize(1020, 700)
+
         stack = QStackedWidget()
         self.setCentralWidget(stack)
         self.router = Router(stack)
-        self.dashboard = DashboardPage()
-        self.eeg = EEGWorkflowPage()
-        self.router.register("dashboard", self.dashboard)
-        self.router.register("eeg", self.eeg)
+
+        self.experiments = []
+        self.pages = {}
+        for definition in discover_experiments():
+            try:
+                page = create_experiment_page(definition)
+            except Exception as exc:
+                print(f"Skipping experiment '{definition.id}': {exc}")
+                continue
+            self.experiments.append(definition)
+            self.pages[definition.route] = page
+
+        categories, items = build_dashboard_catalog(self.experiments)
+        self.dashboard = DashboardPage(categories, items)
         self.dashboard.route_requested.connect(self.router.navigate)
-        self.eeg.dashboard_requested.connect(lambda: self.router.navigate("dashboard"))
+
+        self.router.register("dashboard", self.dashboard)
+        for route, page in self.pages.items():
+            self.router.register(route, page)
+            page.dashboard_requested.connect(lambda: self.router.navigate("dashboard"))
+
         self.router.navigate("dashboard")
 
 

@@ -1,1 +1,0 @@
-"""EEG workflow pages."""

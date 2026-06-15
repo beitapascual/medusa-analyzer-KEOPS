@@ -1,0 +1,40 @@
+{
+  "id": "eeg",
+  "title": "EEG Processing",
+  "subtitle": "Brain signal analysis and processing.",
+  "description": "Workflow for loading EEG recordings, tuning pre-processing defaults, selecting features and reviewing the final configuration.",
+  "status": "Ready",
+  "accent": "burgundy",
+  "enabled": true,
+  "order": 10,
+  "category": {
+    "id": "biosignals",
+    "title": "Biosignals",
+    "description": "Signal processing workflows built from experiment folders.",
+    "order": 10
+  },
+  "route": "experiment:eeg",
+  "icon": "icon.png",
+  "workflow": [
+    {
+      "id": "load_data",
+      "title": "Load data",
+      "widget": "eeg_load_data_widget.EEGLoadDataWidget"
+    },
+    {
+      "id": "preprocessing",
+      "title": "Pre-processing",
+      "widget": "eeg_preprocessing_widget.EEGPreprocessingWidget"
+    },
+    {
+      "id": "features",
+      "title": "Features",
+      "widget": "eeg_features_widget.EEGFeaturesWidget"
+    },
+    {
+      "id": "report",
+      "title": "Final report",
+      "widget": "eeg_report_widget.EEGReportWidget"
+    }
+  ]
+}

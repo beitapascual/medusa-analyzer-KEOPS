@@ -1,3 +1,3 @@
-from .recording_loader import load_recordings
+from .edf_loader import load_edf_file
 
-__all__ = ["load_recordings"]
+__all__ = ["load_edf_file"]

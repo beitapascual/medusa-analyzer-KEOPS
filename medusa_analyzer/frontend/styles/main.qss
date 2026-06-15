@@ -381,6 +381,11 @@ QLabel#selectionStatus[status="error"] {
     background: #FAEAEC;
 }
 
+QLabel#selectionStatus[status="ready"] {
+    color: #0E6F77;
+    background: #EAF4F3;
+}
+
 QFrame#loadingOverlay {
     background: rgba(30, 25, 29, 135);
 }

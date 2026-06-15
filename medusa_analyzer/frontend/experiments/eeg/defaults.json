@@ -1,0 +1,248 @@
+{
+  "load_data": {
+    "allowed_extensions": [
+      ".edf"
+    ]
+  },
+  "preprocessing": {
+    "car": {
+      "enabled": true,
+      "checked_by_default": true
+    },
+    "notch": {
+      "enabled": true,
+      "checked_by_default": true,
+      "default_low_cut": 49.0,
+      "default_high_cut": 51.0,
+      "default_family": "FIR",
+      "families": [
+        "FIR",
+        "IIR"
+      ],
+      "fir": {
+        "default_window": "hamming",
+        "windows": [
+          "hamming",
+          "hann",
+          "blackman"
+        ],
+        "default_order": 101
+      },
+      "iir": {
+        "default_design": "butter",
+        "designs": [
+          {
+            "id": "butter",
+            "title": "Butterworth"
+          },
+          {
+            "id": "cheby1",
+            "title": "Chebyshev I"
+          },
+          {
+            "id": "cheby2",
+            "title": "Chebyshev II"
+          },
+          {
+            "id": "ellip",
+            "title": "Elliptic"
+          },
+          {
+            "id": "bessel",
+            "title": "Bessel"
+          }
+        ],
+        "default_order": 4,
+        "default_rp_db": 1.0,
+        "default_rs_db": 40.0
+      }
+    },
+    "bandpass": {
+      "enabled": true,
+      "checked_by_default": true,
+      "default_low_cut": 0.5,
+      "default_high_cut": 60.0,
+      "default_family": "FIR",
+      "families": [
+        "FIR",
+        "IIR"
+      ],
+      "fir": {
+        "default_window": "hamming",
+        "windows": [
+          "hamming",
+          "hann",
+          "blackman"
+        ],
+        "default_order": 101
+      },
+      "iir": {
+        "default_design": "butter",
+        "designs": [
+          {
+            "id": "butter",
+            "title": "Butterworth"
+          },
+          {
+            "id": "cheby1",
+            "title": "Chebyshev I"
+          },
+          {
+            "id": "cheby2",
+            "title": "Chebyshev II"
+          },
+          {
+            "id": "ellip",
+            "title": "Elliptic"
+          },
+          {
+            "id": "bessel",
+            "title": "Bessel"
+          }
+        ],
+        "default_order": 4,
+        "default_rp_db": 1.0,
+        "default_rs_db": 40.0
+      }
+    },
+    "filters": {
+      "families": [
+        "FIR",
+        "IIR"
+      ],
+      "fir": {
+        "default_window": "hamming",
+        "windows": [
+          "hamming",
+          "hann",
+          "blackman"
+        ],
+        "default_order": 101
+      },
+      "iir": {
+        "default_design": "butter",
+        "designs": [
+          {
+            "id": "butter",
+            "title": "Butterworth"
+          },
+          {
+            "id": "cheby1",
+            "title": "Chebyshev I"
+          },
+          {
+            "id": "cheby2",
+            "title": "Chebyshev II"
+          },
+          {
+            "id": "ellip",
+            "title": "Elliptic"
+          },
+          {
+            "id": "bessel",
+            "title": "Bessel"
+          }
+        ],
+        "default_order": 4,
+        "default_rp_db": 1.0,
+        "default_rs_db": 40.0
+      }
+    },
+    "bands": {
+      "available": [
+        {
+          "id": "delta",
+          "title": "Delta",
+          "low": 0.5,
+          "high": 4.0,
+          "checked_by_default": true
+        },
+        {
+          "id": "theta",
+          "title": "Theta",
+          "low": 4.0,
+          "high": 8.0,
+          "checked_by_default": true
+        },
+        {
+          "id": "alpha",
+          "title": "Alpha",
+          "low": 8.0,
+          "high": 13.0,
+          "checked_by_default": true
+        },
+        {
+          "id": "beta",
+          "title": "Beta",
+          "low": 13.0,
+          "high": 30.0,
+          "checked_by_default": true
+        },
+        {
+          "id": "gamma",
+          "title": "Gamma",
+          "low": 30.0,
+          "high": 45.0,
+          "checked_by_default": true
+        }
+      ]
+    }
+  },
+  "features": {
+    "categories": [
+      {
+        "id": "spectral",
+        "title": "Spectral features",
+        "features": [
+          {
+            "id": "band_power",
+            "title": "Band power",
+            "subtitle": "Power inside each configured frequency band.",
+            "checked_by_default": true
+          },
+          {
+            "id": "relative_band_power",
+            "title": "Relative band power",
+            "subtitle": "Band power normalized by total power.",
+            "checked_by_default": true
+          }
+        ]
+      },
+      {
+        "id": "temporal",
+        "title": "Temporal features",
+        "features": [
+          {
+            "id": "mean_amplitude",
+            "title": "Mean amplitude",
+            "subtitle": "Average signal amplitude in the selected window.",
+            "checked_by_default": true
+          },
+          {
+            "id": "variance",
+            "title": "Variance",
+            "subtitle": "Second-order spread of the signal samples.",
+            "checked_by_default": false
+          }
+        ]
+      },
+      {
+        "id": "nonlinear",
+        "title": "Non-linear features",
+        "features": [
+          {
+            "id": "sample_entropy",
+            "title": "Sample entropy",
+            "subtitle": "Signal complexity estimation.",
+            "checked_by_default": false
+          }
+        ]
+      }
+    ]
+  },
+  "report": {
+    "include_metadata": true,
+    "include_preprocessing_summary": true,
+    "include_selected_features": true
+  }
+}

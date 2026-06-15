@@ -27,9 +27,9 @@ class ExperimentCard(QWidget):
         )
         self.setAccessibleName(f"{title}. {subtitle.rstrip('.')}." + (f" {status}" if status else ""))
         self.setAccessibleDescription(
-            "Open the guided EEG analysis pipeline." if enabled else "This module is coming soon."
+            "Open this experiment workflow." if enabled else "This module is coming soon."
         )
-        self.setToolTip(f"Open {title} processing" if enabled else f"{title} is coming soon")
+        self.setToolTip(f"Open {title}" if enabled else f"{title} is coming soon")
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setFixedSize(304, 344)
 

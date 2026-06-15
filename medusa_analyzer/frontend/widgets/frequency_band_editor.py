@@ -1,15 +1,15 @@
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QCheckBox, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QVBoxLayout,
-)
+from __future__ import annotations
 
-from medusa_analyzer.backend.configs.bands import FrequencyBandConfig
+from collections.abc import MutableSequence
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 
 class FrequencyBandEditor(QFrame):
     changed = Signal()
 
-    def __init__(self, bands: list[FrequencyBandConfig]):
+    def __init__(self, bands: MutableSequence[dict]):
         super().__init__()
         self.setProperty("role", "band-editor")
         self.bands = bands
@@ -20,9 +20,10 @@ class FrequencyBandEditor(QFrame):
             row = QFrame()
             row.setProperty("role", "band-chip")
             row_layout = QHBoxLayout(row)
-            enabled = QCheckBox(band.name)
-            enabled.setChecked(band.enabled)
-            low, high = self._spin(band.low_cut), self._spin(band.high_cut)
+            enabled = QCheckBox(band.get("title", band.get("id", "Band")))
+            enabled.setChecked(bool(band.get("enabled", True)))
+            low = self._spin(float(band.get("low_cut", band.get("low", 0.0))))
+            high = self._spin(float(band.get("high_cut", band.get("high", 0.0))))
             row_layout.addWidget(enabled, 1)
             row_layout.addWidget(QLabel("From"))
             row_layout.addWidget(low)
@@ -45,7 +46,7 @@ class FrequencyBandEditor(QFrame):
 
     def _sync(self) -> None:
         for band, enabled, low, high in self.rows:
-            band.enabled = enabled.isChecked()
-            band.low_cut = low.value()
-            band.high_cut = high.value()
+            band["enabled"] = enabled.isChecked()
+            band["low_cut"] = low.value()
+            band["high_cut"] = high.value()
         self.changed.emit()

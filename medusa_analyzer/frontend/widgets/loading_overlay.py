@@ -31,6 +31,9 @@ class LoadingOverlay(QFrame):
         self.raise_()
         self.show()
 
+    def hide_loading(self) -> None:
+        self.hide()
+
     def resizeEvent(self, event):
         if self.parentWidget():
             self.setGeometry(self.parentWidget().rect())

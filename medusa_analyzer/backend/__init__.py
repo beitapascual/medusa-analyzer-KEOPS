@@ -1,1 +1,1 @@
-"""Qt-free application and scientific domain layer."""
+"""Minimal backend with non-visual reusable helpers."""
