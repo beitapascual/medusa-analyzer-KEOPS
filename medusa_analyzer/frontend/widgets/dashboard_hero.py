@@ -41,7 +41,7 @@ class DashboardHero(QFrame):
             chip.setObjectName("heroChip")
             chip.setProperty("tone", tone)
             self.chips.addWidget(chip)
-        self.chips.addStretch()
+            self.chips.addStretch()
         root.addLayout(self.chips)
 
     def paintEvent(self, event) -> None:
@@ -58,14 +58,6 @@ class DashboardHero(QFrame):
         painter.fillPath(path, gradient)
         painter.setPen(QPen(QColor("#E7D9DD"), 1))
         painter.drawPath(path)
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(138, 21, 56, 15))
-        painter.drawEllipse(self.width() - 216, -82, 270, 270)
-        painter.setBrush(QColor(14, 124, 134, 14))
-        painter.drawEllipse(self.width() - 116, 112, 142, 142)
-        painter.setBrush(QColor(117, 83, 160, 10))
-        painter.drawEllipse(self.width() - 328, 68, 94, 94)
 
     def resizeEvent(self, event) -> None:
         compact = self.width() < 620

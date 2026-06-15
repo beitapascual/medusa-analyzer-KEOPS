@@ -17,7 +17,7 @@ class FilterConfig:
 
 @dataclass(slots=True)
 class NotchFilterConfig(FilterConfig):
-    enabled: bool = False
+    enabled: bool = True
     low_cut: float = 49.0
     high_cut: float = 51.0
 

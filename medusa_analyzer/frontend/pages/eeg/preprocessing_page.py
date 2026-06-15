@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from medusa_analyzer.backend.configs.filters import FilterConfig
-from medusa_analyzer.backend.filters.response import compute_filter_response
+from medusa_analyzer.backend.filters import compute_filter_response
 from medusa_analyzer.backend.validation.engine import ValidationEngine
 from medusa_analyzer.backend.validation.models import ValidationContext, ValidationReport
 from medusa_analyzer.backend.workflows.eeg_state import EEGWorkflowState

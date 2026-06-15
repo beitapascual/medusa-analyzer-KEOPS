@@ -13,7 +13,7 @@ class ValidationContext:
 class ValidationError:
     field: str
     message: str
-    severity: str = "error"
+    severity: str = "error" # for warnings -- severity="warning"
 
 
 @dataclass(slots=True)
@@ -26,5 +26,6 @@ class ValidationReport:
         return not self.errors
 
     def extend(self, other: "ValidationReport") -> None:
+        # To combine reports
         self.errors.extend(other.errors)
         self.warnings.extend(other.warnings)

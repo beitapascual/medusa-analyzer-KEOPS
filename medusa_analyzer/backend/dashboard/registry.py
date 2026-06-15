@@ -5,8 +5,6 @@ def get_dashboard_categories() -> list[DashboardCategory]:
     return [
         DashboardCategory("processing", "Processing", "Prepare signals for robust analysis.", 10),
         DashboardCategory("visualization", "Visualization", "Explore signals and derived measures.", 20),
-        DashboardCategory("analysis", "Analysis", "Run reproducible biomedical analyses.", 30),
-        DashboardCategory("export", "Export", "Package results for downstream workflows.", 40),
     ]
 
 
@@ -21,5 +19,28 @@ def get_dashboard_items() -> list[DashboardItem]:
             route="eeg",
             status="Ready",
             accent="burgundy",
-        )
+        ),
+        DashboardItem(
+            id="ecg-processing",
+            category_id="processing",
+            title="ECG",
+            subtitle="Heart signal analysis and processing.",
+            icon_path="frontend/assets/icons/ecg_icon.png",
+            route="ecg",
+            status="Coming soon",
+            accent="burgundy",
+            enabled=False,
+        ),
+        DashboardItem(
+            id="time-plot",
+            category_id="visualization",
+            title="TIMEPLOT",
+            subtitle="Time plot of processed signals",
+            icon_path="frontend/assets/icons/timeplot_icon.png",
+            route="timeplot",
+            status="Coming soon",
+            accent="burgundy",
+            enabled=False,
+        ),
+
     ]

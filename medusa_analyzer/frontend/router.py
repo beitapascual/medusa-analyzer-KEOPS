@@ -2,6 +2,9 @@ from PySide6.QtWidgets import QStackedWidget, QWidget
 
 
 class Router:
+    # El ruter solo actúa a nivel global, por ejemplo, entre el dashboard y el experimento X.
+    # Luego, los pasos del experimento X se gestionan en su propio WorkFlowPage.
+
     def __init__(self, stack: QStackedWidget):
         self.stack = stack
         self.routes: dict[str, QWidget] = {}

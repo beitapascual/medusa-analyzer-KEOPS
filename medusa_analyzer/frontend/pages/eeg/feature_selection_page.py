@@ -1,7 +1,7 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from medusa_analyzer.backend.features.registry import get_feature_catalog
+from medusa_analyzer.backend.features.registry import get_features_for_experiment
 from medusa_analyzer.backend.workflows.eeg_state import EEGWorkflowState
 from medusa_analyzer.frontend.widgets.feature_selector import FeatureSelector
 
@@ -23,7 +23,9 @@ class FeatureSelectionPage(QWidget):
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addSpacing(16)
-        self.selector = FeatureSelector(get_feature_catalog(), state.feature_config)
+        self.selector = FeatureSelector(
+            get_features_for_experiment("eeg"), state.feature_config
+        )
         self.selector.changed.connect(self._validate)
         root.addWidget(self.selector, 1)
         self.status = QLabel()

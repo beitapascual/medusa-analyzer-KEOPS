@@ -1,48 +1,19 @@
 from pathlib import Path
 
-from PySide6.QtCore import (
-    Property,
-    QEasingCurve,
-    QEvent,
-    QPropertyAnimation,
-    QRectF,
-    Qt,
-    Signal,
-)
-from PySide6.QtGui import (
-    QColor,
-    QCursor,
-    QKeyEvent,
-    QMouseEvent,
-    QPainter,
-    QPainterPath,
-    QPixmap,
-)
-from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsDropShadowEffect,
-    QHBoxLayout,
-    QLabel,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtCore import (Property, QEasingCurve, QEvent, QPropertyAnimation,
+    QRectF, Qt, Signal)
+from PySide6.QtGui import (QColor, QCursor, QKeyEvent, QMouseEvent, QPainter,
+    QPainterPath, QPixmap)
+from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QHBoxLayout,
+    QLabel, QSizePolicy, QVBoxLayout, QWidget)
 
 class ExperimentCard(QWidget):
     """Vertical, keyboard-accessible module card used by the dashboard."""
 
     clicked = Signal()
 
-    def __init__(
-        self,
-        title: str,
-        subtitle: str,
-        icon_path: Path,
-        enabled: bool = True,
-        status: str = "",
-        accent: str = "burgundy",
-    ):
+    def __init__(self, title: str, subtitle: str, icon_path: Path, enabled: bool = True,
+        status: str = "", accent: str = "burgundy"):
         super().__init__()
         self._hover_progress = 0.0
         self._enabled = enabled
@@ -98,15 +69,12 @@ class ExperimentCard(QWidget):
             crop = pixmap.copy(
                 (pixmap.width() - crop_size) // 2,
                 (pixmap.height() - crop_size) // 2,
-                crop_size,
-                crop_size,
-            )
+                crop_size, crop_size)
             scaled = crop.scaled(
                 106,
                 106,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
+                Qt.TransformationMode.SmoothTransformation)
             clipped = QPixmap(106, 106)
             clipped.fill(Qt.GlobalColor.transparent)
             painter = QPainter(clipped)

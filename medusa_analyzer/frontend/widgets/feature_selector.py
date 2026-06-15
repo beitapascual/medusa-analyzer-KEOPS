@@ -3,7 +3,8 @@ from collections import defaultdict
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QLabel, QVBoxLayout
 
-from medusa_analyzer.backend.configs.features import FeatureDescriptor, FeatureSelectionConfig
+from medusa_analyzer.backend.configs.features import FeatureSelectionConfig
+from medusa_analyzer.backend.features.descriptors import FeatureDescriptor
 
 
 class FeatureSelector(QFrame):

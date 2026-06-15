@@ -1,23 +1,141 @@
-from medusa_analyzer.backend.configs.features import FeatureDescriptor
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureDescriptor:
+    id: str
+    name: str
+    category: str
+    description: str
+    compatible_experiments: tuple[str, ...]
+    enabled_by_default_for: tuple[str, ...] = ()
+    parameters: dict[str, Any] = field(default_factory=dict)
 
 
 FEATURES = [
-    FeatureDescriptor("mean", "Mean", "Temporal", "Average signal amplitude.", True),
-    FeatureDescriptor("median", "Median", "Temporal", "Robust central tendency."),
-    FeatureDescriptor("variance", "Variance", "Temporal", "Signal amplitude dispersion.", True),
-    FeatureDescriptor("skewness", "Skewness", "Temporal", "Distribution asymmetry."),
-    FeatureDescriptor("kurtosis", "Kurtosis", "Temporal", "Distribution tail weight."),
-    FeatureDescriptor("absolute_power", "Absolute power", "Spectral", "Power in each enabled band.", True),
-    FeatureDescriptor("relative_power", "Relative power", "Spectral", "Band power normalized by total power.", True),
-    FeatureDescriptor("median_frequency", "Median frequency", "Spectral", "Frequency dividing spectral power."),
-    FeatureDescriptor("spectral_entropy", "Spectral entropy", "Spectral", "Spectral complexity estimate."),
-    FeatureDescriptor("lempel_ziv_complexity", "Lempel-Ziv complexity", "Complexity", "Sequence complexity estimate."),
-    FeatureDescriptor("ctm", "Central tendency measure", "Complexity", "Variability in phase space."),
-    FeatureDescriptor("aec", "AEC", "Connectivity", "Amplitude envelope correlation."),
-    FeatureDescriptor("orthogonalized_aec", "Orthogonalized AEC", "Connectivity", "Leakage-reduced AEC."),
-    FeatureDescriptor("asc", "ASC", "Connectivity", "Amplitude squared correlation."),
-    FeatureDescriptor("orthogonalized_asc", "Orthogonalized ASC", "Connectivity", "Leakage-reduced ASC."),
-    FeatureDescriptor("pli", "PLI", "Connectivity", "Phase lag index."),
-    FeatureDescriptor("wpli", "wPLI", "Connectivity", "Weighted phase lag index."),
-    FeatureDescriptor("plv", "PLV", "Connectivity", "Phase locking value."),
+    FeatureDescriptor(
+        id="mean",
+        name="Mean",
+        category="Temporal",
+        description="Average signal amplitude.",
+        compatible_experiments=("eeg",),
+        enabled_by_default_for=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="median",
+        name="Median",
+        category="Temporal",
+        description="Robust central tendency.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="variance",
+        name="Variance",
+        category="Temporal",
+        description="Signal amplitude dispersion.",
+        compatible_experiments=("eeg",),
+        enabled_by_default_for=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="skewness",
+        name="Skewness",
+        category="Temporal",
+        description="Distribution asymmetry.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="kurtosis",
+        name="Kurtosis",
+        category="Temporal",
+        description="Distribution tail weight.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="power_spectral_density",
+        name="PSD",
+        category="Spectral",
+        description="Power spectral density.",
+        compatible_experiments=("eeg",),
+        enabled_by_default_for=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="absolute_power",
+        name="Absolute power",
+        category="Spectral",
+        description="Power in each enabled band.",
+        compatible_experiments=("eeg",),
+        enabled_by_default_for=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="relative_power",
+        name="Relative power",
+        category="Spectral",
+        description="Band power normalized by total power.",
+        compatible_experiments=("eeg",),
+        enabled_by_default_for=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="median_frequency",
+        name="Median frequency",
+        category="Spectral",
+        description="Frequency dividing spectral power.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="spectral_entropy",
+        name="Spectral entropy",
+        category="Spectral",
+        description="Spectral complexity estimate.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="lempel_ziv_complexity",
+        name="Lempel-Ziv complexity",
+        category="Non linear",
+        description="Sequence complexity estimate.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="ctm",
+        name="Central tendency measure",
+        category="Non linear",
+        description="Variability in phase space.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="aec",
+        name="AEC",
+        category="Connectivity",
+        description="Amplitude envelope correlation.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="orthogonalized_aec",
+        name="Orthogonalized AEC",
+        category="Connectivity",
+        description="Leakage-reduced AEC.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="pli",
+        name="PLI",
+        category="Connectivity",
+        description="Phase lag index.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="wpli",
+        name="wPLI",
+        category="Connectivity",
+        description="Weighted phase lag index.",
+        compatible_experiments=("eeg",),
+    ),
+    FeatureDescriptor(
+        id="plv",
+        name="PLV",
+        category="Connectivity",
+        description="Phase locking value.",
+        compatible_experiments=("eeg",),
+    ),
 ]

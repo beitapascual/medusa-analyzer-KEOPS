@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 
+# Defines a conceptual category
 @dataclass(frozen=True, slots=True)
 class DashboardCategory:
     id: str
@@ -8,7 +9,7 @@ class DashboardCategory:
     description: str
     order: int
 
-
+# Defines items inside one category
 @dataclass(frozen=True, slots=True)
 class DashboardItem:
     id: str
@@ -17,6 +18,6 @@ class DashboardItem:
     subtitle: str
     icon_path: str
     route: str
-    status: str = ""
+    status: str = "" # for example 'ready' or 'updating'
     accent: str = "burgundy"
-    enabled: bool = True
+    enabled: bool = True # if we can clisk or no
