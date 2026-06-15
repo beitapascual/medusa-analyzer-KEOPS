@@ -349,26 +349,6 @@ QFrame[role="plot"] {
     border-radius: 8px;
 }
 
-QFrame[role="validation-panel"] {
-    background: #EDF6F5;
-    border: 1px solid #B9DAD7;
-    border-radius: 10px;
-}
-
-QFrame[role="validation-panel"][status="error"] {
-    background: #FAEAEC;
-    border-color: #E6B9C0;
-}
-
-QLabel#validationTitle {
-    font-weight: 700;
-    color: #0E6F77;
-}
-
-QFrame[role="validation-panel"][status="error"] QLabel#validationTitle {
-    color: #A12B3D;
-}
-
 QLabel#selectionStatus {
     padding: 10px 13px;
     border-radius: 7px;

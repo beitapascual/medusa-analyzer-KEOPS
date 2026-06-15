@@ -20,9 +20,15 @@ class FilterPreviewPlot(QFrame):
         self.setProperty("role", "plot")
         self.setMinimumHeight(225)
         self.response: FilterResponse | None = None
+        self.empty_message = "Valid configuration required"
 
-    def set_response(self, response: FilterResponse | None) -> None:
+    def set_response(
+        self,
+        response: FilterResponse | None,
+        empty_message: str | None = None,
+    ) -> None:
         self.response = response
+        self.empty_message = empty_message or "Valid configuration required"
         self.update()
 
     @staticmethod
@@ -98,7 +104,11 @@ class FilterPreviewPlot(QFrame):
             "Frequency (Hz)",
         )
         if not self.response or len(self.response.frequencies) < 2:
-            painter.drawText(plot, Qt.AlignmentFlag.AlignCenter, "Valid configuration required")
+            painter.drawText(
+                plot.adjusted(24, 24, -24, -24),
+                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                self.empty_message,
+            )
             return
 
         path = QPainterPath()

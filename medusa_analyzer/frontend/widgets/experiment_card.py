@@ -12,7 +12,7 @@ class ExperimentCard(QWidget):
 
     clicked = Signal()
 
-    def __init__(self, title: str, subtitle: str, icon_path: Path, enabled: bool = True,
+    def __init__(self, title: str, subtitle: str, icon_path: Path | None, enabled: bool = True,
         status: str = "", accent: str = "burgundy"):
         super().__init__()
         self._hover_progress = 0.0
@@ -63,7 +63,7 @@ class ExperimentCard(QWidget):
         icon.setObjectName("moduleIcon")
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon.setFixedSize(126, 126)
-        if icon_path.exists():
+        if icon_path is not None and icon_path.is_file():
             pixmap = QPixmap(str(icon_path))
             crop_size = int(min(pixmap.width(), pixmap.height()) * 0.76)
             crop = pixmap.copy(

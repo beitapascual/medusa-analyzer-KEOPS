@@ -1,4 +1,5 @@
 import sys
+import logging
 from pathlib import Path
 
 from PySide6.QtGui import QFont
@@ -7,6 +8,8 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget
 from medusa_analyzer.frontend.dashboard import DashboardPage, build_dashboard_catalog
 from medusa_analyzer.frontend.experiments import create_experiment_page, discover_experiments
 from medusa_analyzer.frontend.router import Router
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -26,7 +29,7 @@ class MainWindow(QMainWindow):
             try:
                 page = create_experiment_page(definition)
             except Exception as exc:
-                print(f"Skipping experiment '{definition.id}': {exc}")
+                logger.exception("Skipping experiment '%s': %s", definition.id, exc)
                 continue
             self.experiments.append(definition)
             self.pages[definition.route] = page
@@ -49,6 +52,7 @@ def _load_stylesheet() -> str:
 
 
 def run() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("Medusa Analyzer")
     app.setOrganizationName("Medusa BCI")

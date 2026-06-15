@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 CHANNELS = ("Fp1", "Fp2", "C3", "C4")
-SAMPLE_RATE = 100
+SAMPLE_RATE = 1000
 RECORD_SECONDS = 1
 N_RECORDS = 10
 DIGITAL_MIN = -32768

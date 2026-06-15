@@ -18,22 +18,24 @@ from medusa_analyzer.frontend.widgets.module_grid import ModuleGrid
 class DashboardCategory:
     id: str
     title: str
-    description: str
-    order: int
+    subtitle: str | None = None
+    order: int = 0
 
 
 # Defines items inside one category
 @dataclass(frozen=True, slots=True)
 class DashboardItem:
     id: str
-    category_id: str
     title: str
     subtitle: str
-    icon_path: str
+    category_id: str
     route: str
+    icon_path: str | Path | None = None
+    description: str | None = None
+    order: int = 0
     status: str = ""  # for example 'ready' or 'updating'
     accent: str = "burgundy"
-    enabled: bool = True  # if we can clisk or no
+    enabled: bool = True
 
 
 def build_dashboard_catalog(
@@ -50,7 +52,7 @@ def build_dashboard_catalog(
             DashboardCategory(
                 id=category_id,
                 title=category_info.get("title", category_id.replace("_", " ").title()),
-                description=category_info.get("description") or category_info.get("subtitle") or "",
+                subtitle=category_info.get("subtitle") or category_info.get("description"),
                 order=int(category_info.get("order", 0)),
             ),
         )
@@ -60,8 +62,10 @@ def build_dashboard_catalog(
                 category_id=category_id,
                 title=experiment.info.get("title", experiment.id.upper()),
                 subtitle=experiment.info.get("subtitle", ""),
-                icon_path=str(experiment.icon_path),
                 route=experiment.route,
+                icon_path=experiment.icon_path,
+                description=experiment.info.get("description"),
+                order=int(experiment.info.get("order", 0)),
                 status=experiment.info.get("status", "Ready"),
                 accent=experiment.info.get("accent", "burgundy"),
                 enabled=bool(experiment.info.get("enabled", True)),
@@ -72,7 +76,14 @@ def build_dashboard_catalog(
         categories_by_id.values(),
         key=lambda category: (category.order, category.title),
     )
-    items.sort(key=lambda item: (item.category_id, item.title))
+    category_order = {category.id: category.order for category in categories}
+    items.sort(
+        key=lambda item: (
+            category_order.get(item.category_id, 0),
+            item.order,
+            item.title,
+        )
+    )
     return categories, items
 
 
@@ -136,9 +147,9 @@ class DashboardPage(QScrollArea):
         title.setWordWrap(True)
         section_layout.addWidget(title)
 
-        if category.description:
+        if category.subtitle:
             section_layout.addSpacing(8)
-            description = QLabel(category.description)
+            description = QLabel(category.subtitle)
             description.setObjectName("moduleSectionSubtitle")
             description.setAlignment(Qt.AlignmentFlag.AlignCenter)
             description.setWordWrap(True)
@@ -151,7 +162,7 @@ class DashboardPage(QScrollArea):
             card = ExperimentCard(
                 title=item.title,
                 subtitle=item.subtitle,
-                icon_path=Path(item.icon_path),
+                icon_path=Path(item.icon_path) if item.icon_path else None,
                 enabled=item.enabled,
                 status=item.status,
                 accent=item.accent,

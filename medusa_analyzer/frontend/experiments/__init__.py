@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import importlib
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,10 +12,13 @@ from PySide6.QtWidgets import QWidget
 
 from medusa_analyzer.frontend.widgets.workflow_shell import WorkflowShell
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class ExperimentDefinition:
     id: str
+    package_name: str
     root: Path
     info: dict[str, Any]
     defaults: dict[str, Any]
@@ -46,29 +50,53 @@ def discover_experiments() -> list[ExperimentDefinition]:
         info_path = directory / "info.json"
         defaults_path = directory / "defaults.json"
         if not info_path.exists():
-            print(f"Ignoring experiment folder without info.json: {directory.name}")
+            logger.warning("Ignoring experiment folder without info.json: %s", directory.name)
             continue
         if not defaults_path.exists():
-            print(f"Ignoring experiment folder without defaults.json: {directory.name}")
+            logger.warning("Ignoring experiment folder without defaults.json: %s", directory.name)
             continue
-        info = _read_json(info_path)
+        try:
+            info = _read_json(info_path)
+            defaults = _read_json(defaults_path)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Ignoring experiment folder %s: %s", directory.name, exc)
+            continue
+
         experiment_id = info.get("id", directory.name)
+        route = info.get("route")
+        workflow = info.get("workflow")
+        if not route or not isinstance(workflow, list) or not workflow:
+            logger.warning(
+                "Ignoring experiment folder %s: info.json requires route and workflow",
+                directory.name,
+            )
+            continue
+
         experiments.append(
             ExperimentDefinition(
                 id=experiment_id,
+                package_name=directory.name,
                 root=directory,
                 info=info,
-                defaults=_read_json(defaults_path),
+                defaults=defaults,
             )
         )
-    return experiments
+    return sorted(
+        experiments,
+        key=lambda experiment: (
+            int(experiment.info.get("order", 0)),
+            experiment.info.get("title", experiment.id),
+        ),
+    )
 
 
 def _resolve_widget_class(definition: ExperimentDefinition, widget_ref: str) -> type[QWidget]:
     module_name, class_name = widget_ref.rsplit(".", 1)
     if not module_name.startswith("widgets."):
         module_name = f"widgets.{module_name}"
-    qualified_module = f"medusa_analyzer.frontend.experiments.{definition.id}.{module_name}"
+    qualified_module = (
+        f"medusa_analyzer.frontend.experiments.{definition.package_name}.{module_name}"
+    )
     module = importlib.import_module(qualified_module)
     widget_class = getattr(module, class_name)
     if not issubclass(widget_class, QWidget):
