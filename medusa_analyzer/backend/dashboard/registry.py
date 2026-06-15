@@ -3,9 +3,17 @@ from .categories import DashboardCategory, DashboardItem
 
 def get_dashboard_categories() -> list[DashboardCategory]:
     return [
-        DashboardCategory("processing", "Processing", "Prepare signals for robust analysis.", 10),
-        DashboardCategory("visualization", "Visualization", "Explore signals and derived measures.", 20),
-    ]
+        DashboardCategory(
+            id= "processing",
+            title= "Processing",
+            description = "Prepare signals for robust analysis.",
+            order = 10),
+
+        DashboardCategory(
+            id = "visualization",
+            title= "Visualization",
+            description = "Explore signals and derived measures.",
+            order = 20)]
 
 
 def get_dashboard_items() -> list[DashboardItem]:
