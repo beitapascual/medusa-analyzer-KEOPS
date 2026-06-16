@@ -266,7 +266,7 @@ class FilterControls(QFrame):
         self.iir = iir
         self.mode = mode
         self.setProperty("role", "filter-controls")
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 16)
 
@@ -369,6 +369,7 @@ class FilterControls(QFrame):
         parameters_layout.addWidget(self.fir_widget)
         parameters_layout.addWidget(self.iir_widget)
         root.addWidget(self.parameters)
+        root.addStretch(1)
 
         self.controls = [self.low, self.high, self.kind, self.fir_order, self.window, self.iir_order, self.design]
         self.enabled.toggled.connect(self._sync)

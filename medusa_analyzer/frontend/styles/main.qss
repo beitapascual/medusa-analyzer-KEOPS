@@ -62,6 +62,11 @@ QLabel#metricValue {
     font-weight: 650;
 }
 
+QLabel[role="table-drag-handle"] {
+    color: #B8A7AF;
+    font-weight: 700;
+}
+
 QFrame[role="surface-panel"],
 QFrame[role="summary-section"],
 QFrame[role="filter-controls"],
@@ -69,6 +74,22 @@ QFrame[role="feature-group"] {
     background: #22181D;
     border: 1px solid #3A2931;
     border-radius: 12px;
+}
+
+QFrame[role="editable-table"],
+QFrame[role="table-header"] {
+    background: transparent;
+    border: none;
+}
+
+QFrame[role="table-header"] QLabel {
+    color: #B8A7AF;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+QLabel[role="error"] {
+    color: #FFB6C2;
 }
 
 /* Dashboard */
