@@ -5,9 +5,9 @@ from medusa_analyzer.frontend.widgets import LoadDataWidget
 class EEGLoadDataWidget(LoadDataWidget):
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__(
-            config=defaults.get("load_data", {}),
+            config=defaults.get("load_data", {}), # allowed extensions
             state=state,
             loader=load_edf_file,
             title="Load EEG data",
-            description="Select one or more EDF files to inspect their metadata before configuring the workflow.",
+            description="Select one or more EDF files.",
         )

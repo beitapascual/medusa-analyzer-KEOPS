@@ -304,6 +304,80 @@ QComboBox:focus {
     border: 2px solid #39B8C1;
 }
 
+QSpinBox,
+QDoubleSpinBox {
+    padding-right: 24px;
+}
+
+QSpinBox::up-button,
+QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    height: 17px;
+    border-left: 1px solid #4A3A41;
+    border-top-right-radius: 7px;
+    background: #181215;
+}
+
+QSpinBox::down-button,
+QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    height: 17px;
+    border-left: 1px solid #4A3A41;
+    border-top: 1px solid #2A1D23;
+    border-bottom-right-radius: 7px;
+    background: #181215;
+}
+
+QSpinBox::up-button:hover,
+QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover,
+QDoubleSpinBox::down-button:hover {
+    background: #22181D;
+}
+
+QSpinBox::up-button:pressed,
+QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed,
+QDoubleSpinBox::down-button:pressed {
+    background: #2A1D23;
+}
+
+QSpinBox::up-arrow,
+QDoubleSpinBox::up-arrow {
+    image: url(${STYLE_DIR}/icons/spin_up.xpm);
+    width: 10px;
+    height: 10px;
+}
+
+QSpinBox::down-arrow,
+QDoubleSpinBox::down-arrow {
+    image: url(${STYLE_DIR}/icons/spin_down.xpm);
+    width: 10px;
+    height: 10px;
+}
+
+QSpinBox::up-arrow:disabled,
+QDoubleSpinBox::up-arrow:disabled,
+QSpinBox::down-arrow:disabled,
+QDoubleSpinBox::down-arrow:disabled {
+    width: 10px;
+    height: 10px;
+}
+
+QSpinBox::up-arrow:disabled,
+QDoubleSpinBox::up-arrow:disabled {
+    image: url(${STYLE_DIR}/icons/spin_up.xpm);
+}
+
+QSpinBox::down-arrow:disabled,
+QDoubleSpinBox::down-arrow:disabled {
+    image: url(${STYLE_DIR}/icons/spin_down.xpm);
+}
+
 QComboBox::drop-down {
     border: none;
     width: 22px;
@@ -371,6 +445,12 @@ QFrame[role="plot"] {
     background: #120D10;
     border: 1px solid #3C3035;
     border-radius: 8px;
+    qproperty-plotBackgroundColor: #181215;
+    qproperty-gridColor: #3A2931;
+    qproperty-axisLineColor: #6E5A63;
+    qproperty-axisTextColor: #C9B8C0;
+    qproperty-responseLineColor: #E35A82;
+    qproperty-emptyMessageColor: #C9B8C0;
 }
 
 QLabel#selectionStatus {
@@ -413,6 +493,19 @@ QProgressBar {
 QProgressBar::chunk {
     background: #E35A82;
     border-radius: 4px;
+}
+
+QWidget[role="step-progress"] {
+    qproperty-lineColor: #DDD7D8;
+    qproperty-lockedStepColor: #C9C4C7;
+    qproperty-activeStepColor: #8A1538;
+    qproperty-completedStepColor: #8A1538;
+    qproperty-errorStepColor: #C85663;
+    qproperty-numberColor: #FFFFFF;
+    qproperty-lockedLabelColor: #FFFFFF;
+    qproperty-activeLabelColor: #E35A82;
+    qproperty-completedLabelColor: #FFFFFF;
+    qproperty-errorLabelColor: #FFFFFF;
 }
 
 QFrame[frameShape="4"],

@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
 
 def _load_stylesheet() -> str:
     path = Path(__file__).resolve().parent / "styles" / "main.qss"
-    return path.read_text(encoding="utf-8")
+    return path.read_text(encoding="utf-8").replace("${STYLE_DIR}", path.parent.as_posix())
 
 
 def run() -> int:

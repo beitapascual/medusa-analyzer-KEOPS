@@ -1,34 +1,23 @@
 from __future__ import annotations
-
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QFileDialog,
-    QFrame,
-    QGridLayout,
-    QLabel,
-    QListWidget,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtWidgets import (QFileDialog, QFrame, QGridLayout, QLabel, QListWidget,
+    QPushButton, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.models import MetadataSummary
 from medusa_analyzer.frontend.widgets.loading_overlay import LoadingOverlay
 from medusa_analyzer.frontend.workers import TaskRunner, Worker
 
+# Script to allow usert to select EDF files, load them in a background thread using workers,
+# extract metadata from files and show them on the screen.
 
-def _load_files(
-    loader: Callable[..., dict],
-    paths: list[str],
-    progress_callback: Callable[[int], None] | None = None,
-) -> list[dict]:
+def _load_files(loader: Callable[..., dict], paths: list[str],
+    progress_callback: Callable[[int], None] | None = None) -> list[dict]:
     results = []
     file_count = len(paths)
     for index, path in enumerate(paths):
+        # Function to convert the progress of one individual file in a global progress
         def report_progress(value: int, file_index: int = index) -> None:
             if progress_callback:
                 progress_callback(int((file_index * 100 + value) / file_count))
@@ -38,16 +27,16 @@ def _load_files(
 
 
 class LoadDataWidget(QWidget):
-    changed = Signal()
+    changed = Signal() # emit a signal when widget state changes, por example when a file is
+    # selected o when files are loaded correctly.
 
-    def __init__(
-        self,
-        config: dict[str, Any],
-        state: dict[str, Any],
-        loader: Callable[..., dict],
-        title: str,
-        description: str,
-    ):
+    def __init__(self,
+        config: dict[str, Any], # allowed extensions
+        state: dict[str, Any], # dic to store loaded data
+        loader: Callable[..., dict], # function that knows how to load a file
+        title: str, # title to show in the UI
+        description: str): # description to show in the UI
+
         super().__init__()
         self.config = config
         self.state = state
@@ -72,12 +61,12 @@ class LoadDataWidget(QWidget):
         self.select_button = QPushButton("Select EDF files")
         self.select_button.setProperty("variant", "secondary")
         self.select_button.clicked.connect(self._select_files)
-        self.files = QListWidget()
+        self.files = QListWidget() # List to show selected file names
         self.files.setMinimumHeight(125)
         self.files.setProperty("role", "file-list")
         self.status_label = QLabel("Choose one or more recordings to load their metadata.")
         self.status_label.setObjectName("selectionStatus")
-        self.status_label.setProperty("status", "idle")
+        self.status_label.setProperty("status", "idle") # ready or error
         layout.addWidget(self.select_button)
         layout.addWidget(self.files)
         layout.addWidget(self.status_label)
@@ -88,7 +77,7 @@ class LoadDataWidget(QWidget):
         self.metadata_layout = QGridLayout(self.metadata_panel)
         self.metadata_layout.setContentsMargins(24, 20, 24, 20)
         root.addWidget(self.metadata_panel)
-        self.metadata_panel.hide()
+        self.metadata_panel.hide() # only shown when metadada are laoded
         root.addStretch()
 
         self.overlay = LoadingOverlay(self)
@@ -100,12 +89,8 @@ class LoadDataWidget(QWidget):
             self._show_metadata(metadata_list)
 
     def _select_files(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Select recordings",
-            "",
-            self._dialog_filter(),
-        )
+        paths, _ = QFileDialog.getOpenFileNames(self, "Select recordings",
+            "", self._dialog_filter())
         if not paths:
             return
         self._clear_loaded_state()
@@ -131,6 +116,7 @@ class LoadDataWidget(QWidget):
         return f"Supported files ({patterns});;All files (*.*)"
 
     def _clear_loaded_state(self) -> None:
+        # delete files loaded previously
         self.state["loaded_file_paths"] = []
         self.state["loader_results"] = []
         self.state["metadata_list"] = []
@@ -139,6 +125,7 @@ class LoadDataWidget(QWidget):
         self.state["metadata"] = None
 
     def _loaded(self, results: list[dict]) -> None:
+        # Convierte cada resultado del loader en un metadata summary
         metadata_list = [
             MetadataSummary.from_loader_result(result)
             for result in results
