@@ -94,6 +94,23 @@ class LoadDataTests(unittest.TestCase):
         self.assertIsNone(state["loader_result"])
         self.assertIsNone(state["metadata"])
 
+    def test_widget_scrolls_when_loaded_content_exceeds_available_height(self):
+        state = {}
+        widget = LoadDataWidget(
+            config={"allowed_extensions": [".edf"]},
+            state=state,
+            loader=lambda path, progress_callback: _fake_result(path),
+            title="Load data",
+            description="Test",
+        )
+        widget._loaded([_fake_result("first.edf"), _fake_result("second.edf")])
+        widget.resize(700, 220)
+        widget.show()
+        self.app.processEvents()
+
+        self.assertTrue(widget.status_label.wordWrap())
+        self.assertGreater(widget.verticalScrollBar().maximum(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

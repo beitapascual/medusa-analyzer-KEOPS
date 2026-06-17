@@ -9,5 +9,4 @@ class EEGLoadDataWidget(LoadDataWidget):
             state=state,
             loader=load_edf_file,
             title="Load EEG data",
-            description="Select one or more EDF files.",
-        )
+            description="Select one or more EDF files.")
