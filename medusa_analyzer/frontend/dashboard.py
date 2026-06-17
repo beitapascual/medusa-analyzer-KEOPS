@@ -38,57 +38,42 @@ class DashboardItem:
     enabled: bool = True
 
 
-def build_dashboard_catalog(
-    experiments: list[ExperimentDefinition],
-) -> tuple[list[DashboardCategory], list[DashboardItem]]:
+def build_dashboard_catalog(experiments: list[ExperimentDefinition]) -> tuple[list[DashboardCategory], list[DashboardItem]]:
+    # Función que transforma una lista de experimentos en categorías y items clicables
     categories_by_id: dict[str, DashboardCategory] = {}
     items: list[DashboardItem] = []
 
     for experiment in experiments:
         category_info = experiment.info.get("category", {})
         category_id = category_info.get("id", "uncategorized")
-        categories_by_id.setdefault(
-            category_id,
-            DashboardCategory(
-                id=category_id,
+        # setdefault sirve para decir: "si esta categoría todavía no existe en el diccionario, créala. Si existe ya,
+        # déjala como está.
+        categories_by_id.setdefault(category_id, DashboardCategory(id=category_id,
                 title=category_info.get("title", category_id.replace("_", " ").title()),
-                subtitle=category_info.get("subtitle") or category_info.get("description"),
-                order=int(category_info.get("order", 0)),
-            ),
-        )
-        items.append(
-            DashboardItem(
-                id=experiment.info.get("id", experiment.id),
-                category_id=category_id,
-                title=experiment.info.get("title", experiment.id.upper()),
+                subtitle=category_info.get("description"), order=int(category_info.get("order", 0))))
+        items.append(DashboardItem(id=experiment.info.get("id", experiment.id),
+                category_id=category_id, title=experiment.info.get("title", experiment.id.upper()),
                 subtitle=experiment.info.get("subtitle", ""),
-                route=experiment.route,
-                icon_path=experiment.icon_path,
+                route=experiment.route, icon_path=experiment.icon_path,
                 description=experiment.info.get("description"),
                 order=int(experiment.info.get("order", 0)),
                 status=experiment.info.get("status", "Ready"),
                 accent=experiment.info.get("accent", "burgundy"),
-                enabled=bool(experiment.info.get("enabled", True)),
-            )
-        )
+                enabled=bool(experiment.info.get("enabled", True))))
 
-    categories = sorted(
-        categories_by_id.values(),
-        key=lambda category: (category.order, category.title),
-    )
+    # Ordemanos categorías e items
+    categories = sorted(categories_by_id.values(), key=lambda category: (category.order, category.title))
     category_order = {category.id: category.order for category in categories}
-    items.sort(
-        key=lambda item: (
-            category_order.get(item.category_id, 0),
-            item.order,
-            item.title,
-        )
-    )
+    items.sort(key=lambda item: (category_order.get(item.category_id, 0), item.order, item.title))
     return categories, items
 
 
 class DashboardPage(QScrollArea):
-    route_requested = Signal(str)
+    # Crea un ScrollArea, mete un hero arriba (DashboardHero), agrupa items por categoría.
+    # Después, para cada item crea un ExperimentCard y, si el item está habilitado, conecta el click a la ruta
+    # del experimento.
+
+    route_requested = Signal(str) # señal para cuando se clique en un item
 
     def __init__(self, categories: list[DashboardCategory], items: list[DashboardItem]):
         super().__init__()
@@ -106,10 +91,8 @@ class DashboardPage(QScrollArea):
         self.container = QWidget()
         self.container.setObjectName("dashboardContainer")
         self.container.setMaximumWidth(1120)
-        self.container.setSizePolicy(
-            self.container.sizePolicy().horizontalPolicy(),
-            self.container.sizePolicy().verticalPolicy(),
-        )
+        self.container.setSizePolicy(self.container.sizePolicy().horizontalPolicy(),
+            self.container.sizePolicy().verticalPolicy())
         layout = QVBoxLayout(self.container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(28)
@@ -129,11 +112,7 @@ class DashboardPage(QScrollArea):
         self.outer.addWidget(self.container)
         self.setWidget(self.content)
 
-    def _create_category_section(
-        self,
-        category: DashboardCategory,
-        items: list[DashboardItem],
-    ) -> QFrame:
+    def _create_category_section(self, category: DashboardCategory, items: list[DashboardItem]) -> QFrame:
         section = QFrame()
         section.setObjectName("moduleSection")
         section_layout = QVBoxLayout(section)
@@ -159,39 +138,24 @@ class DashboardPage(QScrollArea):
 
         grid = ModuleGrid()
         for item in items:
-            card = ExperimentCard(
-                title=item.title,
-                subtitle=item.subtitle,
+            card = ExperimentCard(title=item.title, subtitle=item.subtitle,
                 icon_path=Path(item.icon_path) if item.icon_path else None,
-                enabled=item.enabled,
-                status=item.status,
-                accent=item.accent,
-            )
+                enabled=item.enabled, status=item.status, accent=item.accent)
             if item.enabled:
+                # IMPORTANTE: cuando la clicamos emite señal con la rota específica
                 card.clicked.connect(lambda route=item.route: self.route_requested.emit(route))
             grid.add_card(card)
         section_layout.addWidget(grid)
         return section
 
     def resizeEvent(self, event) -> None:
+        # IMPORTANTE: esta función no se llama "a mano" pero si que se ejecuta.
         width = event.size().width()
         horizontal_margin = 16 if width < 540 else 28 if width < 860 else 48
         vertical_margin = 18 if width < 540 else 28 if width < 860 else 34
         section_margin = 14 if width < 540 else 24 if width < 860 else 34
-        self.outer.setContentsMargins(
-            horizontal_margin,
-            vertical_margin,
-            horizontal_margin,
-            vertical_margin + 14,
-        )
+        self.outer.setContentsMargins(horizontal_margin, vertical_margin, horizontal_margin, vertical_margin + 14)
         for section_layout in self.section_layouts:
-            section_layout.setContentsMargins(
-                section_margin,
-                24 if width < 540 else 29,
-                section_margin,
-                section_margin,
-            )
-        self.container.setFixedWidth(
-            max(0, min(1120, width - horizontal_margin * 2 - 2))
-        )
+            section_layout.setContentsMargins(section_margin, 24 if width < 540 else 29, section_margin, section_margin)
+        self.container.setFixedWidth(max(0, min(1120, width - horizontal_margin * 2 - 2)))
         super().resizeEvent(event)

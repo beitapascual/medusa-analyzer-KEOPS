@@ -7,12 +7,11 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
 from PySide6.QtWidgets import QWidget
 
 from medusa_analyzer.frontend.widgets.workflow_shell import WorkflowShell
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__) # objeto para escribir logs desde este archivo
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +40,9 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def discover_experiments() -> list[ExperimentDefinition]:
+    # Función que recorre frontend/experiments/, comprueba que existe info.json y defaults.json, lee ambos, valida que
+    # info.json tenga route y workflow, y construye un ExperimentDefinition.
+
     experiments: list[ExperimentDefinition] = []
     for directory in sorted(_experiments_root().iterdir()):
         if not directory.is_dir():
@@ -66,37 +68,32 @@ def discover_experiments() -> list[ExperimentDefinition]:
         route = info.get("route")
         workflow = info.get("workflow")
         if not route or not isinstance(workflow, list) or not workflow:
-            logger.warning(
-                "Ignoring experiment folder %s: info.json requires route and workflow",
-                directory.name,
-            )
+            logger.warning("Ignoring experiment folder %s: info.json requires route and workflow", directory.name)
             continue
 
-        experiments.append(
-            ExperimentDefinition(
+        # Vamos guardando la información de todos los experimentos detectados
+        experiments.append(ExperimentDefinition(
                 id=experiment_id,
-                package_name=directory.name,
+                package_name=directory.name, # devuelve lo que va detrás de la última /
                 root=directory,
                 info=info,
-                defaults=defaults,
-            )
-        )
-    return sorted(
-        experiments,
-        key=lambda experiment: (
-            int(experiment.info.get("order", 0)),
-            experiment.info.get("title", experiment.id),
-        ),
-    )
+                defaults=defaults))
+    # Devolvemos la lista de experimentos ordenada por dos posibles criterios. Primero ordenamos por el orden y, si dos
+    # experimentos tienen el mismo orden, ordena por el título.
+    return sorted(experiments, key=lambda experiment: (int(experiment.info.get("order", 0)),
+            experiment.info.get("title", experiment.id)))
 
 
 def _resolve_widget_class(definition: ExperimentDefinition, widget_ref: str) -> type[QWidget]:
+
     module_name, class_name = widget_ref.rsplit(".", 1)
+
+    # Construimos el nombre completo del path donde se encuentran los widgets dentro del experimento
     if not module_name.startswith("widgets."):
         module_name = f"widgets.{module_name}"
-    qualified_module = (
-        f"medusa_analyzer.frontend.experiments.{definition.package_name}.{module_name}"
-    )
+    qualified_module = (f"medusa_analyzer.frontend.experiments.{definition.package_name}.{module_name}")
+
+    # Convertimos el widget en una clase real
     module = importlib.import_module(qualified_module)
     widget_class = getattr(module, class_name)
     if not issubclass(widget_class, QWidget):
@@ -105,6 +102,13 @@ def _resolve_widget_class(definition: ExperimentDefinition, widget_ref: str) -> 
 
 
 def create_experiment_page(definition: ExperimentDefinition) -> WorkflowShell:
+    # Recibe una definición de un experimento y construye una página completa. Es decir, agrupa/define todos los widgets
+    # de un experimento.
+
+    # El state es una memoria compartida del experimento. Todos los widgets reciben este diccionario. Por ejemplo,
+    # si el primer widget carga un archivo, puede guardarlo en state. Luego el segundo widget puede leerlo. Así todos los
+    # pasos se comunican entre sí. Sin state cada pantalla estaría aislada y no podría saber que ha hecho la anterior.
+
     state: dict[str, Any] = {
         "experiment_id": definition.id,
         "experiment_title": definition.info.get("title", definition.id.upper()),
@@ -115,19 +119,20 @@ def create_experiment_page(definition: ExperimentDefinition) -> WorkflowShell:
         "metadata_list": [],
         "loaded_file_path": None,
         "loaded_file_paths": [],
-        "selected_features": [],
-    }
+        "selected_features": []}
+
+    # Leemos los pasos definidos en el info.json
     steps = []
     for step in definition.info.get("workflow", []):
+        # Definimos como clases oficiales de python los diferentes widgets de los steps
         widget_class = _resolve_widget_class(definition, step["widget"])
-        widget = widget_class(definition.info, definition.defaults, state)
+
+        widget = widget_class(definition.info, definition.defaults, state) # TODO: no entiendo porque tenemos que definir estas clases
         steps.append({"id": step["id"], "title": step["title"], "widget": widget})
-    return WorkflowShell(
-        title=definition.info.get("title", definition.id.upper()),
+
+    return WorkflowShell(title=definition.info.get("title", definition.id.upper()),
         subtitle=definition.info.get("description") or definition.info.get("subtitle", ""),
         steps=steps,
-        state=state,
-    )
-
+        state=state)
 
 __all__ = ["ExperimentDefinition", "create_experiment_page", "discover_experiments"]

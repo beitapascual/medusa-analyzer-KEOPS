@@ -27,18 +27,21 @@ class MainWindow(QMainWindow):
         self.pages = {}
         for definition in discover_experiments():
             try:
+                # Creamos los widgets de los steps del experimento, preparamos el state compartido de esos widgets,
+                # y los mostramos en una interfaz.
                 page = create_experiment_page(definition)
             except Exception as exc:
                 logger.exception("Skipping experiment '%s': %s", definition.id, exc)
                 continue
             self.experiments.append(definition)
-            self.pages[definition.route] = page
+            self.pages[definition.route] = page # Guardamos todas las páginas de experimentos
 
         categories, items = build_dashboard_catalog(self.experiments)
+        # Creamos el dashboard con las categorías y los items detectados
         self.dashboard = DashboardPage(categories, items)
         self.dashboard.route_requested.connect(self.router.navigate)
 
-        self.router.register("dashboard", self.dashboard)
+        self.router.register("dashboard", self.dashboard) # registramos la ruta del dashboard
         for route, page in self.pages.items():
             self.router.register(route, page)
             page.dashboard_requested.connect(lambda: self.router.navigate("dashboard"))

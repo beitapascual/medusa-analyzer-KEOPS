@@ -22,13 +22,9 @@ class ExperimentCard(QWidget):
         self.setProperty("enabled", enabled)
         self.setProperty("accent", accent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus if enabled else Qt.FocusPolicy.NoFocus)
-        self.setCursor(
-            QCursor(Qt.CursorShape.PointingHandCursor if enabled else Qt.CursorShape.ArrowCursor)
-        )
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor if enabled else Qt.CursorShape.ArrowCursor))
         self.setAccessibleName(f"{title}. {subtitle.rstrip('.')}." + (f" {status}" if status else ""))
-        self.setAccessibleDescription(
-            "Open this experiment workflow." if enabled else "This module is coming soon."
-        )
+        self.setAccessibleDescription("Open this experiment workflow." if enabled else "This module is coming soon.")
         self.setToolTip(f"Open {title}" if enabled else f"{title} is coming soon")
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setFixedSize(304, 344)
@@ -66,15 +62,8 @@ class ExperimentCard(QWidget):
         if icon_path is not None and icon_path.is_file():
             pixmap = QPixmap(str(icon_path))
             crop_size = int(min(pixmap.width(), pixmap.height()) * 0.76)
-            crop = pixmap.copy(
-                (pixmap.width() - crop_size) // 2,
-                (pixmap.height() - crop_size) // 2,
-                crop_size, crop_size)
-            scaled = crop.scaled(
-                106,
-                106,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation)
+            crop = pixmap.copy((pixmap.width() - crop_size) // 2, (pixmap.height() - crop_size) // 2, crop_size, crop_size)
+            scaled = crop.scaled(106, 106, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
             clipped = QPixmap(106, 106)
             clipped.fill(Qt.GlobalColor.transparent)
             painter = QPainter(clipped)

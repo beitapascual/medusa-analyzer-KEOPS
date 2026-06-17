@@ -70,7 +70,6 @@ class _RowDragHandle(QLabel):
         ).manhattanLength() < QApplication.startDragDistance():
             super().mouseMoveEvent(event)
             return
-
         self.row_frame.start_drag()
         self._drag_start_position = None
         super().mouseMoveEvent(event)

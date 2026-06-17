@@ -5,32 +5,16 @@ from copy import deepcopy
 from typing import Any
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QFrame,
-    QGridLayout,
-    QLabel,
-    QScrollArea,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
-from medusa_analyzer.frontend.widgets.filtering import (
-    FilterControls,
-    FilterPreviewPlot,
-    build_filter_defaults,
-    compute_filter_response,
-    filter_response_error,
-)
+from medusa_analyzer.frontend.widgets.filtering import (FilterControls, FilterPreviewPlot, build_filter_defaults,
+    compute_filter_response, filter_response_error)
 from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import (
-    EEGFrequencyBandsTable,
-)
-
+    EEGFrequencyBandsTable)
 
 class EEGPreprocessingWidget(QScrollArea):
     changed = Signal()
-    _MINIMUM_BAND_FREQUENCY = 0.1
+    _minimum_band_frequency = 0.1
 
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__()
@@ -89,23 +73,13 @@ class EEGPreprocessingWidget(QScrollArea):
             fir, iir,"bandstop")
         self.bandpass = FilterControls("Bandpass filter", self.values["bandpass"], families,
             fir, iir,"bandpass")
-        self.notch.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Expanding,
-        )
-        self.bandpass.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Expanding,
-        )
+        self.notch.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.bandpass.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
-        self.notch_plot_panel = self._build_filter_plot_panel(
-            "Notch filter response",
-            "notch_plot",
-        )
-        self.bandpass_plot_panel = self._build_filter_plot_panel(
-            "Bandpass filter response",
-            "bandpass_plot",
-        )
+        self.notch_plot_panel = self._build_filter_plot_panel("Notch filter response",
+            "notch_plot")
+        self.bandpass_plot_panel = self._build_filter_plot_panel("Bandpass filter response",
+            "bandpass_plot")
 
         filters_grid.addWidget(self.notch, 0, 0)
         filters_grid.addWidget(self.notch_plot_panel, 0, 1)
@@ -120,10 +94,8 @@ class EEGPreprocessingWidget(QScrollArea):
         bands_title = QLabel("Frequency bands")
         bands_title.setObjectName("panelTitle")
         bands_layout.addWidget(bands_title)
-        self.bands = EEGFrequencyBandsTable(
-            self.values["frequency_bands"],
-            default_rows=self.default_frequency_bands,
-        )
+        self.bands = EEGFrequencyBandsTable(self.values["frequency_bands"],
+            default_rows=self.default_frequency_bands)
         bands_layout.addWidget(self.bands)
         root.addWidget(bands_panel)
         root.addStretch()
@@ -138,11 +110,8 @@ class EEGPreprocessingWidget(QScrollArea):
     def _build_default_state(self) -> dict[str, Any]:
         filter_options = self.config.get("filter_options", {})
         return {
-            "car_checked": bool(
-                self.config.get("car", {}).get("checked_by_default", False)
-            ),
-            "notch": build_filter_defaults(
-                self.config.get("notch", {}),
+            "car_checked": bool(self.config.get("car", {}).get("checked_by_default", False)),
+            "notch": build_filter_defaults(self.config.get("notch", {}),
                 filter_options,
                 "bandstop",
             ),
@@ -179,7 +148,7 @@ class EEGPreprocessingWidget(QScrollArea):
             band_copy["low_cut"] = float(
                 band_copy.get(
                     "low_cut",
-                    band_copy.get("low", self._MINIMUM_BAND_FREQUENCY),
+                    band_copy.get("low", self._minimum_band_frequency),
                 )
             )
             band_copy["high_cut"] = float(
@@ -187,7 +156,7 @@ class EEGPreprocessingWidget(QScrollArea):
                     "high_cut",
                     band_copy.get(
                         "high",
-                        max(self._MINIMUM_BAND_FREQUENCY + 0.1, 1.0),
+                        max(self._minimum_band_frequency + 0.1, 1.0),
                     ),
                 )
             )
@@ -219,7 +188,7 @@ class EEGPreprocessingWidget(QScrollArea):
             if math.isfinite(bandpass_high_cut) and bandpass_high_cut > 0:
                 maximum_band_frequency = min(maximum_band_frequency, bandpass_high_cut)
         self.bands.set_frequency_bounds(
-            minimum_frequency=self._MINIMUM_BAND_FREQUENCY,
+            minimum_frequency=self._minimum_band_frequency,
             maximum_frequency=maximum_band_frequency,
             emit_changed=False,
         )
