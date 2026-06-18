@@ -9,29 +9,38 @@ from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QLabel, QScrollAr
 
 from medusa_analyzer.frontend.widgets.filtering import (FilterControls, FilterPreviewPlot, build_filter_defaults,
     compute_filter_response, filter_response_error)
-from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import (
-    EEGFrequencyBandsTable)
+from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import (EEGFrequencyBandsTable)
 
 class EEGPreprocessingWidget(QScrollArea):
-    changed = Signal()
-    _minimum_band_frequency = 0.1
 
+    # Emitimos una señal cuando cambia el widget que se conecta con el WorkflowShell
+    changed = Signal()
+    _minimum_band_frequency = 0.1 # frecuencia mínima permitida para las bandas
+
+    # En el constructor recibimos el info.json, el defaults.json y es estado.
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__()
-        _ = experiment_info
+        _ = experiment_info # Lo recibo pero no lo uso
         self.config = defaults.get("preprocessing", {})
         self.state = state
 
-        self.default_frequency_bands = self._build_default_frequency_bands()
+        # Copiamos las bandas configuradas para desacoplar config y estado editable.
+        self.default_frequency_bands = self._copy_configured_frequency_bands()
+        # Buscamos si existe ya una configuración de estado anterior (ya entramos en el paso antes,
+        # # cambiamos de opciones, avanzamos y volvimos atrás) o crear un estado nuevo.
+        # Si no existe, se crea un estado desde defaults.
         existing_values = self.state.get("preprocessing") or {}
         if not existing_values:
+            # Cogemos los valores por defecto del json
             existing_values = self._build_default_state()
+            # Añadimos al estado estos valores
             self.state["preprocessing"] = existing_values
         self.values = existing_values
 
         title = "Pre-processing"
         description = "Tune the defaults that will be applied to the EEG recording."
 
+        # Configuración del scroll y layout
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
         content = QWidget()
@@ -39,23 +48,29 @@ class EEGPreprocessingWidget(QScrollArea):
         root.setContentsMargins(4, 4, 12, 4)
         root.setSpacing(16)
 
-        heading = QLabel(title)
+        heading = QLabel(title) # Título
         heading.setObjectName("pageTitle")
-        subtitle = QLabel(description)
+        subtitle = QLabel(description) # Subtítulo
         subtitle.setObjectName("muted")
         subtitle.setWordWrap(True)
         root.addWidget(heading)
         root.addWidget(subtitle)
         root.addSpacing(16)
 
+        # Creamos un panel para la opción CAR
         car_panel = QFrame()
         car_panel.setProperty("role", "surface-panel")
         car_layout = QVBoxLayout(car_panel)
-        self.car_checkbox = QCheckBox("Apply common average reference (CAR)")
-        self.car_checkbox.setChecked(bool(self.values.get("car_checked", False)))
+        car_layout.setContentsMargins(24, 20, 24, 20)
+        car_title = QLabel("CAR")
+        car_title.setObjectName("panelTitle")
+        self.car_checkbox = QCheckBox("Apply common average reference")
+        self.car_checkbox.setChecked(bool(self.values.get("car_checked", False))) # Marcamos en función de defaults
+        car_layout.addWidget(car_title)
         car_layout.addWidget(self.car_checkbox)
         root.addWidget(car_panel)
 
+        # Creamos una rejilla para colocar los controles de los filtros y las gráficas del perfil del filtro
         filters_grid = QGridLayout()
         filters_grid.setContentsMargins(0, 0, 0, 0)
         filters_grid.setHorizontalSpacing(16)
@@ -65,17 +80,15 @@ class EEGPreprocessingWidget(QScrollArea):
         filters_grid.setRowStretch(0, 1)
         filters_grid.setRowStretch(1, 1)
         filter_options = self.config.get("filter_options", {})
-        families = filter_options.get("families", ["FIR", "IIR"])
         fir = filter_options.get("fir", {})
         iir = filter_options.get("iir", {})
 
-        self.notch = FilterControls("Notch filter", self.values["notch"], families,
-            fir, iir,"bandstop")
-        self.bandpass = FilterControls("Bandpass filter", self.values["bandpass"], families,
-            fir, iir,"bandpass")
+        # Creamos el panel de controles para cada filtro
+        self.notch = FilterControls("Notch filter", self.values["notch"], fir, iir, "bandstop")
+        self.bandpass = FilterControls("Bandpass filter", self.values["bandpass"], fir, iir, "bandpass")
         self.notch.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.bandpass.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-
+        # Creamos los paneles con lsa gráficas para ver la respuesta de los filtros
         self.notch_plot_panel = self._build_filter_plot_panel("Notch filter response",
             "notch_plot")
         self.bandpass_plot_panel = self._build_filter_plot_panel("Bandpass filter response",
@@ -87,6 +100,7 @@ class EEGPreprocessingWidget(QScrollArea):
         filters_grid.addWidget(self.bandpass_plot_panel, 1, 1)
         root.addLayout(filters_grid)
 
+        # Creamos el panel de bandas de frecuencia
         bands_panel = QFrame()
         bands_panel.setProperty("role", "surface-panel")
         bands_layout = QVBoxLayout(bands_panel)
@@ -94,6 +108,7 @@ class EEGPreprocessingWidget(QScrollArea):
         bands_title = QLabel("Frequency bands")
         bands_title.setObjectName("panelTitle")
         bands_layout.addWidget(bands_title)
+        # Creamos la tabla de bandas
         self.bands = EEGFrequencyBandsTable(self.values["frequency_bands"],
             default_rows=self.default_frequency_bands)
         bands_layout.addWidget(self.bands)
@@ -101,6 +116,8 @@ class EEGPreprocessingWidget(QScrollArea):
         root.addStretch()
 
         self.setWidget(content)
+        # Conectamos todas los elementos modificables a la función ._sync. Esta función guarda el estado, calcula la
+        # respuesta de los filtros, actualiza los plots y emite señal de changed.
         self.car_checkbox.toggled.connect(self._sync)
         self.notch.changed.connect(self._sync)
         self.bandpass.changed.connect(self._sync)
@@ -108,64 +125,40 @@ class EEGPreprocessingWidget(QScrollArea):
         self._sync()
 
     def _build_default_state(self) -> dict[str, Any]:
-        filter_options = self.config.get("filter_options", {})
-        return {
-            "car_checked": bool(self.config.get("car", {}).get("checked_by_default", False)),
-            "notch": build_filter_defaults(self.config.get("notch", {}),
-                filter_options,
-                "bandstop",
-            ),
-            "bandpass": build_filter_defaults(
-                self.config.get("bandpass", {}),
-                filter_options,
-                "bandpass",
-            ),
-            "frequency_bands": self._build_default_frequency_bands(),
-        }
+        # Función que construye el estado inicial de preprocesado
+        return {"car_checked": bool(self.config.get("car", {}).get("checked_by_default", False)),
+            "notch": build_filter_defaults(self.config.get("notch", {}), "bandstop"),
+            "bandpass": build_filter_defaults(self.config.get("bandpass", {}), "bandpass"),
+            "frequency_bands": self._copy_configured_frequency_bands()}
 
     def _build_filter_plot_panel(self, title: str, plot_attribute: str) -> QFrame:
+        # Función que crea un panel reutilizable para una gráfica
         panel = QFrame()
         panel.setProperty("role", "surface-panel")
-        panel.setSizePolicy(
-            QSizePolicy.Policy.Preferred,
-            QSizePolicy.Policy.Expanding,
-        )
+        panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding,)
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(24, 20, 24, 20)
         title_label = QLabel(title)
         title_label.setObjectName("panelTitle")
         plot = FilterPreviewPlot()
+        # IMPORTANTE: Creamos atributo dinámicamente. Por ejemplo, si plot_attribute es "notch_plot" entonces hace algo
+        # equivalente a self.notch_plot = plot
         setattr(self, plot_attribute, plot)
         panel_layout.addWidget(title_label)
         panel_layout.addWidget(plot)
         return panel
 
-    def _build_default_frequency_bands(self) -> list[dict[str, Any]]:
-        bands: list[dict[str, Any]] = []
-        for band in self.config.get("bands", {}).get("available", []):
-            band_copy = deepcopy(band)
-            band_copy["enabled"] = bool(band_copy.get("checked_by_default", True))
-            band_copy["low_cut"] = float(
-                band_copy.get(
-                    "low_cut",
-                    band_copy.get("low", self._minimum_band_frequency),
-                )
-            )
-            band_copy["high_cut"] = float(
-                band_copy.get(
-                    "high_cut",
-                    band_copy.get(
-                        "high",
-                        max(self._minimum_band_frequency + 0.1, 1.0),
-                    ),
-                )
-            )
-            bands.append(band_copy)
-        return bands
+    def _copy_configured_frequency_bands(self) -> list[dict[str, Any]]:
+        # Función para hacer una copia independiente de las mandas y evitar modificaciones de lo original.
+        return [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])]
 
     def _sync(self) -> None:
-        self.values["car_checked"] = self.car_checkbox.isChecked()
-        fs = 1000.0
+        # Es la función central del widget. Se llama cada vez que cambia algo. Sirve para guardar el valor del checkbox
+        # del CRA, detectar la frecuencia de muestreo, recalcular la respuesta de los filtros, limitar las bandas de
+        # frecuencia según fs y bandpass, actualizar las gráficas y emitir changed.
+
+        self.values["car_checked"] = self.car_checkbox.isChecked() # Actualiza el estado (self.values es state[preprocessing])
+        fs = 1000.0 # Si no sabe la fs, coge 1000 por defecto.
         metadata_list = self.state.get("metadata_list") or []
         sampling_rates = [metadata.sampling_rate for metadata in metadata_list
             if metadata.sampling_rate is not None and metadata.sampling_rate > 0]

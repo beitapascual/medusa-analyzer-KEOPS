@@ -160,7 +160,8 @@ class LoadDataWidget(QScrollArea):
 
     def _loaded(self, results: list[dict]) -> None:
         # Esta función se ejecuta cuando el worker terminó correctamente. Recibe results, que es la lista de
-        # resultados del loader, convierte cada resultado del loader en un metadata summary.
+        # resultados del loader, y convierte cada resultado del loader en un metadata summary.
+        # Además, guarda un montón de cosas en el state.
 
         # Convertimos cada resultado del loader en un objeto MetadataSummary.
         metadata_list = [MetadataSummary.from_loader_result(result) for result in results]
@@ -170,9 +171,7 @@ class LoadDataWidget(QScrollArea):
 
         # Guardamos el primer archivo en versión singular. OJO, antes path(-s-), result(-s-);
         # ahora path, result.
-        # TODO todavía no veo claro la utilidad de guardar también uno singular. Estaría guay que el summary report que se
-        # TODO hace, sea capaz de ver configuraciones diferentes y no asumir que todos son igual al primero.
-        # Pero ya lo haremos cuando tengamos bien lo de BIDS.
+        # TODO todavía no veo claro la utilidad de guardar también uno singular.
 
         first_result = results[0]
         first_metadata = metadata_list[0]
@@ -251,5 +250,6 @@ class LoadDataWidget(QScrollArea):
         self.metadata_panel.show()
 
     def can_continue(self) -> bool:
-        # Recuerda de WorkflowShell hace lo de if hasattr(widget, "can_continue"):
+        # Recuerda de WorkflowShell hace lo de if hasattr(widget, "can_continue"). Hasta que no haya una carga válida,
+        # el Next queda deshabilitado.
         return bool(self.state.get("metadata_list") or self.state.get("metadata"))

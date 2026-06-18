@@ -38,26 +38,23 @@ def normalize_fir_order(value: int, require_odd: bool = False) -> int:
     return order
 
 
-def build_filter_defaults(config: dict[str, Any], filter_options: dict[str, Any],
-    mode: FilterMode) -> dict[str, Any]:
-    common_fir = filter_options.get("fir", {})
-    specific_fir = config.get("fir", {})
-    common_iir = filter_options.get("iir", {})
-    specific_iir = config.get("iir", {})
-    filter_type = str(config.get("default_family", "FIR")).lower()
+def build_filter_defaults(config: dict[str, Any], mode: FilterMode) -> dict[str, Any]:
+    # Función para construir el estado inicial de un filtro. En config pasamos directamente la configuración
+    # que queremos para ese filtro.
+    filter_type = str(config.get("filter_type", "fir")).lower()
     require_odd_fir_order = mode == "bandstop" and filter_type == "fir"
     return {
-        "enabled": bool(config.get("checked_by_default", config.get("enabled", True))),
-        "low_cut": float(config.get("default_low_cut", 0.5)),
-        "high_cut": float(config.get("default_high_cut", 60.0)),
+        "enabled": bool(config.get("enabled", True)),
+        "low_cut": float(config.get("low_cut", 0.5)),
+        "high_cut": float(config.get("high_cut", 60.0)),
         "filter_type": filter_type,
-        "fir_order": normalize_fir_order(specific_fir.get("default_order", common_fir.get("default_order", 101)),
+        "fir_order": normalize_fir_order(config.get("fir_order", 101),
             require_odd=require_odd_fir_order),
-        "fir_window": str(specific_fir.get("default_window", common_fir.get("default_window", "hamming"))),
-        "iir_order": int(specific_iir.get("default_order", common_iir.get("default_order", 4))),
-        "iir_design": str(specific_iir.get("default_design", common_iir.get("default_design", "butter"))),
-        "iir_rp_db": float(specific_iir.get("default_rp_db", common_iir.get("default_rp_db", 1.0))),
-        "iir_rs_db": float(specific_iir.get("default_rs_db", common_iir.get("default_rs_db", 40.0)))}
+        "fir_window": str(config.get("fir_window", "hamming")),
+        "iir_order": int(config.get("iir_order", 4)),
+        "iir_design": str(config.get("iir_design", "butter")),
+        "iir_rp_db": float(config.get("iir_rp_db", 1.0)),
+        "iir_rs_db": float(config.get("iir_rs_db", 40.0))}
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,12 +253,12 @@ class FilterPreviewPlot(QFrame):
 
 class FilterControls(QFrame):
     changed = Signal()
+    FILTER_FAMILIES = ("FIR", "IIR")
 
-    def __init__(self, title: str, config: dict[str, Any], families: list[str], fir: dict[str, Any],
+    def __init__(self, title: str, config: dict[str, Any], fir: dict[str, Any],
         iir: dict[str, Any], mode: FilterMode):
         super().__init__()
         self.config = config
-        self.families = families
         self.fir = fir
         self.iir = iir
         self.mode = mode
@@ -279,7 +276,7 @@ class FilterControls(QFrame):
         self.low = self._double(float(config.get("low_cut", 0.5)))
         self.high = self._double(float(config.get("high_cut", 60.0)))
         self.kind = QComboBox()
-        for family in families:
+        for family in self.FILTER_FAMILIES:
             self.kind.addItem(str(family))
         self.kind.setCurrentText(str(config.get("filter_type", "fir")).upper())
         grid.addWidget(QLabel("Low cut"), 0, 0)

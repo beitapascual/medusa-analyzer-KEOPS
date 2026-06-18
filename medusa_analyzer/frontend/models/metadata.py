@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
+# TODO: habrá que modificarlo cuando hagamos lo de BIDS
 @dataclass(slots=True)
 class MetadataSummary:
     file_name: str
@@ -14,11 +14,9 @@ class MetadataSummary:
 
     @classmethod
     def from_loader_result(cls, result: dict) -> "MetadataSummary":
-        return cls(
-            file_name=result.get("name", ""),
+        return cls(file_name=result.get("name", ""),
             file_path=result.get("path", ""),
             channels=list(result.get("channels", [])),
             sampling_rate=result.get("sampling_rate"),
             duration_seconds=result.get("duration_seconds"),
-            n_samples=result.get("n_samples"),
-        )
+            n_samples=result.get("n_samples"))

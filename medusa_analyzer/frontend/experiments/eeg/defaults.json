@@ -10,10 +10,6 @@
       "checked_by_default": true
     },
     "filter_options": {
-      "families": [
-        "FIR",
-        "IIR"
-      ],
       "fir": {
         "default_window": "hamming",
         "windows": [
@@ -114,60 +110,64 @@
     },
     "notch": {
       "enabled": true,
-      "checked_by_default": true,
-      "default_low_cut": 49.0,
-      "default_high_cut": 51.0,
-      "default_family": "FIR",
-      "fir": {
-        "default_order": 1001
-      }
+      "filter_type": "fir",
+      "low_cut": 49.0,
+      "high_cut": 51.0,
+      "fir_order": 1001,
+      "fir_window": "hamming",
+      "iir_order": 4,
+      "iir_design": "butter",
+      "iir_rp_db": 1.0,
+      "iir_rs_db": 40.0
     },
     "bandpass": {
       "enabled": true,
-      "checked_by_default": true,
-      "default_low_cut": 0.5,
-      "default_high_cut": 60.0,
-      "default_family": "FIR",
-      "fir": {
-        "default_order": 1000
-      }
+      "filter_type": "fir",
+      "low_cut": 0.5,
+      "high_cut": 60.0,
+      "fir_order": 1000,
+      "fir_window": "hamming",
+      "iir_order": 4,
+      "iir_design": "butter",
+      "iir_rp_db": 1.0,
+      "iir_rs_db": 40.0
     },
     "bands": {
       "available": [
         {
           "id": "delta",
           "title": "Delta",
-          "low": 0.5,
-          "high": 4.0,
-          "checked_by_default": true
+          "low_cut": 0.5,
+          "high_cut": 4.0,
+          "enabled": true
         },
         {
           "id": "theta",
           "title": "Theta",
-          "low": 4.0,
-          "high": 8.0,
-          "checked_by_default": true
+          "low_cut": 4.0,
+          "high_cut": 8.0,
+          "enabled": true
         },
         {
           "id": "alpha",
           "title": "Alpha",
-          "low": 8.0,
-          "high": 13.0,
-          "checked_by_default": true
+          "low_cut": 8.0,
+          "high_cut": 13.0,
+          "enabled": true
         },
         {
           "id": "beta",
           "title": "Beta",
-          "low": 13.0,
-          "high": 30.0,
-          "checked_by_default": true
+          "low_cut": 13.0,
+          "high_cut": 30.0,
+          "enabled": true
         },
         {
           "id": "gamma",
           "title": "Gamma",
-          "low": 30.0,
-          "high": 45.0,
-          "checked_by_default": true
+          "low_cut": 30.0,
+          "high_cut": 45.0,
+          "enabled": true
         }
       ]
     }

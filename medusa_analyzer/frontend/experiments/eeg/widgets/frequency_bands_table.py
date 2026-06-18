@@ -186,10 +186,10 @@ class EEGFrequencyBandsTable(EditableTable):
         row["enabled"] = bool(row.get("enabled", True))
         row["title"] = str(row.get("title") or row.get("id") or "Band")
         row["low_cut"] = float(
-            row.get("low_cut", row.get("low", self.minimum_frequency))
+            row.get("low_cut", self.minimum_frequency)
         )
         row["high_cut"] = float(
-            row.get("high_cut", row.get("high", default_high_cut))
+            row.get("high_cut", default_high_cut)
         )
         return row
 
