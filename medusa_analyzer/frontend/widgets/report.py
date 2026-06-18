@@ -41,8 +41,6 @@ class ReportWidget(QScrollArea):
         self.root.addWidget(subtitle)
 
         metadata_list = self.state.get("metadata_list") or []
-        if not metadata_list and self.state.get("metadata") is not None:
-            metadata_list = [self.state["metadata"]]
         if self.config.get("include_metadata", True):
             self.root.addWidget(self._metadata_section(metadata_list))
 

@@ -7,8 +7,8 @@ from typing import Any
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
-from medusa_analyzer.frontend.widgets.filtering import (FilterControls, FilterPreviewPlot, build_filter_defaults,
-    compute_filter_response, filter_response_error)
+from medusa_analyzer.frontend.widgets.filtering import (FilterControls, FilterPreviewPlot, FilterResponse,
+    build_filter_defaults, compute_filter_response, filter_response_error)
 from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import (EEGFrequencyBandsTable)
 
 class EEGPreprocessingWidget(QScrollArea):
@@ -36,6 +36,7 @@ class EEGPreprocessingWidget(QScrollArea):
             # Añadimos al estado estos valores
             self.state["preprocessing"] = existing_values
         self.values = existing_values
+        self._filters_are_valid = False
 
         title = "Pre-processing"
         description = "Tune the defaults that will be applied to the EEG recording."
@@ -152,49 +153,83 @@ class EEGPreprocessingWidget(QScrollArea):
         # Función para hacer una copia independiente de las mandas y evitar modificaciones de lo original.
         return [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])]
 
+    def _resolve_sampling_rate(self) -> float | None:
+        metadata_list = self.state.get("metadata_list") or []
+        sampling_rates = [metadata.sampling_rate for metadata in metadata_list
+            if metadata.sampling_rate is not None and metadata.sampling_rate > 0]
+        if sampling_rates:
+            return min(sampling_rates)
+
+        return None
+
+    def _set_preprocessing_enabled(self, enabled: bool) -> None:
+        self.car_checkbox.setEnabled(enabled)
+        self.notch.setEnabled(enabled)
+        self.bandpass.setEnabled(enabled)
+        self.bands.setEnabled(enabled)
+
+    def _update_filter_feedback(self, controls: FilterControls, plot: FilterPreviewPlot,
+        config: dict[str, Any], fs: float, mode: str) -> tuple[FilterResponse | None, bool]:
+        response = compute_filter_response(config, fs, mode)
+        if config.get("enabled", True) and response is None:
+            error_message = filter_response_error(config, fs)
+            controls.set_error_message(error_message)
+            plot.set_response(None, error_message)
+            return None, False
+
+        controls.set_error_message(None)
+        plot.set_response(response)
+        return response, True
+
     def _sync(self) -> None:
         # Es la función central del widget. Se llama cada vez que cambia algo. Sirve para guardar el valor del checkbox
         # del CRA, detectar la frecuencia de muestreo, recalcular la respuesta de los filtros, limitar las bandas de
         # frecuencia según fs y bandpass, actualizar las gráficas y emitir changed.
 
         self.values["car_checked"] = self.car_checkbox.isChecked() # Actualiza el estado (self.values es state[preprocessing])
-        fs = 1000.0 # Si no sabe la fs, coge 1000 por defecto.
-        metadata_list = self.state.get("metadata_list") or []
-        sampling_rates = [metadata.sampling_rate for metadata in metadata_list
-            if metadata.sampling_rate is not None and metadata.sampling_rate > 0]
-        if sampling_rates:
-            fs = min(sampling_rates)
-        else:
-            metadata = self.state.get("metadata")
-            if (metadata is not None and metadata.sampling_rate is not None
-                and metadata.sampling_rate > 0):
-                fs = metadata.sampling_rate
+        fs = self._resolve_sampling_rate() # Cogemos fs
+        # Si no hay frecuencia de muestreo, deshabilitamos toodo
+        if fs is None:
+            self._set_preprocessing_enabled(False)
+            self._filters_are_valid = False
+            self.bands.set_frequency_bounds(minimum_frequency=self._minimum_band_frequency,
+                maximum_frequency=10000.0, emit_changed=False)
+            self.notch.set_error_message(None)
+            self.bandpass.set_error_message(None)
+            self.notch_plot.set_response(None, "Load recordings first to preview the filter response.")
+            self.bandpass_plot.set_response(None, "Load recordings first to preview the filter response.")
+            self.changed.emit()
+            return
 
-        notch_response = compute_filter_response(self.values["notch"], fs, "bandstop")
-        bandpass_response = compute_filter_response(self.values["bandpass"], fs,"bandpass")
-        maximum_band_frequency = fs / 2
-        if self.values["bandpass"].get("enabled", True):
+        self._set_preprocessing_enabled(True)
+
+        # Calculamos las respuestas de los filtros para mostrar en las gráficas
+        notch_response, notch_valid = self._update_filter_feedback(self.notch, self.notch_plot,
+            self.values["notch"], fs, "bandstop")
+        bandpass_response, bandpass_valid = self._update_filter_feedback(self.bandpass,
+            self.bandpass_plot, self.values["bandpass"], fs, "bandpass")
+        self._filters_are_valid = notch_valid and bandpass_valid
+        maximum_band_frequency = fs / 2 # máxima frecuencia permitida para bandas
+        # TODO: también hay que poner eso para los filtros
+
+        # Si el bandpass está activo tenemos que comprobar que las bandas no superen la banda de paso, entonces
+        # limitaremos las bandas al mínimo entre fs/2 y el high cut de la banda de paso.
+        if self.values["bandpass"].get("enabled", True) and bandpass_valid:
             try:
                 bandpass_high_cut = float(self.values["bandpass"].get("high_cut", maximum_band_frequency))
             except (TypeError, ValueError):
                 bandpass_high_cut = maximum_band_frequency
             if math.isfinite(bandpass_high_cut) and bandpass_high_cut > 0:
                 maximum_band_frequency = min(maximum_band_frequency, bandpass_high_cut)
-        self.bands.set_frequency_bounds(
-            minimum_frequency=self._minimum_band_frequency,
-            maximum_frequency=maximum_band_frequency,
-            emit_changed=False,
-        )
-        self.notch_plot.set_response(notch_response, (filter_response_error(self.values["notch"], fs)
-                if notch_response is None else None))
-        self.bandpass_plot.set_response(bandpass_response, (filter_response_error(self.values["bandpass"], fs)
-                if bandpass_response is None else None))
-        self.changed.emit()
+        # Actualizamos los límites
+        self.bands.set_frequency_bounds(minimum_frequency=self._minimum_band_frequency,
+            maximum_frequency=maximum_band_frequency, emit_changed=False)
+        self.changed.emit() # Avisamos al Workflowshell
 
     def on_step_activated(self) -> None:
         self._sync()
 
     def can_continue(self) -> bool:
-        return self.bands.is_valid()
+        return self._resolve_sampling_rate() is not None and self._filters_are_valid and self.bands.is_valid()
 
 __all__ = ["EEGPreprocessingWidget"]

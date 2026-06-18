@@ -366,6 +366,11 @@ class FilterControls(QFrame):
         parameters_layout.addWidget(self.fir_widget)
         parameters_layout.addWidget(self.iir_widget)
         root.addWidget(self.parameters)
+        self.error_label = QLabel()
+        self.error_label.setProperty("role", "error")
+        self.error_label.setWordWrap(True)
+        self.error_label.hide()
+        root.addWidget(self.error_label)
         root.addStretch(1)
 
         self.controls = [self.low, self.high, self.kind, self.fir_order, self.window, self.iir_order, self.design]
@@ -421,6 +426,14 @@ class FilterControls(QFrame):
         for control in self.controls:
             control.setEnabled(self.config["enabled"])
         self.changed.emit()
+
+    def set_error_message(self, message: str | None) -> None:
+        if message:
+            self.error_label.setText(message)
+            self.error_label.show()
+        else:
+            self.error_label.clear()
+            self.error_label.hide()
 
 
 __all__ = ["FilterControls","FilterMode", "FilterPreviewPlot", "FilterResponse", "build_filter_defaults",

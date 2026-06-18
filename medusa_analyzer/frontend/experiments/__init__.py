@@ -113,11 +113,8 @@ def create_experiment_page(definition: ExperimentDefinition) -> WorkflowShell:
         "experiment_id": definition.id,
         "experiment_title": definition.info.get("title", definition.id.upper()),
         "defaults": copy.deepcopy(definition.defaults),
-        "loader_result": None,
         "loader_results": [],
-        "metadata": None,
         "metadata_list": [],
-        "loaded_file_path": None,
         "loaded_file_paths": [],
         "selected_features": []}
 

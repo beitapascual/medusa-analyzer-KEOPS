@@ -42,7 +42,7 @@ class LoadDataTests(unittest.TestCase):
         )
         self.assertEqual(progress, [0, 50, 50, 100])
 
-    def test_loaded_batch_is_stored_without_losing_legacy_aliases(self):
+    def test_loaded_batch_is_stored_only_as_collections(self):
         state = {}
         widget = LoadDataWidget(
             config={"allowed_extensions": [".edf"]},
@@ -61,20 +61,19 @@ class LoadDataTests(unittest.TestCase):
             [metadata.file_name for metadata in state["metadata_list"]],
             ["first.edf", "second.edf"],
         )
-        self.assertEqual(state["loaded_file_path"], "first.edf")
-        self.assertEqual(state["loader_result"], results[0])
-        self.assertEqual(state["metadata"].file_name, "first.edf")
+        self.assertNotIn("loaded_file_path", state)
+        self.assertNotIn("loader_result", state)
+        self.assertNotIn("metadata", state)
         self.assertTrue(widget.can_continue())
 
     def test_clear_loaded_state_disables_continue(self):
-        metadata = MetadataSummary.from_loader_result(_fake_result("first.edf"))
         state = {
             "loaded_file_paths": ["first.edf"],
             "loader_results": [_fake_result("first.edf")],
-            "metadata_list": [],
+            "metadata_list": [MetadataSummary.from_loader_result(_fake_result("first.edf"))],
             "loaded_file_path": "first.edf",
             "loader_result": _fake_result("first.edf"),
-            "metadata": metadata,
+            "metadata": MetadataSummary.from_loader_result(_fake_result("first.edf")),
         }
         widget = LoadDataWidget(
             config={},
@@ -90,9 +89,9 @@ class LoadDataTests(unittest.TestCase):
         self.assertEqual(state["loaded_file_paths"], [])
         self.assertEqual(state["loader_results"], [])
         self.assertEqual(state["metadata_list"], [])
-        self.assertIsNone(state["loaded_file_path"])
-        self.assertIsNone(state["loader_result"])
-        self.assertIsNone(state["metadata"])
+        self.assertNotIn("loaded_file_path", state)
+        self.assertNotIn("loader_result", state)
+        self.assertNotIn("metadata", state)
 
     def test_widget_scrolls_when_loaded_content_exceeds_available_height(self):
         state = {}
