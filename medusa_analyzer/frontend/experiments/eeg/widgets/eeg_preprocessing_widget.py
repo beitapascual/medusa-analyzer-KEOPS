@@ -181,6 +181,35 @@ class EEGPreprocessingWidget(QScrollArea):
         plot.set_response(response)
         return response, True
 
+    @staticmethod
+    def _active_bandpass_bounds(bandpass_config: dict[str, Any]) -> tuple[float, float] | None:
+        if not bandpass_config.get("enabled", True):
+            return None
+        try:
+            low_cut = float(bandpass_config["low_cut"])
+            high_cut = float(bandpass_config["high_cut"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not math.isfinite(low_cut) or not math.isfinite(high_cut):
+            return None
+        return low_cut, high_cut
+
+    @staticmethod
+    def _notch_bandpass_error(notch_config: dict[str, Any],
+        bandpass_bounds: tuple[float, float] | None) -> str | None:
+        if not notch_config.get("enabled", True) or bandpass_bounds is None:
+            return None
+        try:
+            notch_low_cut = float(notch_config["low_cut"])
+            notch_high_cut = float(notch_config["high_cut"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        bandpass_low_cut, bandpass_high_cut = bandpass_bounds
+        if notch_low_cut < bandpass_low_cut or notch_high_cut > bandpass_high_cut:
+            return (f"Cutoffs must stay within {bandpass_low_cut:g}-{bandpass_high_cut:g} Hz "
+                "(active bandpass range).")
+        return None
+
     def _sync(self) -> None:
         # Es la función central del widget. Se llama cada vez que cambia algo. Sirve para guardar el valor del checkbox
         # del CRA, detectar la frecuencia de muestreo, recalcular la respuesta de los filtros, limitar las bandas de
@@ -208,19 +237,26 @@ class EEGPreprocessingWidget(QScrollArea):
             self.values["notch"], fs, "bandstop")
         bandpass_response, bandpass_valid = self._update_filter_feedback(self.bandpass,
             self.bandpass_plot, self.values["bandpass"], fs, "bandpass")
-        self._filters_are_valid = notch_valid and bandpass_valid
+        bandpass_bounds = None
         maximum_band_frequency = fs / 2 # máxima frecuencia permitida para bandas
-        # TODO: también hay que poner eso para los filtros
 
         # Si el bandpass está activo tenemos que comprobar que las bandas no superen la banda de paso, entonces
         # limitaremos las bandas al mínimo entre fs/2 y el high cut de la banda de paso.
         if self.values["bandpass"].get("enabled", True) and bandpass_valid:
+            bandpass_bounds = self._active_bandpass_bounds(self.values["bandpass"])
             try:
                 bandpass_high_cut = float(self.values["bandpass"].get("high_cut", maximum_band_frequency))
             except (TypeError, ValueError):
                 bandpass_high_cut = maximum_band_frequency
             if math.isfinite(bandpass_high_cut) and bandpass_high_cut > 0:
                 maximum_band_frequency = min(maximum_band_frequency, bandpass_high_cut)
+        if notch_valid and bandpass_valid:
+            notch_bandpass_error = self._notch_bandpass_error(self.values["notch"], bandpass_bounds)
+            if notch_bandpass_error:
+                self.notch.set_error_message(notch_bandpass_error)
+                self.notch_plot.set_response(None, notch_bandpass_error)
+                notch_valid = False
+        self._filters_are_valid = notch_valid and bandpass_valid
         # Actualizamos los límites
         self.bands.set_frequency_bounds(minimum_frequency=self._minimum_band_frequency,
             maximum_frequency=maximum_band_frequency, emit_changed=False)
