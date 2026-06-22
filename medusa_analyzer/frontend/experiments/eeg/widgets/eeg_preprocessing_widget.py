@@ -154,6 +154,8 @@ class EEGPreprocessingWidget(QScrollArea):
         return [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])]
 
     def _resolve_sampling_rate(self) -> float | None:
+        # Función para comprobar la frecuencia de muestreo. En caso de que haya varias (varios registros con diferentes
+        # fs, coge la menor)
         metadata_list = self.state.get("metadata_list") or []
         sampling_rates = [metadata.sampling_rate for metadata in metadata_list
             if metadata.sampling_rate is not None and metadata.sampling_rate > 0]
@@ -163,6 +165,7 @@ class EEGPreprocessingWidget(QScrollArea):
         return None
 
     def _set_preprocessing_enabled(self, enabled: bool) -> None:
+        # Función para habilitar todos los botones del preprocesado
         self.car_checkbox.setEnabled(enabled)
         self.notch.setEnabled(enabled)
         self.bandpass.setEnabled(enabled)
@@ -170,7 +173,10 @@ class EEGPreprocessingWidget(QScrollArea):
 
     def _update_filter_feedback(self, controls: FilterControls, plot: FilterPreviewPlot,
         config: dict[str, Any], fs: float, mode: str) -> tuple[FilterResponse | None, bool]:
+        # Calculamos la respuesta del filtro
         response = compute_filter_response(config, fs, mode)
+        # Si el filtro está activdado y no se peude calcular, construye un mensaje de error, lo muestra en el panel del
+        # filtro y vacía la gráfica
         if config.get("enabled", True) and response is None:
             error_message = filter_response_error(config, fs)
             controls.set_error_message(error_message)
@@ -183,6 +189,7 @@ class EEGPreprocessingWidget(QScrollArea):
 
     @staticmethod
     def _active_bandpass_bounds(bandpass_config: dict[str, Any]) -> tuple[float, float] | None:
+        # Función para obtener los límites del filtro paso banda cuando está activdado
         if not bandpass_config.get("enabled", True):
             return None
         try:
@@ -197,6 +204,7 @@ class EEGPreprocessingWidget(QScrollArea):
     @staticmethod
     def _notch_bandpass_error(notch_config: dict[str, Any],
         bandpass_bounds: tuple[float, float] | None) -> str | None:
+        # Función para comprobar y el notch está dentro de los límites del bandpass
         if not notch_config.get("enabled", True) or bandpass_bounds is None:
             return None
         try:
@@ -264,6 +272,9 @@ class EEGPreprocessingWidget(QScrollArea):
 
     def on_step_activated(self) -> None:
         self._sync()
+        # se llama a esta función en workflow_shell para que cada vez que se muestre este paso, se refresque toodo.
+        # No llamamos a _sync directamente porque es una implementación interna del widget concreto y WorkflowShell no
+        # debería conocer métodos internos de cada paso.
 
     def can_continue(self) -> bool:
         return self._resolve_sampling_rate() is not None and self._filters_are_valid and self.bands.is_valid()
