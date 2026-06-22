@@ -7,33 +7,38 @@ from typing import Any, Literal
 import numpy as np
 from PySide6.QtCore import QPointF, Property, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QDoubleSpinBox,
-    QFrame,
-    QGridLayout,
-    QLabel,
-    QSizePolicy,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QLabel, QSizePolicy,
+    QSpinBox, QVBoxLayout, QWidget)
 from scipy import signal
 
 
-FilterMode = Literal["bandpass", "bandstop"]
+FilterMode = Literal["bandpass", "bandstop"] # tipos de filtros esperados
 
+# En este script se hace todoo lo relativo al filtrado. Se guarda y ordena la configuración del filtro, se comprueba
+# si esa configuración tiene sentido, se calcula como sería su respuesta en frecuencia y se enseña esa respuesta en una
+# gráfica. A parte, se crea la UI para tocar los parámetreos. O sea es el módulo de configuración + preview del filtro.
+
+# Resumen global del funcionamiento:
+#   Se crea la config inicial con build_filter_defaukts()
+#   FilterControls muestra esa config en la UI
+#   El usuario cambia algo
+#   FilterControls._sync() actualiza self.config y emite señal changed
+#   El widget padre recibe changed y llama a compute_filter_response
+#   Si va bien, actúa FilterPreviewPlot.set_response(Response. Si va mal, actúan filter_response_error y set_error_message
 
 def normalize_choice(choice: Any) -> tuple[str, str]:
+    # Función para normalizar diccionarios de datos o strings y convertirlo en una tupla uniforme que esté lista para
+    # meterla en un combobox.
     if isinstance(choice, dict):
         return str(choice["id"]), str(choice.get("title", choice["id"]))
     return str(choice), str(choice).replace("_", " ").title()
 
 
 def normalize_fir_order(value: int, require_odd: bool = False) -> int:
-    order = max(3, int(value))
-    if require_odd and order % 2 == 0:
+    # Función que normaliza el orden del filtro, ya que ciertos tipos de filtro requieren que el orden sea impar. Con
+    # esta función, si el usuario mete un orden de 1000 en un notch, automaticamente se va a subir a 1001.
+    order = max(3, int(value)) # mínimo orden del filtro de valor igual a 3
+    if require_odd and order % 2 == 0: # si se trata de un filtro bandstop convertimos el orden a impar
         order += 1
     return order
 
@@ -59,17 +64,22 @@ def build_filter_defaults(config: dict[str, Any], mode: FilterMode) -> dict[str,
 
 @dataclass(frozen=True, slots=True)
 class FilterResponse:
+    # Clase que almacena las frecuencias y la magnitud de la respuesta del filtro para luego pintar la gráfica.
     frequencies: list[float]
     magnitude_db: list[float]
 
 
 def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode) -> FilterResponse | None:
+    # Función para calcular la respuesta en frecuencia de un filtro
+
+    # Su el filtro está desactivado, devolvemos una línea plana a 0 dB
     if not config.get("enabled", True):
         return FilterResponse([0.0, fs / 2], [0.0, 0.0])
 
     low_cut = float(config["low_cut"])
     high_cut = float(config["high_cut"])
     filter_type = str(config["filter_type"]).lower()
+    # Validamos que los límites estén por debajo de la frecuencia de Nyquist
     if not 0 < low_cut < high_cut < fs / 2:
         return None
 
@@ -78,8 +88,8 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode)
             numtaps = normalize_fir_order(config["fir_order"], require_odd=mode == "bandstop")
             window = str(config["fir_window"])
             coefficients = signal.firwin(numtaps,[low_cut, high_cut], pass_zero=mode == "bandstop",
-                fs=fs, window=window)
-            frequencies, response = signal.freqz(coefficients, worN=1024, fs=fs)
+                fs=fs, window=window) # utilizamos scipy.signal.firwin
+            frequencies, response = signal.freqz(coefficients, worN=1024, fs=fs) # respuesta en frecuencia
         else:
             iir_kwargs = {}
             design = str(config["iir_design"])
@@ -88,16 +98,17 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode)
             if design in {"cheby2", "ellip"}:
                 iir_kwargs["rs"] = float(config["iir_rs_db"])
             coefficients = signal.iirfilter(int(config["iir_order"]), [low_cut, high_cut], btype=mode,
-                fs=fs, ftype=design, output="sos", **iir_kwargs)
-            frequencies, response = signal.sosfreqz(coefficients, worN=1024, fs=fs)
+                fs=fs, ftype=design, output="sos", **iir_kwargs) # utilizamos scipy.signal.iirfilter
+            frequencies, response = signal.sosfreqz(coefficients, worN=1024, fs=fs) # respuesta en frecuencia
     except (ValueError, TypeError):
         return None
 
-    magnitude = 20 * np.log10(np.maximum(np.abs(response), 1e-8))
+    magnitude = 20 * np.log10(np.maximum(np.abs(response), 1e-8)) # convertimos magnitud a dB
     return FilterResponse(frequencies.tolist(), magnitude.tolist())
 
 
 def filter_response_error(config: dict[str, Any], fs: float) -> str:
+    # Función para construir los mensajes de error.
     low_cut = float(config["low_cut"])
     high_cut = float(config["high_cut"])
     nyquist = fs / 2
@@ -108,7 +119,8 @@ def filter_response_error(config: dict[str, Any], fs: float) -> str:
 
 
 class FilterPreviewPlot(QFrame):
-    def __init__(self):
+    # Widget que pinta la gráfica
+    def __init__(self): # inicializamos el widget de la gráfica, sus colores y su estado vacío
         super().__init__()
         self.setProperty("role", "plot")
         self.setMinimumHeight(225)
@@ -118,56 +130,60 @@ class FilterPreviewPlot(QFrame):
         self._axis_text_color = QColor("#756F77")
         self._response_line_color = QColor("#0E7C86")
         self._empty_message_color = QColor("#756F77")
-        self.response: FilterResponse | None = None
-        self.empty_message = "Valid configuration required"
+        self.response: FilterResponse | None = None # Guarda la respuesta
+        self.empty_message = "Valid configuration required" # Guarda mensaje vacío si no hay respuesta
 
     def set_response(self, response: FilterResponse | None, empty_message: str | None = None) -> None:
+        # Guarda la respuesta del filtro o el mensaje vacío y fuerza un repintado
         self.response = response
         self.empty_message = empty_message or "Valid configuration required"
         self.update()
 
     def _set_color(self, attribute: str, value) -> None:
+        # Cambia uno de los colores internos y repinta
         setattr(self, attribute, QColor(value))
         self.update()
 
     def get_plot_background_color(self) -> QColor:
+        # devuelve el color del fondo de la gráfica
         return self._plot_background_color
 
     def set_plot_background_color(self, value) -> None:
-        self._set_color("_plot_background_color", value)
+        self._set_color("_plot_background_color", value) # cambia el color de fondo de la gráfica
 
     def get_grid_color(self) -> QColor:
-        return self._grid_color
+        return self._grid_color # devuelve el color de la rejilla
 
     def set_grid_color(self, value) -> None:
-        self._set_color("_grid_color", value)
+        self._set_color("_grid_color", value) # cambia el color de la rejilla
 
     def get_axis_line_color(self) -> QColor:
-        return self._axis_line_color
+        return self._axis_line_color # devuelve el color de la línea del eje
 
     def set_axis_line_color(self, value) -> None:
-        self._set_color("_axis_line_color", value)
+        self._set_color("_axis_line_color", value) # cambia el color de la línea del eje
 
     def get_axis_text_color(self) -> QColor:
-        return self._axis_text_color
+        return self._axis_text_color # devuelve el color del texto de los ejes
 
     def set_axis_text_color(self, value) -> None:
-        self._set_color("_axis_text_color", value)
+        self._set_color("_axis_text_color", value) # cambia el color del texto de los ejes
 
-    def get_response_line_color(self) -> QColor:
+    def get_response_line_color(self) -> QColor: # devuelve el color de la curva de la respuesta
         return self._response_line_color
 
-    def set_response_line_color(self, value) -> None:
+    def set_response_line_color(self, value) -> None: # cambia el color de la curva de la respuesta
         self._set_color("_response_line_color", value)
 
     def get_empty_message_color(self) -> QColor:
-        return self._empty_message_color
+        return self._empty_message_color # devuelve el color del mensaje cuando no hay gráfica
 
     def set_empty_message_color(self, value) -> None:
-        self._set_color("_empty_message_color", value)
+        self._set_color("_empty_message_color", value) # cambia el color del mensaje vacío
 
     @staticmethod
     def _nice_step(value: float) -> float:
+        # Función para que el eje X del gráfico quede bonito. Va de la mano de _frequency_ticks
         if value <= 0:
             return 1.0
         exponent = math.floor(math.log10(value))
@@ -184,6 +200,7 @@ class FilterPreviewPlot(QFrame):
 
     @classmethod
     def _frequency_ticks(cls, maximum_frequency: float, plot_width: float) -> tuple[float, list[float]]:
+        # Función para que el eje X del gráfico quede bonito. Va de la mano de _nice_step
         target_intervals = max(2, min(6, int(plot_width // 72)))
         step = cls._nice_step(maximum_frequency / target_intervals)
         axis_maximum = max(step, math.ceil(maximum_frequency / step) * step)
@@ -192,6 +209,9 @@ class FilterPreviewPlot(QFrame):
         return axis_maximum, ticks
 
     def paintEvent(self, event):
+        # Función para pintar todoo del gráfico: fondo, rejilla, ejes, etiquetas, emnsaje vacío si no hay respuesta,
+        # curva (si la hay), etc.
+
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -252,8 +272,11 @@ class FilterPreviewPlot(QFrame):
 
 
 class FilterControls(QFrame):
-    changed = Signal()
-    FILTER_FAMILIES = ("FIR", "IIR")
+    # Panel editable de los filtros. este widget es el bloque UI del filtro. Tiene un checkbox por defecto enabled,
+    # un low_cut y hight_cut, un selector FIR/IIR, bloque FIR, bloque IIR, label de error y una señal de changed.
+
+    changed = Signal() # avisar fuera cuando cambia algo
+    FILTER_FAMILIES = ("FIR", "IIR") # familas de filtros que puede elegir el usuario
 
     def __init__(self, title: str, config: dict[str, Any], fir: dict[str, Any],
         iir: dict[str, Any], mode: FilterMode):
@@ -261,21 +284,23 @@ class FilterControls(QFrame):
         self.config = config
         self.fir = fir
         self.iir = iir
-        self.mode = mode
+        self.mode = mode # dice si este panel representa un bandpass o un bandstop
         self.setProperty("role", "filter-controls")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 16)
 
+        # Checkbox para activar/desactivar el filtro
         self.enabled = QCheckBox(title)
         self.enabled.setObjectName("controlTitle")
         self.enabled.setChecked(bool(config.get("enabled", True)))
         root.addWidget(self.enabled)
 
+        # Bloque base
         grid = QGridLayout()
-        self.low = self._double(float(config.get("low_cut", 0.5)))
-        self.high = self._double(float(config.get("high_cut", 60.0)))
-        self.kind = QComboBox()
+        self.low = self._double(float(config.get("low_cut", 0.5))) # spinbox para low_cut
+        self.high = self._double(float(config.get("high_cut", 60.0))) # spinbox para high_cut
+        self.kind = QComboBox() # combo para elegir FIR o IIR
         for family in self.FILTER_FAMILIES:
             self.kind.addItem(str(family))
         self.kind.setCurrentText(str(config.get("filter_type", "fir")).upper())
@@ -287,6 +312,7 @@ class FilterControls(QFrame):
         grid.addWidget(self.kind, 1, 2)
         root.addLayout(grid)
 
+        # Bloque contenedor de parámetros
         self.parameters = QWidget()
         self.parameters.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
@@ -294,7 +320,8 @@ class FilterControls(QFrame):
         parameters_layout.setContentsMargins(0, 0, 0, 0)
         parameters_layout.setSpacing(0)
 
-        self.fir_widget = QWidget()
+        # Bloque del filtro FIR
+        self.fir_widget = QWidget() # subpanel
         self.fir_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         fir_layout = QGridLayout(self.fir_widget)
         fir_layout.setContentsMargins(0, 4, 0, 0)
@@ -303,14 +330,14 @@ class FilterControls(QFrame):
         fir_layout.setColumnStretch(0, 0)
         fir_layout.setColumnStretch(1, 0)
         fir_layout.setColumnStretch(2, 1)
-        self.fir_order = QSpinBox()
+        self.fir_order = QSpinBox() # spinbox para el orden del filtro
         self.fir_order.setRange(0, 99999)
         self.fir_order.setSingleStep(1)
         self.fir_order.setValue(int(config.get("fir_order", fir.get("default_order", 1001))))
         self.fir_order.setMaximumWidth(140)
-        self.window = QComboBox()
+        self.window = QComboBox() # combobox para la ventana del filtro
         for window in fir.get("windows", []):
-            window_id, window_title = normalize_choice(window)
+            window_id, window_title = normalize_choice(window) # normalizamos las opciones del combo
             self.window.addItem(window_title, window_id)
         window_index = self.window.findData(str(config.get("fir_window", fir.get("default_window", "hamming"))))
         if window_index >= 0:
@@ -321,7 +348,8 @@ class FilterControls(QFrame):
         fir_layout.addWidget(self.fir_order, 1, 0)
         fir_layout.addWidget(self.window, 1, 1)
 
-        self.iir_widget = QWidget()
+        # Bloque del filtro IIR
+        self.iir_widget = QWidget() # subpanel
         self.iir_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         iir_layout = QGridLayout(self.iir_widget)
         iir_layout.setContentsMargins(0, 4, 0, 0)
@@ -330,25 +358,25 @@ class FilterControls(QFrame):
         iir_layout.setColumnStretch(0, 0)
         iir_layout.setColumnStretch(1, 0)
         iir_layout.setColumnStretch(2, 1)
-        self.iir_order = QSpinBox()
+        self.iir_order = QSpinBox() # spinbox para el orden del filtro
         self.iir_order.setRange(1, 20)
         self.iir_order.setValue(int(config.get("iir_order", iir.get("default_order", 4))))
         self.iir_order.setMaximumWidth(140)
-        self.design = QComboBox()
+        self.design = QComboBox() # combobox para el diseño del filtro
         for design in iir.get("designs", []):
-            design_id, design_title = normalize_choice(design)
+            design_id, design_title = normalize_choice(design) # normalizamos las opciones del combo
             self.design.addItem(design_title, design_id)
         design_index = self.design.findData(str(config.get("iir_design", iir.get("default_design", "butter"))))
         if design_index >= 0:
             self.design.setCurrentIndex(design_index)
         self.design.setMaximumWidth(180)
-        self.iir_rp = QDoubleSpinBox()
+        self.iir_rp = QDoubleSpinBox() # spinbox para el rizado de la banda de paso
         self.iir_rp.setRange(0.1, 20.0)
         self.iir_rp.setDecimals(2)
         self.iir_rp.setValue(float(config.get("iir_rp_db", iir.get("default_rp_db", 1.0))))
         self.iir_rp.setSuffix(" dB")
         self.iir_rp.setMaximumWidth(140)
-        self.iir_rs = QDoubleSpinBox()
+        self.iir_rs = QDoubleSpinBox() # spinbox para la atenuación en la banda de rechazo
         self.iir_rs.setRange(1.0, 200.0)
         self.iir_rs.setDecimals(1)
         self.iir_rs.setValue(float(config.get("iir_rs_db", iir.get("default_rs_db", 40.0))))
@@ -366,7 +394,7 @@ class FilterControls(QFrame):
         parameters_layout.addWidget(self.fir_widget)
         parameters_layout.addWidget(self.iir_widget)
         root.addWidget(self.parameters)
-        self.error_label = QLabel()
+        self.error_label = QLabel() # etiqueta donde aparece el mensaje de error del filtro
         self.error_label.setProperty("role", "error")
         self.error_label.setWordWrap(True)
         self.error_label.hide()
@@ -374,6 +402,7 @@ class FilterControls(QFrame):
         root.addStretch(1)
 
         self.controls = [self.low, self.high, self.kind, self.fir_order, self.window, self.iir_order, self.design]
+        # Conectamos todos los controles a _sync() para que cualquier cambio de la UI dispare
         self.enabled.toggled.connect(self._sync)
         self.kind.currentTextChanged.connect(self._sync)
         for control in (self.low, self.high):
@@ -399,10 +428,12 @@ class FilterControls(QFrame):
         filter_type = self.kind.currentText().lower()
         require_odd_fir_order = self.mode == "bandstop" and filter_type == "fir"
 
+        # Leemos toodo lo que el usuario ha puesto en la UI y lo guardamos en self.config
         self.config["enabled"] = self.enabled.isChecked()
         self.config["low_cut"] = self.low.value()
         self.config["high_cut"] = self.high.value()
         self.config["filter_type"] = filter_type
+        # (Normalizamos el orden del filtro FIR)
         self.config["fir_order"] = normalize_fir_order(self.fir_order.value(), require_odd=require_odd_fir_order)
         self.config["fir_window"] = self.window.currentData()
         self.config["iir_order"] = self.iir_order.value()
@@ -410,8 +441,8 @@ class FilterControls(QFrame):
         self.config["iir_rp_db"] = self.iir_rp.value()
         self.config["iir_rs_db"] = self.iir_rs.value()
 
+        # Decidimos si el filtro es FIR o IIR. En función de la decisión, muestra el bloque correcto y oculta el otro.
         is_fir = self.config["filter_type"] == "fir"
-
         self.fir_widget.setVisible(is_fir)
         self.iir_widget.setVisible(not is_fir)
 
@@ -421,13 +452,18 @@ class FilterControls(QFrame):
         self.updateGeometry()
 
         design = self.config["iir_design"]
+        # Activamos/desctaivamos 'rp' y 'rs' según el diseño IIR
         self.iir_rp.setEnabled(self.config["enabled"] and not is_fir and design in {"cheby1", "ellip"})
         self.iir_rs.setEnabled(self.config["enabled"] and not is_fir and design in {"cheby2", "ellip"})
+        # Desactivamos todos los controles si el filtro está apagado
         for control in self.controls:
             control.setEnabled(self.config["enabled"])
+
+        # Emitimos señal de que algo ha cambiado
         self.changed.emit()
 
     def set_error_message(self, message: str | None) -> None:
+        # Función para mostrar/ocultar el mensaje de error
         if message:
             self.error_label.setText(message)
             self.error_label.show()
