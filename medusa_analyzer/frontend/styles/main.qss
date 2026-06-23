@@ -50,6 +50,13 @@ QLabel#loadingTitle {
     font-weight: 650;
 }
 
+QLabel#subgroupTitle {
+    color: #E7D7DE;
+    font-size: 14px;
+    font-weight: 650;
+    margin-top: 8px;
+}
+
 QLabel#muted,
 QLabel#metricLabel,
 QLabel#summaryLabel {
