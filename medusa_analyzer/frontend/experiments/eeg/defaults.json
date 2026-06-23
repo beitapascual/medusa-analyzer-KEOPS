@@ -189,41 +189,248 @@
             "title": "Relative band power",
             "subtitle": "Band power normalized by total power.",
             "checked_by_default": true
-          }
-        ]
-      },
-      {
-        "id": "temporal",
-        "title": "Temporal features",
-        "features": [
-          {
-            "id": "mean_amplitude",
-            "title": "Mean amplitude",
-            "subtitle": "Average signal amplitude in the selected window.",
-            "checked_by_default": true
           },
           {
-            "id": "variance",
-            "title": "Variance",
-            "subtitle": "Second-order spread of the signal samples.",
-            "checked_by_default": false
-          }
-        ]
-      },
-      {
-        "id": "nonlinear",
-        "title": "Non-linear features",
-        "features": [
+            "id": "psd",
+            "title": "PSD",
+            "subtitle": "Power spectral density estimation.",
+            "checked_by_default": true,
+            "params": [
+              {
+                "id": "segment_percent",
+                "title": "Segment (%)",
+                "type": "int",
+                "default": 80,
+                "min": 1,
+                "max": 100,
+                "tooltip": "Percentage of the signal used per PSD segment."
+              },
+              {
+                "id": "overlap_percent",
+                "title": "Overlap (%)",
+                "type": "int",
+                "default": 50,
+                "min": 0,
+                "max": 99,
+                "tooltip": "Percentage of overlap between consecutive PSD segments."
+              },
+              {
+                "id": "window",
+                "title": "Window",
+                "type": "combo",
+                "default": "hamming",
+                "options": [
+                  {
+                    "id": "hamming",
+                    "title": "Hamming"
+                  },
+                  {
+                    "id": "bartlett",
+                    "title": "Bartlett"
+                  },
+                  {
+                    "id": "blackmanharris",
+                    "title": "Blackman-Harris"
+                  },
+                  {
+                    "id": "bohman",
+                    "title": "Bohman"
+                  },
+                  {
+                    "id": "boxcar",
+                    "title": "Boxcar"
+                  },
+                  {
+                    "id": "flattop",
+                    "title": "Flat top"
+                  },
+                  {
+                    "id": "nuttall",
+                    "title": "Nuttall"
+                  },
+                  {
+                    "id": "parzen",
+                    "title": "Parzen"
+                  },
+                  {
+                    "id": "triang",
+                    "title": "Triangular"
+                  }
+                ],
+                "tooltip": "Window function used for PSD estimation."
+              }
+            ]
+          },
           {
-            "id": "sample_entropy",
-            "title": "Sample entropy",
-            "subtitle": "Signal complexity estimation.",
-            "checked_by_default": false
+            "id": "statistical",
+            "title": "Basic statistical features",
+            "features": [
+              {
+                "id": "mean",
+                "title": "Mean",
+                "subtitle": "Average value of the signal",
+                "checked_by_default": true
+              },
+              {
+                "id": "median",
+                "title": "Median",
+                "subtitle": "Median value of the signal.",
+                "checked_by_default": true
+              },
+              {
+                "id": "variance",
+                "title": "Variance",
+                "subtitle": "Second-order spread of the signal samples.",
+                "checked_by_default": false
+              },
+              {
+                "id": "kurtosis",
+                "title": "Kurtosis",
+                "subtitle": "Measure of the heaviness of the distribution tails.",
+                "checked_by_default": false
+              },
+              {
+                "id": "skewness",
+                "title": "Skewness",
+                "subtitle": "Measure of asymmetry of the signal distribution.",
+                "checked_by_default": false
+              }
+            ]
+          },
+          {
+            "id": "nonlinear",
+            "title": "Non-linear features",
+            "features": [
+              {
+                "id": "sample_entropy",
+                "title": "Sample entropy",
+                "subtitle": "Signal complexity estimation.",
+                "checked_by_default": false,
+                "params": [
+                  {
+                    "id": "m",
+                    "title": "m",
+                    "type": "int",
+                    "default": 1,
+                    "min": 1,
+                    "max": 10,
+                    "tooltip": "Embedding dimension used to compare signal patterns."
+                  },
+                  {
+                    "id": "r",
+                    "title": "r",
+                    "type": "float",
+                    "default": 0.1,
+                    "min": 0.0,
+                    "max": 10.0,
+                    "step": 0.01,
+                    "tooltip": "Tolerance threshold used to decide whether two patterns are similar."
+                  }
+                ]
+              },
+              {
+                "id": "ctm",
+                "title": "Central tendency measure",
+                "subtitle": "Quantifies how often points remain within a radius in the phase-space plot.",
+                "checked_by_default": false,
+                "params": [
+                  {
+                    "id": "r",
+                    "title": "r",
+                    "type": "float",
+                    "default": 0.075,
+                    "min": 0.0,
+                    "max": 10.0,
+                    "step": 0.001,
+                    "tooltip": "Radius used to count points around the origin in the second-order difference plot."
+                  }
+                ]
+              },
+              {
+                "id": "multiscale_sample_entropy",
+                "title": "Multiscale sample entropy",
+                "subtitle": "Sample entropy computed across multiple temporal scales.",
+                "checked_by_default": false,
+                "params": [
+                  {
+                    "id": "max_scale",
+                    "title": "Max scale",
+                    "type": "int",
+                    "default": 5,
+                    "min": 1,
+                    "max": 100,
+                    "tooltip": "Maximum temporal scale used for the multiscale analysis."
+                  },
+                  {
+                    "id": "m",
+                    "title": "m",
+                    "type": "int",
+                    "default": 1,
+                    "min": 1,
+                    "max": 10,
+                    "tooltip": "Embedding dimension used to compare signal patterns."
+                  },
+                  {
+                    "id": "r",
+                    "title": "r",
+                    "type": "float",
+                    "default": 0.1,
+                    "min": 0.0,
+                    "max": 10.0,
+                    "step": 0.01,
+                    "tooltip": "Tolerance threshold used to decide whether two patterns are similar."
+                  }
+                ]
+              },
+              {
+                "id": "lempel_ziv_complexity",
+                "title": "Lempel-Ziv complexity",
+                "subtitle": "Complexity metric based on the number of distinct symbolic patterns.",
+                "checked_by_default": false
+              },
+              {
+                "id": "multiscale_lempel_ziv_complexity",
+                "title": "Multiscale Lempel-Ziv complexity",
+                "subtitle": "Lempel-Ziv complexity computed across several temporal scales.",
+                "checked_by_default": false,
+                "params": [
+                  {
+                    "id": "scales",
+                    "title": "Scales",
+                    "type": "text",
+                    "default": "[1, 3, 5]",
+                    "tooltip": "List of temporal scales. Use Python-list format, for example [1, 3, 5]."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "connectivity",
+            "title": "Connectivity features",
+            "subcategories": [
+              {
+                "id": "amplitude",
+                "title": "Amplitude connectivity",
+                "features": []
+              },
+              {
+                "id": "phase",
+                "title": "Phase connectivity",
+                "features": []
+              },
+              {
+                "id": "coherence",
+                "title": "Coherence connectivity",
+                "features": []
+              }
+            ]
           }
         ]
       }
     ]
   },
+
   "report": {
     "include_metadata": true,
     "include_preprocessing_summary": true,

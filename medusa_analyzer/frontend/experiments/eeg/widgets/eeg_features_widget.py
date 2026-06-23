@@ -7,5 +7,4 @@ class EEGFeaturesWidget(FeaturesWidget):
             config=defaults.get("features", {}),
             state=state,
             title="Features",
-            description="Pick the feature blocks that should appear in the EEG processing configuration.",
-        )
+            description="Pick the feature blocks that should appear in the EEG processing configuration.")
