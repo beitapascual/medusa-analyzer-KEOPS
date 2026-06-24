@@ -40,17 +40,39 @@ class ReportWidget(QScrollArea):
         self.root.addWidget(title)
         self.root.addWidget(subtitle)
 
-        metadata_list = self.state.get("metadata_list") or []
-        if self.config.get("include_metadata", True):
-            self.root.addWidget(self._metadata_section(metadata_list))
-
-        if self.config.get("include_preprocessing_summary", True):
-            self.root.addWidget(self._preprocessing_section())
-
-        if self.config.get("include_selected_features", True):
-            self.root.addWidget(self._features_section())
+        for section in self._sections():
+            if section is not None:
+                self.root.addWidget(section)
 
         self.root.addStretch()
+
+    def _sections(self) -> list[QWidget]:
+        sections: list[QWidget] = []
+        metadata_list = self.state.get("metadata_list") or []
+        if self.config.get("include_metadata", True):
+            sections.append(self._metadata_section(metadata_list))
+
+        if self.config.get("include_preprocessing_summary", True):
+            preprocessing_section = self._preprocessing_section()
+            if preprocessing_section is not None:
+                sections.append(preprocessing_section)
+
+        if self.config.get("include_selected_features", True):
+            features_section = self._features_section()
+            if features_section is not None:
+                sections.append(features_section)
+
+        sections.extend(self._additional_sections())
+        return sections
+
+    def _preprocessing_section(self) -> QFrame | None:
+        return None
+
+    def _features_section(self) -> QFrame | None:
+        return None
+
+    def _additional_sections(self) -> list[QWidget]:
+        return []
 
     def _metadata_section(self, metadata_list: list[MetadataSummary]) -> QFrame:
         if not metadata_list:
@@ -90,42 +112,6 @@ class ReportWidget(QScrollArea):
                 ),
             ],
         )
-
-    def _preprocessing_section(self) -> QFrame:
-        preprocessing = self.state.get("preprocessing", {})
-        if not preprocessing:
-            return self._section("Pre-processing", [("Status", "Using experiment defaults.")])
-        notch = preprocessing.get("notch", {})
-        bandpass = preprocessing.get("bandpass", {})
-        enabled_bands = [
-            band.get("title", band.get("id", "Band"))
-            for band in preprocessing.get("frequency_bands", [])
-            if band.get("enabled", True)
-        ]
-        return self._section(
-            "Pre-processing",
-            [
-                ("CAR", "Enabled" if preprocessing.get("car_checked") else "Disabled"),
-                ("Notch", self._filter_description(notch)),
-                ("Bandpass", self._filter_description(bandpass)),
-                ("Frequency bands", ", ".join(enabled_bands) if enabled_bands else "None"),
-            ],
-        )
-
-    @staticmethod
-    def _filter_description(config: dict[str, Any]) -> str:
-        if not config or not config.get("enabled", False):
-            return "Disabled"
-        if str(config.get("filter_type", "fir")).lower() == "fir":
-            detail = f'order {config.get("fir_order")}, {config.get("fir_window")} window'
-        else:
-            detail = f'order {config.get("iir_order")}, {config.get("iir_design")}'
-        return f'{config.get("low_cut"):g}-{config.get("high_cut"):g} Hz, {str(config.get("filter_type", "")).upper()}, {detail}'
-
-    def _features_section(self) -> QFrame:
-        selected = self.state.get("selected_features", [])
-        value = ", ".join(selected) if selected else "None selected."
-        return self._section("Features", [("Selected feature ids", value)])
 
     def _section(self, title: str, rows: list[tuple[str, str]]) -> QFrame:
         panel = QFrame()

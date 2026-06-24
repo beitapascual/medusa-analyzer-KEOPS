@@ -4,40 +4,26 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QDoubleSpinBox,
-    QFormLayout,
-    QFrame,
-    QGridLayout,
-    QLabel,
-    QLineEdit,
-    QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout, QLabel,
+    QLineEdit, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 
 @dataclass(frozen=True, slots=True)
 class FeatureItem:
-    id: str # identificador interno de la característica
-    title: str # nombre visible de la característica
-    subtitle: str # texto explicativo de la característica
-    category_id: str # a qué categoría pertenece
+    id: str # identificador interno de la caracterÃ­stica
+    title: str # nombre visible de la caracterÃ­stica
+    subtitle: str # texto explicativo de la caracterÃ­stica
+    category_id: str # a quÃ© categorÃ­a pertenece
     checked_by_default: bool = False # si debe venir marcada al principio
-    params: list[dict[str, Any]] | None = None # parámetros de la característica
+    params: list[dict[str, Any]] | None = None # parÃ¡metros de la caracterÃ­stica
 
 
 class FeaturesWidget(QScrollArea):
-    changed = Signal() # señal que se emite cuando cambia la selección
+    changed = Signal() # seÃ±al que se emite cuando cambia la selecciÃ³n
     _column_count = 2
     _panel_height = 360
 
-    # El constructor recibe la definición de categorías y features (config), el estado compartido donde se guarda lo
-    # seleccionado, el título grande de la página  y el subtítulo descriptivo.
+    # El constructor recibe la definiciÃ³n de categorÃ­as y features (config), el estado compartido donde se guarda lo
+    # seleccionado, el tÃ­tulo grande de la pÃ¡gina  y el subtÃ­tulo descriptivo.
     def __init__(self, config: dict[str, Any], state: dict[str, Any], title: str, description: str):
         super().__init__()
         self.config = config
@@ -48,10 +34,10 @@ class FeaturesWidget(QScrollArea):
         self.param_containers: dict[str, QWidget] = {}
         self.category_panels: list[QFrame] = []
 
-        # Si no existe selected_features, reconstruye la selección por defecto
+        # Si no existe selected_features, reconstruye la selecciÃ³n por defecto
         if "selected_features" not in self.state or not self.state["selected_features"]:
             self.state["selected_features"] = self._default_selection()
-        # Inicializamos también en el estado el diccionario de los parámetros
+        # Inicializamos tambiÃ©n en el estado el diccionario de los parÃ¡metros
         if "feature_params" not in self.state:
             self.state["feature_params"] = {}
 
@@ -63,15 +49,15 @@ class FeaturesWidget(QScrollArea):
         root.setContentsMargins(4, 4, 12, 4)
         root.setSpacing(16)
 
-        heading = QLabel(title) # cabecera con el título
+        heading = QLabel(title) # cabecera con el tÃ­tulo
         heading.setObjectName("pageTitle")
-        subtitle = QLabel(description) # subtítulo
+        subtitle = QLabel(description) # subtÃ­tulo
         subtitle.setObjectName("muted")
-        subtitle.setWordWrap(True) # si el texto es largo, salta de línea
+        subtitle.setWordWrap(True) # si el texto es largo, salta de lÃ­nea
         root.addWidget(heading)
         root.addWidget(subtitle)
 
-        categories_container = QWidget() # contenedor de las categorías
+        categories_container = QWidget() # contenedor de las categorÃ­as
         self.category_grid = QGridLayout(categories_container)
         self.category_grid.setContentsMargins(0, 0, 0, 0)
         self.category_grid.setHorizontalSpacing(16)
@@ -80,10 +66,10 @@ class FeaturesWidget(QScrollArea):
         self.category_grid.setColumnStretch(1, 1)
 
         categories = self.config.get("categories", [])
-        # Bucle recorriendo las categorías
+        # Bucle recorriendo las categorÃ­as
         for index, category in enumerate(categories):
             panel = self._build_group_panel(category, heading_object_name="groupTitle")
-            self.category_panels.append(panel) # Creamos un panel para esa categoría
+            self.category_panels.append(panel) # Creamos un panel para esa categorÃ­a
             row = index // self._column_count
             column = index % self._column_count
             is_last_odd_panel = len(categories) % self._column_count == 1 and index == len(categories) - 1
@@ -95,7 +81,7 @@ class FeaturesWidget(QScrollArea):
         self._sync()
 
     def _build_group_panel(self, group: dict[str, Any], heading_object_name: str) -> QFrame:
-        # Función que crea el panel visual de una categoría top-level, le pone título, le mete un QScrollArea interno
+        # FunciÃ³n que crea el panel visual de una categorÃ­a top-level, le pone tÃ­tulo, le mete un QScrollArea interno
         panel = QFrame()
         panel.setProperty("role", "feature-group")
         panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -104,7 +90,7 @@ class FeaturesWidget(QScrollArea):
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(10)
 
-        group_title = QLabel(str(group.get("title", ""))) # Título de la categoría
+        group_title = QLabel(str(group.get("title", ""))) # TÃ­tulo de la categorÃ­a
         group_title.setObjectName(heading_object_name)
         layout.addWidget(group_title)
 
@@ -126,13 +112,13 @@ class FeaturesWidget(QScrollArea):
         return panel
 
     def _populate_group(self, layout: QVBoxLayout, group: dict[str, Any]) -> None:
-        # Métoodo que rellena un layout con el contenido de un grupo. Para ello, recorre features. Si una entrada es una
-        # característica normal, la dibuja.
-        # Bucle iterando por las características de una categoría
+        # MÃ©toodo que rellena un layout con el contenido de un grupo. Para ello, recorre features. Si una entrada es una
+        # caracterÃ­stica normal, la dibuja.
+        # Bucle iterando por las caracterÃ­sticas de una categorÃ­a
         for feature in group.get("features", []):
-            # Esto es para iterar en las top-features. Por ejemplo, una top feature sería 'spectral' que tiene varias
+            # Esto es para iterar en las top-features. Por ejemplo, una top feature serÃ­a 'spectral' que tiene varias
             # features: PSD, RP, AP.
-            if feature.get("features"):
+            if feature.get("features") or feature.get("subcategories"):
                 subgroup_title = QLabel(str(feature.get("title", "")))
                 subgroup_title.setObjectName("subgroupTitle")
                 layout.addWidget(subgroup_title)
@@ -140,8 +126,8 @@ class FeaturesWidget(QScrollArea):
                 continue
             self._add_feature_controls(layout, feature, str(group.get("id", "")))
 
-        # Esto es para subcategorías de una top-feature. Por ejemplo, la top-feature 'connectivity' tiene las categorías
-        # amplitud, fase y coherencia. A su vez, cada subcategoría tiene varias features.
+        # Esto es para subcategorÃ­as de una top-feature. Por ejemplo, la top-feature 'connectivity' tiene las categorÃ­as
+        # amplitud, fase y coherencia. A su vez, cada subcategorÃ­a tiene varias features.
         for subcategory in group.get("subcategories", []):
             subgroup_title = QLabel(str(subcategory.get("title", "")))
             subgroup_title.setObjectName("subgroupTitle")
@@ -149,8 +135,8 @@ class FeaturesWidget(QScrollArea):
             self._populate_group(layout, subcategory)
 
     def _add_feature_controls(self, layout: QVBoxLayout, feature: dict[str, Any], category_id: str) -> None:
-        # Función que crea el checkbox de una feature real, añade su subtítulo (si existe), guarda el checkbox en
-        # self.checkboxes y si la feature tiene parámetros, crea también su bloque de parámetros
+        # FunciÃ³n que crea el checkbox de una feature real, aÃ±ade su subtÃ­tulo (si existe), guarda el checkbox en
+        # self.checkboxes y si la feature tiene parÃ¡metros, crea tambiÃ©n su bloque de parÃ¡metros
         item = FeatureItem(id=feature["id"], title=feature["title"], subtitle=feature.get("subtitle", ""),
             category_id=category_id, checked_by_default=bool(feature.get("checked_by_default", False)),
             params=feature.get("params", []))
@@ -171,9 +157,10 @@ class FeaturesWidget(QScrollArea):
 
         if item.params:
             params_container = self._build_params_form(item)
-            params_container.setVisible(box.isChecked()) # solo se deja visible si el checkbox está marcado
-            self.param_containers[item.id] = params_container # diccionario para guardar el bloque de parámetros
+            params_container.setVisible(box.isChecked()) # solo se deja visible si el checkbox estÃ¡ marcado
+            self.param_containers[item.id] = params_container # diccionario para guardar el bloque de parÃ¡metros
             layout.addWidget(params_container)
+        self._after_feature_controls_added(layout, item, box)
 
     def _default_selection(self) -> list[str]:
         # Obetner las selecciones por defecto
@@ -183,8 +170,8 @@ class FeaturesWidget(QScrollArea):
         return selected
 
     def _collect_default_selection(self, group: dict[str, Any], selected: list[str]) -> None:
-        # Métoodo que recorre recursivamente un grupo para encontrar todas las características que deben venir
-        # seleccionadas por defecto. Considera también la posibilidad de que haya subgrupos.
+        # MÃ©toodo que recorre recursivamente un grupo para encontrar todas las caracterÃ­sticas que deben venir
+        # seleccionadas por defecto. Considera tambiÃ©n la posibilidad de que haya subgrupos.
 
         for feature in group.get("features", []):
             if feature.get("features") or feature.get("subcategories"):
@@ -197,7 +184,7 @@ class FeaturesWidget(QScrollArea):
             self._collect_default_selection(subcategory, selected)
 
     def _build_params_form(self, item: FeatureItem) -> QWidget:
-        # Crea el bloque visual de parámetros de una característica. Crea una fila por parámetro y guarda tanto los
+        # Crea el bloque visual de parÃ¡metros de una caracterÃ­stica. Crea una fila por parÃ¡metro y guarda tanto los
         # widgets como sus valores por defecto.
         container = QWidget()
         form = QFormLayout(container)
@@ -205,9 +192,9 @@ class FeaturesWidget(QScrollArea):
         form.setSpacing(8)
 
         # Creamos dos diccionarios para esa feature
-        self.param_widgets[item.id] = {} # diccionario de widgets de los parámetros
-        self.param_defaults[item.id] = {} # diccioanrio de los defaults de los parámetros
-        # Recorremos todos los parámetros de la feature
+        self.param_widgets[item.id] = {} # diccionario de widgets de los parÃ¡metros
+        self.param_defaults[item.id] = {} # diccioanrio de los defaults de los parÃ¡metros
+        # Recorremos todos los parÃ¡metros de la feature
         for param in item.params or []:
             widget = self._create_param_widget(item.id, param)
             label = QLabel(param["title"])
@@ -218,11 +205,17 @@ class FeaturesWidget(QScrollArea):
             self.param_defaults[item.id][param["id"]] = param.get("default")
         return container
 
+    def _after_feature_controls_added(self, layout: QVBoxLayout, item: FeatureItem, checkbox: QCheckBox) -> None:
+        # Hook para que una subclase pueda aÃ±adir UI especÃ­fica justo despuÃ©s de dibujar una feature concreta.
+        _ = layout
+        _ = item
+        _ = checkbox
+
     def _create_param_widget(self, feature_id: str, param: dict[str, Any]) -> QWidget:
-        # Crea el widget correcto según el tipo de parámetro
+        # Crea el widget correcto segÃºn el tipo de parÃ¡metro
         param_id = param["id"]
         param_type = param.get("type", "text")
-        # Buscamos el valor por defecto del parámetro
+        # Buscamos el valor por defecto del parÃ¡metro
         saved_value = (self.state.get("feature_params", {}).get(feature_id, {}).get(param_id, param.get("default")))
 
         if param_type == "int":
@@ -243,6 +236,12 @@ class FeaturesWidget(QScrollArea):
             widget.valueChanged.connect(self._sync)
             return widget
 
+        if param_type == "checkbox":
+            widget = QCheckBox()
+            widget.setChecked(bool(saved_value))
+            widget.toggled.connect(self._sync)
+            return widget
+
         if param_type == "combo":
             widget = QComboBox()
             for option in param.get("options", []):
@@ -259,8 +258,8 @@ class FeaturesWidget(QScrollArea):
         return widget
 
     def _set_param_widget_value(self, widget: QWidget, value: Any) -> None:
-        # Función que recibe un widget de un parámetro y un valor y le pone ese valor correctamente según el tipo de
-        # widget. Además bloquea señales mientras lo hace.
+        # FunciÃ³n que recibe un widget de un parÃ¡metro y un valor y le pone ese valor correctamente segÃºn el tipo de
+        # widget. AdemÃ¡s bloquea seÃ±ales mientras lo hace.
         widget.blockSignals(True)
         try:
             if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
@@ -271,49 +270,65 @@ class FeaturesWidget(QScrollArea):
                     widget.setCurrentIndex(index)
             elif isinstance(widget, QLineEdit):
                 widget.setText("" if value is None else str(value))
+            elif isinstance(widget, QCheckBox):
+                widget.setChecked(bool(value))
         finally:
             widget.blockSignals(False)
 
     def _reset_feature_params(self, feature_id: str) -> None:
-        # Resetea todos los parámetros de una característica a los valores por defecto
+        # Resetea todos los parÃ¡metros de una caracterÃ­stica a los valores por defecto
         defaults = self.param_defaults.get(feature_id, {})
         widgets = self.param_widgets.get(feature_id, {})
         for param_id, widget in widgets.items():
             self._set_param_widget_value(widget, defaults.get(param_id))
 
-    def _sync(self) -> None:
-        # Primero, reconstruimos las características seleccionadas
-        self.state["selected_features"] = [feature_id for feature_id, checkbox in self.checkboxes.items() if checkbox.isChecked()]
+    def _selected_feature_ids(self) -> list[str]:
+        # Reconstruye la lista de ids marcados mirando el estado real de los checkboxes.
+        return [feature_id for feature_id, checkbox in self.checkboxes.items() if checkbox.isChecked()]
 
-        # Recorremos todos los contenedos de parámetros
+    def _sync_param_containers(self, selected_features: list[str]) -> None:
+        # Recorremos todos los contenedos de parÃ¡metros
         for feature_id, container in self.param_containers.items():
-            is_selected = feature_id in self.state["selected_features"]
-            container.setVisible(is_selected) # si la característica está marcada, mostramos los parámetros
+            is_selected = feature_id in selected_features
+            container.setVisible(is_selected) # si la caracterÃ­stica estÃ¡ marcada, mostramos los parÃ¡metros
             if not is_selected:
                 self._reset_feature_params(feature_id) # si no reseteamos los valores
 
-        # Reconstruimos el diccionario de los parámetros de las características
-        self.state["feature_params"] = {}
-        for feature_id, params in self.param_widgets.items(): # recorremos todas las features que tienen parámetros
-            if feature_id not in self.state["selected_features"]: # si no está seleccionada, pasamos
+    def _read_param_widget_value(self, widget: QWidget) -> Any:
+        # Devuelve el valor actual del widget de un parÃ¡metro segÃºn su tipo real.
+        if isinstance(widget, QSpinBox):
+            return widget.value()
+        if isinstance(widget, QDoubleSpinBox):
+            return widget.value()
+        if isinstance(widget, QComboBox):
+            return widget.currentData()
+        if isinstance(widget, QLineEdit):
+            return widget.text()
+        if isinstance(widget, QCheckBox):
+            return widget.isChecked()
+        return None
+
+    def _rebuild_feature_params(self, selected_features: list[str]) -> dict[str, dict[str, Any]]:
+        # Reconstruimos el diccionario de los parÃ¡metros de las caracterÃ­sticas activas.
+        feature_params: dict[str, dict[str, Any]] = {}
+        for feature_id, params in self.param_widgets.items(): # recorremos todas las features que tienen parÃ¡metros
+            if feature_id not in selected_features: # si no estÃ¡ seleccionada, pasamos
                 continue
-            self.state["feature_params"][feature_id] = {} # solo guardamos parámetros de features activas
-            for param_id, widget in params.items(): # recorremos cada widget de parámetros de esa feature
-                if isinstance(widget, QSpinBox):
-                    value = widget.value()
-                elif isinstance(widget, QDoubleSpinBox):
-                    value = widget.value()
-                elif isinstance(widget, QComboBox):
-                    value = widget.currentData()
-                elif isinstance(widget, QLineEdit):
-                    value = widget.text()
-                else:
-                    value = None
-                self.state["feature_params"][feature_id][param_id] = value # guardamos el valor leído en el estado
-        self.changed.emit() # emitimos señal de que algo ha cambiado
+            feature_params[feature_id] = {} # solo guardamos parÃ¡metros de features activas
+            for param_id, widget in params.items(): # recorremos cada widget de parÃ¡metros de esa feature
+                feature_params[feature_id][param_id] = self._read_param_widget_value(widget)
+        return feature_params
+
+    def _sync(self) -> None:
+        # Primero, reconstruimos las caracterÃ­sticas seleccionadas
+        selected_features = self._selected_feature_ids()
+        self.state["selected_features"] = selected_features
+        self._sync_param_containers(selected_features)
+        self.state["feature_params"] = self._rebuild_feature_params(selected_features)
+        self.changed.emit() # emitimos seÃ±al de que algo ha cambiado
 
     def can_continue(self) -> bool:
-        # Métodoo que usa el workflow para saber si puede avanzar. Ahora mismo se puede seguir aunque no haya ninguna
+        # MÃ©todoo que usa el workflow para saber si puede avanzar. Ahora mismo se puede seguir aunque no haya ninguna
         # marcada.
         return True
 
