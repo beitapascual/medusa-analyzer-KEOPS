@@ -160,6 +160,10 @@ class FeaturesWidget(QScrollArea):
             params_container.setVisible(box.isChecked()) # solo se deja visible si el checkbox estÃ¡ marcado
             self.param_containers[item.id] = params_container # diccionario para guardar el bloque de parÃ¡metros
             layout.addWidget(params_container)
+            if item.id not in self.param_widgets:
+                layout.removeWidget(params_container)
+                params_container.deleteLater()
+                self.param_containers.pop(item.id, None)
         self._after_feature_controls_added(layout, item, box)
 
     def _default_selection(self) -> list[str]:
@@ -196,6 +200,8 @@ class FeaturesWidget(QScrollArea):
         self.param_defaults[item.id] = {} # diccioanrio de los defaults de los parÃ¡metros
         # Recorremos todos los parÃ¡metros de la feature
         for param in item.params or []:
+            if str(param.get("type", "")) == "derived":
+                continue
             widget = self._create_param_widget(item.id, param)
             label = QLabel(param["title"])
             label.setToolTip(param.get("tooltip", ""))
@@ -203,6 +209,9 @@ class FeaturesWidget(QScrollArea):
             form.addRow(label, widget)
             self.param_widgets[item.id][param["id"]] = widget
             self.param_defaults[item.id][param["id"]] = param.get("default")
+        if not self.param_widgets[item.id]:
+            self.param_widgets.pop(item.id, None)
+            self.param_defaults.pop(item.id, None)
         return container
 
     def _after_feature_controls_added(self, layout: QVBoxLayout, item: FeatureItem, checkbox: QCheckBox) -> None:

@@ -252,14 +252,34 @@
           {
             "id": "absolute_band_power",
             "title": "Absolute band power",
-            "subtitle": "Absolute power per band.",
-            "checked_by_default": false
+            "subtitle": "Absolute power computed in the frequency bands selected during preprocessing.",
+            "checked_by_default": true,
+            "params": [
+              {
+                "id": "selected_frequency_bands",
+                "title": "bands",
+                "type": "derived",
+                "source": "feature_params.absolute_band_power.selected_frequency_bands",
+                "format": "bands",
+                "default": []
+              }
+            ]
           },
           {
             "id": "relative_band_power",
             "title": "Relative band power",
-            "subtitle": "Power normalized by broadband.",
-            "checked_by_default": false
+            "subtitle": "Band power normalized by total power across the selected preprocessing bands.",
+            "checked_by_default": true,
+            "params": [
+              {
+                "id": "selected_frequency_bands",
+                "title": "bands",
+                "type": "derived",
+                "source": "feature_params.relative_band_power.selected_frequency_bands",
+                "format": "bands",
+                "default": []
+              }
+            ]
           },
           {
             "id": "median_frequency",

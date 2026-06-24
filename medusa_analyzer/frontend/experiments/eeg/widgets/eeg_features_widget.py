@@ -13,13 +13,14 @@ from medusa_analyzer.frontend.widgets import FeatureItem, FeaturesWidget
 
 
 class EEGFeaturesWidget(FeaturesWidget):
-    _legacy_absolute_band_power_feature_id = "band_power"
-    _absolute_band_power_feature_id = "absolute_band_power"
+    _legacy_band_power_feature_id = "band_power"
+    _band_power_feature_id = "absolute_band_power"
     _psd_feature_id = "psd"
-    _relative_band_power_feature_id = "relative_band_power"
+    _normalized_band_power_feature_id = "relative_band_power"
     _multiscale_lz_feature_id = "multiscale_lempel_ziv_complexity"
     _multiscale_lz_scales_param_id = "scales"
     _multiscale_lz_scales_pattern = re.compile(r"^\[(?:[1-9]\d*)(?:, [1-9]\d*)*\]$")
+    _minimum_band_frequency = 0.1
 
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         _ = experiment_info
@@ -57,18 +58,18 @@ class EEGFeaturesWidget(FeaturesWidget):
         if isinstance(selected_features, list):
             migrated_selected_features: list[str] = []
             for feature_id in selected_features:
-                if feature_id == cls._legacy_absolute_band_power_feature_id:
-                    feature_id = cls._absolute_band_power_feature_id
+                if feature_id == cls._legacy_band_power_feature_id:
+                    feature_id = cls._band_power_feature_id
                 if feature_id not in migrated_selected_features:
                     migrated_selected_features.append(feature_id)
             state["selected_features"] = migrated_selected_features
 
         feature_params = state.get("feature_params")
         if isinstance(feature_params, dict):
-            if (cls._legacy_absolute_band_power_feature_id in feature_params
-                and cls._absolute_band_power_feature_id not in feature_params):
-                feature_params[cls._absolute_band_power_feature_id] = feature_params.pop(
-                    cls._legacy_absolute_band_power_feature_id)
+            if (cls._legacy_band_power_feature_id in feature_params
+                and cls._band_power_feature_id not in feature_params):
+                feature_params[cls._band_power_feature_id] = feature_params.pop(
+                    cls._legacy_band_power_feature_id)
 
     @staticmethod
     def _copy_rows(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -132,6 +133,27 @@ class EEGFeaturesWidget(FeaturesWidget):
         available_bands = preprocessing_defaults.get("bands", {}).get("available", [])
         return cls._copy_rows(available_bands)
 
+    def _resolve_sampling_rate(self) -> float | None:
+        metadata_list = self.state.get("metadata_list") or []
+        sampling_rates = [metadata.sampling_rate for metadata in metadata_list
+            if metadata.sampling_rate is not None and metadata.sampling_rate > 0]
+        if sampling_rates:
+            return min(sampling_rates)
+        return None
+
+    def _effective_broadband(self) -> dict[str, Any] | None:
+        preprocessing_state = self.state.get("preprocessing") or {}
+        broadband = deepcopy(preprocessing_state.get("broadband"))
+        if broadband is not None:
+            return broadband
+
+        sampling_rate = self._resolve_sampling_rate()
+        if sampling_rate is None:
+            return None
+
+        return {"id": "broadband", "title": "Broadband", "enabled": True,
+            "low_cut": self._minimum_band_frequency, "high_cut": float(sampling_rate / 2)}
+
     @staticmethod
     def _build_band_message_container() -> tuple[QWidget, QLabel]:
         container = QWidget()
@@ -148,14 +170,14 @@ class EEGFeaturesWidget(FeaturesWidget):
     def _after_feature_controls_added(self, layout: QVBoxLayout, item: FeatureItem, checkbox: QCheckBox) -> None:
         _ = checkbox
 
-        if item.id == self._absolute_band_power_feature_id:
+        if item.id == self._band_power_feature_id:
             container, message = self._build_band_message_container()
             self._absolute_band_power_container = container
             self._absolute_band_power_message = message
             layout.addWidget(container)
             return
 
-        if item.id != self._relative_band_power_feature_id:
+        if item.id != self._normalized_band_power_feature_id:
             return
 
         container, message = self._build_band_message_container()
@@ -189,7 +211,7 @@ class EEGFeaturesWidget(FeaturesWidget):
 
     def _preprocessing_selected_frequency_state(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         preprocessing_state = self.state.get("preprocessing") or {}
-        broadband = deepcopy(preprocessing_state.get("broadband"))
+        broadband = self._effective_broadband()
         selected_frequency_bands = self._copy_rows(preprocessing_state.get("selected_frequency_bands"))
         if selected_frequency_bands:
             return selected_frequency_bands, broadband
@@ -237,14 +259,14 @@ class EEGFeaturesWidget(FeaturesWidget):
         if self._absolute_band_power_container is None or self._absolute_band_power_message is None:
             return
 
-        absolute_band_power_selected = self._absolute_band_power_feature_id in selected_features
+        absolute_band_power_selected = self._band_power_feature_id in selected_features
         self._absolute_band_power_container.setVisible(absolute_band_power_selected)
         if not absolute_band_power_selected:
             return
 
         selected_frequency_bands, broadband = self._preprocessing_selected_frequency_state()
-        feature_params[self._absolute_band_power_feature_id] = {
-            "bands_source": "preprocessing",
+        feature_params[self._band_power_feature_id] = {
+            "bands_source": "preprocessing" if self.state.get("preprocessing") else "metadata",
             "frequency_bands": self._copy_rows((self.state.get("preprocessing") or {}).get("frequency_bands")),
             "selected_frequency_bands": self._copy_rows(selected_frequency_bands),
             "broadband": deepcopy(broadband),
@@ -265,7 +287,7 @@ class EEGFeaturesWidget(FeaturesWidget):
                 maximum_frequency=float(broadband["high_cut"]),
                 emit_changed=False)
 
-        relative_band_power_selected = self._relative_band_power_feature_id in selected_features
+        relative_band_power_selected = self._normalized_band_power_feature_id in selected_features
         self._relative_band_power_container.setVisible(relative_band_power_selected)
         if not relative_band_power_selected:
             return
@@ -273,7 +295,7 @@ class EEGFeaturesWidget(FeaturesWidget):
         if preprocessing_named_bands:
             self._relative_band_power_message.setText(self._band_summary_message(preprocessing_named_bands))
             self._relative_band_power_table.setVisible(False)
-            feature_params[self._relative_band_power_feature_id] = {
+            feature_params[self._normalized_band_power_feature_id] = {
                 "bands_source": "preprocessing",
                 "frequency_bands": self._copy_rows((self.state.get("preprocessing") or {}).get("frequency_bands")),
                 "selected_frequency_bands": self._copy_rows(preprocessing_named_bands),
@@ -284,7 +306,7 @@ class EEGFeaturesWidget(FeaturesWidget):
         selected_relative_bands = self._selected_relative_band_power_bands(broadband)
         self._relative_band_power_message.setText(self._band_summary_message(selected_relative_bands))
         self._relative_band_power_table.setVisible(True)
-        feature_params[self._relative_band_power_feature_id] = {
+        feature_params[self._normalized_band_power_feature_id] = {
             "bands_source": "custom",
             "frequency_bands": self._copy_rows(self._relative_band_power_rows),
             "selected_frequency_bands": selected_relative_bands,
@@ -347,12 +369,12 @@ class EEGFeaturesWidget(FeaturesWidget):
     def _validate_feature_configuration(self, selected_features: list[str], feature_params: dict[str, dict[str, Any]]) -> list[str]:
         errors: list[str] = []
 
-        if self._absolute_band_power_feature_id in selected_features:
+        if self._band_power_feature_id in selected_features:
             selected_frequency_bands, _ = self._preprocessing_selected_frequency_state()
             if not selected_frequency_bands:
                 errors.append("Absolute band power: no valid pre-processing bands are available.")
 
-        if self._relative_band_power_feature_id in selected_features:
+        if self._normalized_band_power_feature_id in selected_features:
             selected_frequency_bands, _ = self._preprocessing_selected_frequency_state()
             preprocessing_named_bands = [band for band in selected_frequency_bands if str(band.get("id", "")) != "broadband"]
             if not preprocessing_named_bands:

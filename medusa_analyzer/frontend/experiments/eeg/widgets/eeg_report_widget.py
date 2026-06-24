@@ -8,9 +8,6 @@ from medusa_analyzer.frontend.widgets import ReportWidget
 # EEGReportWidget lo que hace es decirle como es la sección de preprocesado en EEG, como es la sección de features,
 # como resumir filtros, bandas y parámetros, etc.
 class EEGReportWidget(ReportWidget):
-    # TODO: PORUQE ESTO? QUIERO QUE NO HAYA QUE HARDCODEARLO
-    _absolute_band_power_feature_id = "absolute_band_power"
-    _relative_band_power_feature_id = "relative_band_power"
 
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         _ = experiment_info
@@ -46,6 +43,42 @@ class EEGReportWidget(ReportWidget):
             return "None"
         return ", ".join(cls._describe_band(band) for band in bands)
 
+    def _get_state_value(self, path: str, default: Any = None) -> Any:
+        value: Any = self.state
+        for part in path.split("."):
+            if not isinstance(value, dict):
+                return default
+            value = value.get(part)
+            if value is None:
+                return default
+        return value
+
+    def _format_param_value(self, param: dict[str, Any], value: Any) -> str:
+        param_type = str(param.get("type", ""))
+        param_format = str(param.get("format", ""))
+
+        if param_format == "bands":
+            if not value:
+                return ""
+            return ", ".join(
+                self._describe_band(band, include_parentheses=False)
+                for band in value
+            )
+
+        if param_type == "combo":
+            return self._combo_value_title(param, value)
+
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+
+        if isinstance(value, float):
+            return f"{value:g}"
+
+        if value is None:
+            return ""
+
+        return str(value)
+
     @staticmethod
     def _filter_description(config: dict[str, Any]) -> str:
         # Resume un filtro EEG en una línea
@@ -62,12 +95,12 @@ class EEGReportWidget(ReportWidget):
         preprocessing = self.state.get("preprocessing", {}) # leemos del estado
         # TODO: habrá que cambiar esto
         if not preprocessing:
-            return self._section("Pre-processing", [("Status", "Using experiment defaults.")])
+            return self._section("Preprocessing", [("Status", "Preprocessing step skipped.")])
 
         selected_frequency_bands = preprocessing.get("selected_frequency_bands", [])
         notch = preprocessing.get("notch", {})
         bandpass = preprocessing.get("bandpass", {})
-        return self._section("Pre-processing", # llamamos a _section
+        return self._section("Preprocessing", # llamamos a _section
             [("CAR", "Enabled" if preprocessing.get("car_checked") else "Disabled"),
                 ("Notch", self._filter_description(notch)), ("Bandpass", self._filter_description(bandpass)),
                 ("Analysis bands", self._bands_summary(selected_frequency_bands))])
@@ -90,30 +123,27 @@ class EEGReportWidget(ReportWidget):
         return feature_ids
 
     @classmethod
-    def _collect_leaf_feature_definitions(cls, group: dict[str, Any], feature_definitions: dict[str, dict[str, Any]]) -> None:
+    def _resolve_feature_definitions(cls, group: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        feature_definitions: dict[str, dict[str, Any]] = {}
         # Función que hace un índice rápido de todas las características del JSON para que sea más rápido acceder a su
         # información (título, parámetros, opciones del combo, etc.)
-        for feature in group.get("features", []):
-            if feature.get("features") or feature.get("subcategories"):
-                cls._collect_leaf_feature_definitions(feature, feature_definitions)
-                continue
-            feature_id = feature.get("id")
-            if feature_id:
-                feature_definitions[str(feature_id)] = feature
+        groups_to_visit = group.get("categories", [group])
 
-        for subcategory in group.get("subcategories", []):
-            cls._collect_leaf_feature_definitions(subcategory, feature_definitions)
+        for current_group in groups_to_visit:
+            for feature in current_group.get("features", []):
+                if feature.get("features") or feature.get("subcategories"):
+                    feature_definitions.update(cls._resolve_feature_definitions(feature))
+                    continue
+                feature_id = feature.get("id")
+                if feature_id:
+                    feature_definitions[str(feature_id)] = feature
+            for subcategory in current_group.get("subcategories", []):
+                feature_definitions.update(cls._resolve_feature_definitions(subcategory))
 
-    @classmethod
-    def _resolve_feature_definitions(cls, features_config: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        # TODO: no eniendo mucho la diferencia con _collect_leaf_feature_definitions, no se podrían unificar?
-        feature_definitions: dict[str, dict[str, Any]] = {}
-        for category in features_config.get("categories", []):
-            cls._collect_leaf_feature_definitions(category, feature_definitions)
         return feature_definitions
 
     def _combo_value_title(self, param: dict[str, Any], value: Any) -> str:
-        # Métoodo que hace que si un parámetros era un combo, enseña el nombre bonito y no el id en crudo
+        # Métoodo que hace que si un parámetro era un combo, enseña el nombre bonito y no el id en crudo
         for option in param.get("options", []):
             if option.get("id") == value:
                 return str(option.get("title") or value)
@@ -122,31 +152,28 @@ class EEGReportWidget(ReportWidget):
     def _feature_param_summaries(self, feature_id: str, feature_definition: dict[str, Any]) -> list[str]:
         # Construye una lista de "detalles" que acompañan a una feature en el report
         # Leemos los parámetros guardados de una característica
-        # TODO: no se podrían considerar las bandas como parámetros para no hardcodear esto?
         feature_params = self.state.get("feature_params", {}).get(feature_id, {})
-        if feature_id in (self._absolute_band_power_feature_id, self._relative_band_power_feature_id):
-            selected_frequency_bands = feature_params.get("selected_frequency_bands", [])
-            if selected_frequency_bands:
-                return [", ".join(self._describe_band(band, include_parentheses=False) for band in selected_frequency_bands)]
-            return []
-
         param_summaries: list[str] = []
         # Recorremos los parámetros de la feature
         for param in feature_definition.get("params", []):
             param_id = str(param.get("id", ""))
-            if param_id not in feature_params:
-                continue
-            value = feature_params[param_id]
-            # Convertimos el valor del parámetro a texto
-            if str(param.get("type", "")) == "combo":
-                value_text = self._combo_value_title(param, value)
-            elif isinstance(value, bool):
-                value_text = "Yes" if value else "No"
-            elif isinstance(value, float):
-                value_text = f"{value:g}"
+            param_type = str(param.get("type", ""))
+            title = str(param.get("title") or param_id)
+            if param_type == "derived":
+                source = str(param.get("source", ""))
+                default = param.get("default")
+                value = self._get_state_value(source, default) if source else default
+                if value in ("", [], {}, ()):
+                    value = default
             else:
-                value_text = str(value)
-            param_summaries.append(f'{param.get("title", param_id)}={value_text}')
+                if param_id not in feature_params:
+                    continue
+                value = feature_params[param_id]
+            # Convertimos el valor del parámetro a texto
+            value_text = self._format_param_value(param, value)
+            if not value_text:
+                continue
+            param_summaries.append(f"{title}={value_text}")
         return param_summaries
 
     def _feature_summary(self, feature_id: str) -> str:

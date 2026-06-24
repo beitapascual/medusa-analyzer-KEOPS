@@ -23,7 +23,7 @@
     },
     {
       "id": "preprocessing",
-      "title": "Pre-processing",
+      "title": "Preprocessing",
       "widget": "eeg_preprocessing_widget.EEGPreprocessingWidget"
     },
     {
