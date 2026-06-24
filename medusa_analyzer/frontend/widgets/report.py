@@ -9,10 +9,10 @@ class ReportWidget(QScrollArea):
     # metiendo "secciones". La sección de metadata es general, pero luego se meten secciones dependientes del experimento
     def __init__(self, config: dict[str, Any], state: dict[str, Any], title: str, description: str):
         super().__init__()
-        self.config = config # para ver qué secciones hay que mostrar
+        self.config = config # para ver que secciones hay que mostrar
         self.state = state # estado compartido del workflow
-        self.title_text = title # título del report
-        self.description_text = description # subtítulo del report
+        self.title_text = title # titulo del report
+        self.description_text = description # subtitulo del report
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
         self.content = QWidget()
@@ -23,7 +23,7 @@ class ReportWidget(QScrollArea):
         self.refresh() # dibujamos el report por primera vez
 
     def on_step_activated(self) -> None:
-        # Métoodo que cuando el workflow entra en este paso, vuelve a regenerar el report potque puede ser que el usuario
+        # Metooodo que cuando el workflow entra en este paso, vuelve a regenerar el report porque puede ser que el usuario
         # cambie cosas en pasos anteriores y vuelva a generar el report, entonces tiene que reflejar el estado nuevo.
         self.refresh()
 
@@ -35,9 +35,9 @@ class ReportWidget(QScrollArea):
             if item.widget():
                 item.widget().deleteLater()
 
-        title = QLabel(self.title_text) # Volvemos a crear el título
+        title = QLabel(self.title_text) # Volvemos a crear el titulo
         title.setObjectName("pageTitle")
-        subtitle = QLabel(self.description_text) # Volvemos a crear el subtítulo
+        subtitle = QLabel(self.description_text) # Volvemos a crear el subtitulo
         subtitle.setObjectName("muted")
         subtitle.setWordWrap(True)
         self.root.addWidget(title)
@@ -51,24 +51,13 @@ class ReportWidget(QScrollArea):
         self.root.addStretch()
 
     def _sections(self) -> list[QWidget]:
-        # Métoodo que decide qué secciones tiene el report y en qué orden.
+        # Metooodo que decide que secciones tiene el report y en qué orden.
         sections: list[QWidget] = [] # lista vacía para guardar las secciones
-        metadata_list = self.state.get("metadata_list") or [] # leemos metadata_list del estado
-        if self.config.get("include_metadata", True):
-            sections.append(self._metadata_section(metadata_list))
-
-        if self.config.get("include_preprocessing_summary", True):
-            preprocessing_section = self._preprocessing_section()
-            if preprocessing_section is not None:
-                sections.append(preprocessing_section)
-
-        if self.config.get("include_selected_features", True):
-            features_section = self._features_section()
-            if features_section is not None:
-                sections.append(features_section)
-
         # Esto permite añadir cualquier sección extra
-        sections.extend(self._additional_section_builders())
+        for builder in self._section_builders():
+            section = builder()
+            if section is not None:
+                sections.append(section)
         return sections
 
     def _section_builders(self) -> list:
@@ -86,7 +75,7 @@ class ReportWidget(QScrollArea):
         return []
 
     def _metadata_section(self, metadata_list: list[MetadataSummary]) -> QFrame:
-        # Métoodo para construir el panel de Metada
+        # Metooodo para construir el panel de Metada
         if not metadata_list:
             return self._section("Metadata", [("Status", "No EDF loaded yet.")])
         # Mostramos la frecuencia de muestreo
@@ -103,7 +92,7 @@ class ReportWidget(QScrollArea):
                 ("Total samples", str(sum(metadata.n_samples or 0 for metadata in metadata_list)))])
 
     def _section(self, title: str, rows: list[tuple[str, str]]) -> QFrame:
-        # Constructor visual genérico de una sección a partir del t´tiulo, y la lista de pares (etiqueta, valor)
+        # Constructor visual genérico de una sección a partir del título, y la lista de pares (etiqueta, valor)
         panel = QFrame()
         panel.setProperty("role", "summary-section")
         layout = QGridLayout(panel)
