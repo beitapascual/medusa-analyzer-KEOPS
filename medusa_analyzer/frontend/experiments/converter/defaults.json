@@ -1,0 +1,7 @@
+{
+  "load_data": {
+    "allowed_extensions": [
+      ".edf", ".mat"
+    ]
+  }
+}
