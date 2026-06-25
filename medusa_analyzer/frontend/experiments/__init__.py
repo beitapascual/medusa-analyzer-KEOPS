@@ -74,7 +74,7 @@ def discover_experiments() -> list[ExperimentDefinition]:
         # Vamos guardando la información de todos los experimentos detectados
         experiments.append(ExperimentDefinition(
                 id=experiment_id,
-                package_name=directory.name, # devuelve lo que va detrás de la última /
+                package_name=directory.name, # TODO: esto está duplicaod
                 root=directory,
                 info=info,
                 defaults=defaults))
