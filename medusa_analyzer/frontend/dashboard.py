@@ -13,7 +13,7 @@ from medusa_analyzer.frontend.widgets.experiment_card import ExperimentCard
 from medusa_analyzer.frontend.widgets.module_grid import ModuleGrid
 
 
-# Defines a conceptual category
+# Información de una categoría
 @dataclass(frozen=True, slots=True)
 class DashboardCategory:
     id: str
@@ -22,7 +22,7 @@ class DashboardCategory:
     order: int = 0
 
 
-# Defines items inside one category
+# Información para mostrar en una tarjeta
 @dataclass(frozen=True, slots=True)
 class DashboardItem:
     id: str
@@ -39,7 +39,9 @@ class DashboardItem:
 
 
 def build_dashboard_catalog(experiments: list[ExperimentDefinition]) -> tuple[list[DashboardCategory], list[DashboardItem]]:
-    # Función que transforma una lista de experimentos en categorías y items clicables
+    # Función para obtener las categorías e items a pintar en el dashboard, sin crear las páginas reales de los experimentos
+    # eso lo hace (create_experiment_page). build_dashboard_catalog escribe el menú con las tarjetas de los platos, y
+    # create_experiment_page cocina el plato completo, es decir, crea el widget real del experimento.
     categories_by_id: dict[str, DashboardCategory] = {}
     items: list[DashboardItem] = []
 
@@ -61,13 +63,13 @@ def build_dashboard_catalog(experiments: list[ExperimentDefinition]) -> tuple[li
                 accent=experiment.info.get("accent", "burgundy"),
                 enabled=bool(experiment.info.get("enabled", True))))
 
-    # Ordemanos categorías e items
+    # Ordenamos categorías e items
     categories = sorted(categories_by_id.values(), key=lambda category: (category.order, category.title))
     category_order = {category.id: category.order for category in categories}
     items.sort(key=lambda item: (category_order.get(item.category_id, 0), item.order, item.title))
     return categories, items
 
-
+# Construimos la interfaz del Dashboard
 class DashboardPage(QScrollArea):
     # Crea un ScrollArea, mete un hero arriba (DashboardHero), agrupa items por categoría.
     # Después, para cada item crea un ExperimentCard y, si el item está habilitado, conecta el click a la ruta
@@ -138,18 +140,23 @@ class DashboardPage(QScrollArea):
 
         grid = ModuleGrid()
         for item in items:
+            # Creamos las carpetas de cada experimento
             card = ExperimentCard(title=item.title, subtitle=item.subtitle,
                 icon_path=Path(item.icon_path) if item.icon_path else None,
                 enabled=item.enabled, status=item.status, accent=item.accent)
             if item.enabled:
-                # IMPORTANTE: cuando la clicamos emite señal con la rota específica
+                # IMPORTANTE: cuando la clicamos emite señal con la ruta específica. Aquí detectamos que una tarjeta ha
+                # emitido un click y ejecutamos la función lambda. Esta función ahce que DashboardPage emita route_requestec
+                # con la ruta de esa tarjeta.
+
+                # En MainWindow tenemos 'self.dashboard.route_requested.connect(self.router.navigate)' que llama al Router.
                 card.clicked.connect(lambda route=item.route: self.route_requested.emit(route))
             grid.add_card(card)
         section_layout.addWidget(grid)
         return section
 
     def resizeEvent(self, event) -> None:
-        # IMPORTANTE: esta función no se llama "a mano" pero si que se ejecuta.
+        # IMPORTANTE: esta función no se llama "a mano" pero sí que se ejecuta.
         width = event.size().width()
         horizontal_margin = 16 if width < 540 else 28 if width < 860 else 48
         vertical_margin = 18 if width < 540 else 28 if width < 860 else 34

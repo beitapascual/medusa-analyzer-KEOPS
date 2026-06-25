@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from copy import deepcopy
 from typing import Any
 
@@ -165,9 +164,9 @@ class EEGPreprocessingWidget(QScrollArea):
         config: dict[str, Any], fs: float, mode: str) -> tuple[FilterResponse | None, bool]:
         # Intentamos calcular la respuesta. Si la configuracion no pasa las
         # validaciones basicas reutilizamos el mensaje del modulo de filtering.
-        response = compute_filter_response(config, fs, mode)
+        response = compute_filter_response(config, fs, mode, fir_options=controls.fir, iir_options=controls.iir)
         if config.get("enabled", True) and response is None:
-            error_message = filter_response_error(config, fs)
+            error_message = filter_response_error(config, fs, fir_options=controls.fir, iir_options=controls.iir)
             controls.set_error_message(error_message)
             plot.set_response(None, error_message)
             return None, False
@@ -181,26 +180,24 @@ class EEGPreprocessingWidget(QScrollArea):
         if not bandpass_config.get("enabled", True):
             return None
         try:
-            low_cut = Validation.coerce_float(bandpass_config["low_cut"])
-            high_cut = Validation.coerce_float(bandpass_config["high_cut"])
+            return Validation.coerce_float(bandpass_config["low_cut"]), Validation.coerce_float(
+                bandpass_config["high_cut"])
         except (KeyError, ValueError):
             return None
-        if not math.isfinite(low_cut) or not math.isfinite(high_cut):
-            return None
-        return low_cut, high_cut
 
     @staticmethod
-    def _notch_bandpass_error(notch_config: dict[str, Any],
-        bandpass_bounds: tuple[float, float] | None) -> str | None:
+    def _notch_bandpass_errors(notch_config: dict[str, Any], *, label: str,
+        bandpass_bounds: tuple[float, float] | None = None, **_: Any) -> list[str]:
         # Esta es la regla personalizada del paso de preprocessing:
         # si hay bandpass activo, el notch tiene que vivir dentro de ese rango.
+        _ = label
         if not notch_config.get("enabled", True) or bandpass_bounds is None:
-            return None
+            return []
         try:
             notch_low_cut = Validation.coerce_float(notch_config["low_cut"])
             notch_high_cut = Validation.coerce_float(notch_config["high_cut"])
         except (KeyError, ValueError):
-            return None
+            return []
 
         bandpass_low_cut, bandpass_high_cut = bandpass_bounds
         low_errors = _preprocessing_validation.validate_many(notch_low_cut,
@@ -210,9 +207,9 @@ class EEGPreprocessingWidget(QScrollArea):
             [("less_or_equal", {"maximum": bandpass_high_cut, "suffix": " Hz"})],
             label="Notch filter: high cut")
         if low_errors or high_errors:
-            return (f"Cutoffs must stay within {bandpass_low_cut:g}-{bandpass_high_cut:g} Hz "
-                "(active bandpass range).")
-        return None
+            return [f"Cutoffs must stay within {bandpass_low_cut:g}-{bandpass_high_cut:g} Hz "
+                "(active bandpass range)."]
+        return []
 
     def _build_broadband(self, maximum_band_frequency: float,
         bandpass_bounds: tuple[float, float] | None) -> dict[str, Any]:
@@ -267,20 +264,17 @@ class EEGPreprocessingWidget(QScrollArea):
         # tabla de bandas y para la broadband efectiva.
         if self.values["bandpass"].get("enabled", True) and bandpass_valid:
             bandpass_bounds = self._active_bandpass_bounds(self.values["bandpass"])
-            try:
-                bandpass_high_cut = Validation.coerce_float(
-                    self.values["bandpass"].get("high_cut", maximum_band_frequency))
-            except ValueError:
-                bandpass_high_cut = maximum_band_frequency
-            if math.isfinite(bandpass_high_cut) and bandpass_high_cut > 0:
-                maximum_band_frequency = min(maximum_band_frequency, bandpass_high_cut)
+            if bandpass_bounds is not None:
+                maximum_band_frequency = min(maximum_band_frequency, bandpass_bounds[1])
 
         # Regla personalizada: el notch no puede salir del bandpass activo.
         if notch_valid and bandpass_valid:
-            notch_bandpass_error = self._notch_bandpass_error(self.values["notch"], bandpass_bounds)
-            if notch_bandpass_error:
-                self.notch.set_error_message(notch_bandpass_error)
-                self.notch_plot.set_response(None, notch_bandpass_error)
+            notch_bandpass_errors = _preprocessing_validation.validate_errors(
+                self.values["notch"], "custom", label="Notch filter",
+                validator=self._notch_bandpass_errors, bandpass_bounds=bandpass_bounds)
+            if notch_bandpass_errors:
+                self.notch.set_error_message(notch_bandpass_errors[0])
+                self.notch_plot.set_response(None, notch_bandpass_errors[0])
                 notch_valid = False
 
         self._filters_are_valid = notch_valid and bandpass_valid

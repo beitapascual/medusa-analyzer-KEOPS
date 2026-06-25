@@ -72,17 +72,33 @@ class FilterResponse:
     magnitude_db: list[float]
 
 
-def filter_validation_errors(config: dict[str, Any], fs: float) -> list[str]:
-    # Centralizamos aquí las reglas genéricas de validación del filtro:
-    # - los cortes deben ser números finitos
-    # - deben estar entre 0 y Nyquist
-    # - low debe quedar por debajo de high
-    # - TODO: SE GESTIONA TAMBIÉN LO DEL BANDPASS??
+def _option_ids(options: list[dict[str, Any]] | list[str] | tuple[str, ...] | None) -> list[str]:
+    ids: list[str] = []
+    for option in options or []:
+        if isinstance(option, dict):
+            option_id = option.get("id")
+            if option_id is not None:
+                ids.append(str(option_id))
+            continue
+        ids.append(str(option))
+    return ids
+
+
+def _filter_config_errors(config: dict[str, Any], *, label: str, fs: float,
+    fir_options: dict[str, Any] | None = None, iir_options: dict[str, Any] | None = None, **_: Any) -> list[str]:
+    # Validador compuesto para toda la configuracion del filtro. Aqui agrupamos
+    # las reglas numericas y las dependencias entre campos del propio filtro.
+    _ = label
     if not config.get("enabled", True):
         return []
 
-    nyquist = fs / 2
     errors: list[str] = []
+    nyquist = fs / 2
+    filter_type_errors = _filter_validation.validate_many(config.get("filter_type"),
+        [("one_of", {"options": ["fir", "iir"]})],
+        label="Filter type")
+    errors.extend(filter_type_errors)
+
     errors.extend(_filter_validation.validate_many(config.get("low_cut"),
         ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " Hz"}),
             ("less_than", {"maximum": nyquist, "suffix": " Hz"})],
@@ -99,10 +115,54 @@ def filter_validation_errors(config: dict[str, Any], fs: float) -> list[str]:
     errors.extend(_filter_validation.validate_many(low_cut,
         [("less_than", {"maximum": high_cut, "suffix": " Hz"})],
         label="Low cut"))
+    if errors:
+        return errors
+
+    filter_type = str(config.get("filter_type")).lower()
+    if filter_type == "fir":
+        errors.extend(_filter_validation.validate_many(config.get("fir_order"),
+            ["integer", ("greater_or_equal", {"minimum": 3})],
+            label="FIR order"))
+        fir_windows = _option_ids((fir_options or {}).get("windows"))
+        if fir_windows:
+            errors.extend(_filter_validation.validate_many(config.get("fir_window"),
+                [("one_of", {"options": fir_windows})],
+                label="FIR window"))
+        return errors
+
+    errors.extend(_filter_validation.validate_many(config.get("iir_order"),
+        ["integer", ("greater_or_equal", {"minimum": 1})],
+        label="IIR order"))
+    iir_designs = _option_ids((iir_options or {}).get("designs"))
+    if iir_designs:
+        errors.extend(_filter_validation.validate_many(config.get("iir_design"),
+            [("one_of", {"options": iir_designs})],
+            label="IIR design"))
+    if errors:
+        return errors
+
+    design = str(config.get("iir_design")).lower()
+    if design in {"cheby1", "ellip"}:
+        errors.extend(_filter_validation.validate_many(config.get("iir_rp_db"),
+            ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " dB"})],
+            label="Passband ripple"))
+    if design in {"cheby2", "ellip"}:
+        errors.extend(_filter_validation.validate_many(config.get("iir_rs_db"),
+            ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " dB"})],
+            label="Stopband attenuation"))
     return errors
 
 
-def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode) -> FilterResponse | None:
+def filter_validation_errors(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
+    iir_options: dict[str, Any] | None = None) -> list[str]:
+    # Punto público de validación para la configuración del filtro. A partir de
+    # aquí el resto del flujo no debería reimplementar reglas del propio filtro.
+    return _filter_validation.validate_errors(config, "custom", label="Filter",
+        validator=_filter_config_errors, fs=fs, fir_options=fir_options, iir_options=iir_options)
+
+
+def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode, *,
+    fir_options: dict[str, Any] | None = None, iir_options: dict[str, Any] | None = None) -> FilterResponse | None:
     # Calcula la respuesta en frecuencia de un filtro. Si la configuración no pasa las
     # validaciones básicas devolvemos None y el widget mostrará el error.
 
@@ -110,7 +170,7 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode)
     if not config.get("enabled", True):
         return FilterResponse([0.0, fs / 2], [0.0, 0.0])
 
-    if filter_validation_errors(config, fs):
+    if filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options):
         return None
 
     low_cut = Validation.coerce_float(config["low_cut"])
@@ -141,9 +201,10 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode)
     return FilterResponse(frequencies.tolist(), magnitude.tolist())
 
 
-def filter_response_error(config: dict[str, Any], fs: float) -> str:
+def filter_response_error(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
+    iir_options: dict[str, Any] | None = None) -> str:
     # Función para construir los mensajes de error.
-    validation_errors = filter_validation_errors(config, fs)
+    validation_errors = filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options)
     if validation_errors:
         return validation_errors[0]
     return "Unable to design a response with the selected filter parameters."

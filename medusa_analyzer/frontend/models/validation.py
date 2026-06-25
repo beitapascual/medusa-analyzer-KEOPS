@@ -12,7 +12,8 @@ from typing import Any
 # (numero finito, mayor que cero, menor que otro valor, etc.) y no tenga que
 # reimplementar cada regla una y otra vez.
 
-ValidationCallable = Callable[..., "ValidationResult | str | None"]
+ValidationOutcome = "ValidationResult | str | Sequence[str] | None"
+ValidationCallable = Callable[..., ValidationOutcome]
 RuleSpec = str | tuple[str, dict[str, Any]]
 
 
@@ -51,26 +52,28 @@ class Validation:
         self._validators[str(key)] = validator
 
     def validate(self, value: Any, rule_key: str, *, label: str, **options: Any) -> ValidationResult:
+        errors = self.validate_errors(value, rule_key, label=label, **options)
+        if not errors:
+            return ValidationResult(ok=True)
+        return ValidationResult(ok=False, error=errors[0])
+
+    def validate_errors(self, value: Any, rule_key: str, *, label: str, **options: Any) -> list[str]:
+        # Variante orientada a coleccionar errores. Es especialmente util para
+        # validaciones personalizadas que generan mas de un mensaje.
         validator = self._validators.get(rule_key)
         if validator is None:
             raise KeyError(f"Unknown validation rule: {rule_key}")
-
-        result = validator(value, label=label, **options)
-        if isinstance(result, ValidationResult):
-            return result
-        if result is None:
-            return ValidationResult(ok=True)
-        return ValidationResult(ok=False, error=str(result))
+        return self._normalize_errors(validator(value, label=label, **options), label)
 
     def validate_many(self, value: Any, rules: Iterable[RuleSpec], *, label: str,
         stop_on_first_error: bool = True) -> list[str]:
         errors: list[str] = []
         for rule in rules:
             rule_key, options = self._normalize_rule(rule)
-            result = self.validate(value, rule_key, label=label, **options)
-            if result.ok:
+            rule_errors = self.validate_errors(value, rule_key, label=label, **options)
+            if not rule_errors:
                 continue
-            errors.append(result.error or f"{label} is invalid.")
+            errors.extend(rule_errors)
             if stop_on_first_error:
                 break
         return errors
@@ -115,6 +118,18 @@ class Validation:
             return rule, {}
         rule_key, options = rule
         return rule_key, dict(options)
+
+    @staticmethod
+    def _normalize_errors(result: ValidationOutcome, label: str) -> list[str]:
+        if isinstance(result, ValidationResult):
+            if result.ok:
+                return []
+            return [result.error or f"{label} is invalid."]
+        if result is None:
+            return []
+        if isinstance(result, str):
+            return [result]
+        return [str(error) for error in result if error]
 
     @staticmethod
     def _format_bound(bound: Any, suffix: str = "") -> str:

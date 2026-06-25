@@ -306,14 +306,41 @@ class EEGFeaturesWidget(FeaturesWidget):
         param_title = str(param.get("title") or param.get("id") or "Parameter")
         return f"{feature_title}: {param_title}"
 
-    def _multiscale_lz_scales_error(self, value: Any, *, label: str, **_: Any) -> str | None:
+    def _multiscale_lz_scales_errors(self, value: Any, *, label: str, **_: Any) -> list[str]:
         # Regla personalizada: en este caso no basta con "texto". Queremos una
         # lista tipo Python con enteros positivos y separador coma+espacio.
         if not isinstance(value, str):
-            return f"{label} must be written as a text list like [1, 3, 5]."
-        if not self._multiscale_lz_scales_pattern.fullmatch(value):
-            return f"{label} must follow the format [1, 3, 5]."
-        return None
+            return [f"{label} must be written as a text list like [1, 3, 5]."]
+        return self._validator.validate_many(value,
+            [("pattern", {"pattern": self._multiscale_lz_scales_pattern,
+                "message": f"{label} must follow the format [1, 3, 5]."})],
+            label=label)
+
+    def _absolute_band_power_errors(self, _value: Any, *, label: str, **_: Any) -> list[str]:
+        # Regla compuesta: si se activa absolute band power, debe existir al
+        # menos una banda util procedente del preprocessing o de la broadband.
+        selected_frequency_bands, _ = self._preprocessing_selected_frequency_state()
+        return self._validator.validate_many(selected_frequency_bands,
+            [("minimum_length", {"minimum": 1, "item_name": "pre-processing band", "action": "select"})],
+            label=label)
+
+    def _relative_band_power_errors(self, _value: Any, *, label: str, **_: Any) -> list[str]:
+        # Regla compuesta: si preprocessing ya aporta bandas nominales, se usan.
+        # Si no, la tabla custom debe tener al menos una banda valida.
+        selected_frequency_bands, _ = self._preprocessing_selected_frequency_state()
+        preprocessing_named_bands = [band for band in selected_frequency_bands if str(band.get("id", "")) != "broadband"]
+        if preprocessing_named_bands:
+            return []
+
+        selected_relative_bands = self._selected_relative_band_power_bands()
+        errors = self._validator.validate_many(selected_relative_bands,
+            [("minimum_length", {"minimum": 1, "item_name": "frequency band", "action": "select"})],
+            label=label)
+        if errors:
+            return errors
+        if self._relative_band_power_table is not None and not self._relative_band_power_table.is_valid():
+            return [f"{label}: {error}" for error in self._relative_band_power_table.validation_errors()]
+        return []
 
     def _feature_param_rules(self, feature_id: str, param: dict[str, Any]
         ) -> list[str | tuple[str, dict[str, Any]]]:
@@ -339,7 +366,7 @@ class EEGFeaturesWidget(FeaturesWidget):
 
         if (feature_id == self._multiscale_lz_feature_id
             and str(param.get("id", "")) == self._multiscale_lz_scales_param_id):
-            rules.append(("custom", {"validator": self._multiscale_lz_scales_error}))
+            rules.append(("custom", {"validator": self._multiscale_lz_scales_errors}))
 
         return rules
 
@@ -354,23 +381,12 @@ class EEGFeaturesWidget(FeaturesWidget):
         errors: list[str] = []
 
         if self._absolute_band_power_feature_id in selected_features:
-            selected_frequency_bands, _ = self._preprocessing_selected_frequency_state()
-            errors.extend(self._validator.validate_many(selected_frequency_bands,
-                [("minimum_length", {"minimum": 1, "item_name": "pre-processing band", "action": "select"})],
-                label="Absolute band power"))
+            errors.extend(self._validator.validate_errors(feature_params.get(self._absolute_band_power_feature_id),
+                "custom", label="Absolute band power", validator=self._absolute_band_power_errors))
 
         if self._relative_band_power_feature_id in selected_features:
-            selected_frequency_bands, _ = self._preprocessing_selected_frequency_state()
-            preprocessing_named_bands = [band for band in selected_frequency_bands if str(band.get("id", "")) != "broadband"]
-            if not preprocessing_named_bands:
-                selected_relative_bands = self._selected_relative_band_power_bands()
-                relative_band_errors = self._validator.validate_many(selected_relative_bands,
-                    [("minimum_length", {"minimum": 1, "item_name": "frequency band", "action": "select"})],
-                    label="Relative band power")
-                errors.extend(relative_band_errors)
-                if (not relative_band_errors and self._relative_band_power_table is not None
-                    and not self._relative_band_power_table.is_valid()):
-                    errors.extend(f"Relative band power: {error}" for error in self._relative_band_power_table.validation_errors())
+            errors.extend(self._validator.validate_errors(feature_params.get(self._relative_band_power_feature_id),
+                "custom", label="Relative band power", validator=self._relative_band_power_errors))
 
         for feature_id in selected_features:
             feature_definition = self._feature_definitions.get(feature_id, {})

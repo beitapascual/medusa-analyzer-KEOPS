@@ -163,12 +163,12 @@ class ExperimentCard(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if self._enabled and event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
+            self.clicked.emit() # Emitimos señal de que se ha clicado en la tarjeta para que lo reciba el dashboard
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if self._enabled and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
-            self.clicked.emit()
+            self.clicked.emit() # Emitimos señal de que se ha clicado en la tarjeta para que lo reciba el dashboard
             event.accept()
             return
         super().keyPressEvent(event)
