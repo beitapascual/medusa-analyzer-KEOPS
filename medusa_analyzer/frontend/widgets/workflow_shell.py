@@ -143,5 +143,10 @@ class WorkflowShell(QWidget):
         # Le pasa a la barra el estado de cada uno de los pasos para que pueda actualizarse
         self.stepper.set_states(states)
         self.back_button.setText("Back" if current > 0 else "Dashboard")
-        self.next_button.setText("Finish" if current == len(self.steps) - 1 else "Next")
+        if current == len(self.steps) - 2:
+            self.next_button.setText("Run")
+        elif current == len(self.steps) - 1:
+            self.next_button.setText("Finish")
+        else:
+            self.next_button.setText("Next")
         self.next_button.setEnabled(self._current_step_can_continue())
