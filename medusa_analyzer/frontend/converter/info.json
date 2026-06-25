@@ -19,12 +19,12 @@
     {
       "id": "load_data",
       "title": "Load data",
-      "widget": "eeg_load_data_widget.EEGLoadDataWidget"
+      "widget": "converter_load_data_widget.ConverterLoadDataWidget"
     },
     {
-      "id": "report",
-      "title": "Final report",
-      "widget": "eeg_report_widget.EEGReportWidget"
+      "id": "",
+      "title": "",
+      "widget": ""
     }
   ]
 }
