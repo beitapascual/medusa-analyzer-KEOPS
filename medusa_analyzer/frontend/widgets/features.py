@@ -9,21 +9,21 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
 
 @dataclass(frozen=True, slots=True)
 class FeatureItem:
-    id: str # identificador interno de la caracterÃ­stica
-    title: str # nombre visible de la caracterÃ­stica
-    subtitle: str # texto explicativo de la caracterÃ­stica
-    category_id: str # a quÃ© categorÃ­a pertenece
+    id: str # identificador interno de la característica
+    title: str # nombre visible de la característica
+    subtitle: str # texto explicativo de la característica
+    category_id: str # a quÃ© categoría pertenece
     checked_by_default: bool = False # si debe venir marcada al principio
-    params: list[dict[str, Any]] | None = None # parÃ¡metros de la caracterÃ­stica
+    params: list[dict[str, Any]] | None = None # parámetros de la característica
 
 
 class FeaturesWidget(QScrollArea):
-    changed = Signal() # seÃ±al que se emite cuando cambia la selecciÃ³n
+    changed = Signal() # seÃ±al que se emite cuando cambia la selección
     _column_count = 2
     _panel_height = 360
 
-    # El constructor recibe la definiciÃ³n de categorÃ­as y features (config), el estado compartido donde se guarda lo
-    # seleccionado, el tÃ­tulo grande de la pÃ¡gina  y el subtÃ­tulo descriptivo.
+    # El constructor recibe la definición de categorías y features (config), el estado compartido donde se guarda lo
+    # seleccionado, el título grande de la página  y el subtítulo descriptivo.
     def __init__(self, config: dict[str, Any], state: dict[str, Any], title: str, description: str):
         super().__init__()
         self.config = config

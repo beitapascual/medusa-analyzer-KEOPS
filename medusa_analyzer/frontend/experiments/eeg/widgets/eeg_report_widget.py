@@ -95,12 +95,12 @@ class EEGReportWidget(ReportWidget):
         preprocessing = self.state.get("preprocessing", {}) # leemos del estado
         # TODO: habrá que cambiar esto
         if not preprocessing:
-            return self._section("Preprocessing", [("Status", "Preprocessing step skipped.")])
+            return self._section("Pre-processing", [("Status", "Preprocessing step skipped.")])
 
         selected_frequency_bands = preprocessing.get("selected_frequency_bands", [])
         notch = preprocessing.get("notch", {})
         bandpass = preprocessing.get("bandpass", {})
-        return self._section("Preprocessing", # llamamos a _section
+        return self._section("Pre-processing", # llamamos a _section
             [("CAR", "Enabled" if preprocessing.get("car_checked") else "Disabled"),
                 ("Notch", self._filter_description(notch)), ("Bandpass", self._filter_description(bandpass)),
                 ("Analysis bands", self._bands_summary(selected_frequency_bands))])

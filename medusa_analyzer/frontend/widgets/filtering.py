@@ -11,13 +11,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGr
     QSpinBox, QVBoxLayout, QWidget)
 from scipy import signal
 
+from medusa_analyzer.frontend.models import Validation
+
 
 FilterMode = Literal["bandpass", "bandstop"] # tipos de filtros esperados
+_filter_validation = Validation()
 
-# En este script se hace todoo lo relativo al filtrado. Se guarda y ordena la configuración del filtro, se comprueba
-# si esa configuración tiene sentido, se calcula como sería su respuesta en frecuencia y se enseña esa respuesta en una
-# gráfica. A parte, se crea la UI para tocar los parámetreos. O sea es el módulo de configuración + preview del filtro.
-
+# En este script vive todo lo relativo al filtrado: defaults, validaciones,
+# preview de respuesta en frecuencia y controles editables de notch/bandpass.
 # Resumen global del funcionamiento:
 #   Se crea la config inicial con build_filter_defaukts()
 #   FilterControls muestra esa config en la UI
@@ -26,17 +27,18 @@ FilterMode = Literal["bandpass", "bandstop"] # tipos de filtros esperados
 #   El widget padre recibe changed y llama a compute_filter_response
 #   Si va bien, actúa FilterPreviewPlot.set_response(Response. Si va mal, actúan filter_response_error y set_error_message
 
+
 def normalize_choice(choice: Any) -> tuple[str, str]:
-    # Función para normalizar diccionarios de datos o strings y convertirlo en una tupla uniforme que esté lista para
-    # meterla en un combobox.
+    # Normaliza ids/opciones del JSON para que un combobox siempre reciba
+    # (id_interno, titulo_visible).
     if isinstance(choice, dict):
         return str(choice["id"]), str(choice.get("title", choice["id"]))
     return str(choice), str(choice).replace("_", " ").title()
 
 
 def normalize_fir_order(value: int, require_odd: bool = False) -> int:
-    # Función que normaliza el orden del filtro, ya que ciertos tipos de filtro requieren que el orden sea impar. Con
-    # esta función, si el usuario mete un orden de 1000 en un notch, automaticamente se va a subir a 1001.
+    # Algunos filtros FIR necesitan orden impar. Este helper normaliza eso en
+    # un solo sitio para que la UI y el cálculo hablen el mismo idioma.
     order = max(3, int(value)) # mínimo orden del filtro de valor igual a 3
     if require_odd and order % 2 == 0: # si se trata de un filtro bandstop convertimos el orden a impar
         order += 1
@@ -44,8 +46,7 @@ def normalize_fir_order(value: int, require_odd: bool = False) -> int:
 
 
 def build_filter_defaults(config: dict[str, Any], mode: FilterMode) -> dict[str, Any]:
-    # Función para construir el estado inicial de un filtro. En config pasamos directamente la configuración
-    # que queremos para ese filtro.
+    # Construye el estado editable inicial de un filtro a partir del JSON.
     filter_type = str(config.get("filter_type", "fir")).lower()
     require_odd_fir_order = mode == "bandstop" and filter_type == "fir"
     return {
@@ -59,39 +60,72 @@ def build_filter_defaults(config: dict[str, Any], mode: FilterMode) -> dict[str,
         "iir_order": int(config.get("iir_order", 4)),
         "iir_design": str(config.get("iir_design", "butter")),
         "iir_rp_db": float(config.get("iir_rp_db", 1.0)),
-        "iir_rs_db": float(config.get("iir_rs_db", 40.0))}
+        "iir_rs_db": float(config.get("iir_rs_db", 40.0)),
+    }
 
 
 @dataclass(frozen=True, slots=True)
 class FilterResponse:
-    # Clase que almacena las frecuencias y la magnitud de la respuesta del filtro para luego pintar la gráfica.
+    # Estructura ligera que contiene la respuesta del filtro (frecuencia y magnitud) ya preparada para
+    # dibujarse en el plot.
     frequencies: list[float]
     magnitude_db: list[float]
 
 
+def filter_validation_errors(config: dict[str, Any], fs: float) -> list[str]:
+    # Centralizamos aquí las reglas genéricas de validación del filtro:
+    # - los cortes deben ser números finitos
+    # - deben estar entre 0 y Nyquist
+    # - low debe quedar por debajo de high
+    # - TODO: SE GESTIONA TAMBIÉN LO DEL BANDPASS??
+    if not config.get("enabled", True):
+        return []
+
+    nyquist = fs / 2
+    errors: list[str] = []
+    errors.extend(_filter_validation.validate_many(config.get("low_cut"),
+        ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " Hz"}),
+            ("less_than", {"maximum": nyquist, "suffix": " Hz"})],
+        label="Low cut"))
+    errors.extend(_filter_validation.validate_many(config.get("high_cut"),
+        ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " Hz"}),
+            ("less_than", {"maximum": nyquist, "suffix": " Hz"})],
+        label="High cut"))
+    if errors:
+        return errors
+
+    low_cut = Validation.coerce_float(config.get("low_cut"))
+    high_cut = Validation.coerce_float(config.get("high_cut"))
+    errors.extend(_filter_validation.validate_many(low_cut,
+        [("less_than", {"maximum": high_cut, "suffix": " Hz"})],
+        label="Low cut"))
+    return errors
+
+
 def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode) -> FilterResponse | None:
-    # Función para calcular la respuesta en frecuencia de un filtro
+    # Calcula la respuesta en frecuencia de un filtro. Si la configuración no pasa las
+    # validaciones básicas devolvemos None y el widget mostrará el error.
 
     # Su el filtro está desactivado, devolvemos una línea plana a 0 dB
     if not config.get("enabled", True):
         return FilterResponse([0.0, fs / 2], [0.0, 0.0])
 
-    low_cut = float(config["low_cut"])
-    high_cut = float(config["high_cut"])
-    filter_type = str(config["filter_type"]).lower()
-    # Validamos que los límites estén por debajo de la frecuencia de Nyquist
-    if not 0 < low_cut < high_cut < fs / 2:
+    if filter_validation_errors(config, fs):
         return None
+
+    low_cut = Validation.coerce_float(config["low_cut"])
+    high_cut = Validation.coerce_float(config["high_cut"])
+    filter_type = str(config["filter_type"]).lower()
 
     try:
         if filter_type == "fir":
             numtaps = normalize_fir_order(config["fir_order"], require_odd=mode == "bandstop")
             window = str(config["fir_window"])
-            coefficients = signal.firwin(numtaps,[low_cut, high_cut], pass_zero=mode == "bandstop",
+            coefficients = signal.firwin(numtaps, [low_cut, high_cut], pass_zero=mode == "bandstop",
                 fs=fs, window=window) # utilizamos scipy.signal.firwin
             frequencies, response = signal.freqz(coefficients, worN=1024, fs=fs) # respuesta en frecuencia
         else:
-            iir_kwargs = {}
+            iir_kwargs: dict[str, Any] = {}
             design = str(config["iir_design"])
             if design in {"cheby1", "ellip"}:
                 iir_kwargs["rp"] = float(config["iir_rp_db"])
@@ -109,17 +143,14 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode)
 
 def filter_response_error(config: dict[str, Any], fs: float) -> str:
     # Función para construir los mensajes de error.
-    low_cut = float(config["low_cut"])
-    high_cut = float(config["high_cut"])
-    nyquist = fs / 2
-    if not 0 < low_cut < high_cut < nyquist:
-        return ( f"Cutoffs must satisfy 0 < low < high < {nyquist:g} Hz "
-            f"(Nyquist limit for {fs:g} Hz sampling).")
+    validation_errors = filter_validation_errors(config, fs)
+    if validation_errors:
+        return validation_errors[0]
     return "Unable to design a response with the selected filter parameters."
 
 
 class FilterPreviewPlot(QFrame):
-    # Widget que pinta la gráfica
+    # Widget que pinta la gráfica de respuesta en frecuencia.
     def __init__(self): # inicializamos el widget de la gráfica, sus colores y su estado vacío
         super().__init__()
         self.setProperty("role", "plot")
@@ -218,7 +249,7 @@ class FilterPreviewPlot(QFrame):
         plot = self.rect().adjusted(48, 18, -18, -55)
         painter.fillRect(plot, self._plot_background_color)
 
-        maximum_frequency = (max(self.response.frequencies) if self.response and self.response.frequencies else 1.0)
+        maximum_frequency = max(self.response.frequencies) if self.response and self.response.frequencies else 1.0
         axis_maximum, frequency_ticks = self._frequency_ticks(maximum_frequency, plot.width())
 
         painter.setPen(QPen(self._grid_color, 1))
@@ -247,7 +278,8 @@ class FilterPreviewPlot(QFrame):
             painter.drawText(QRectF(label_left, plot.bottom() + 4, label_width, 17),
                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, f"{frequency:g}")
 
-        painter.drawText(plot.left(), plot.bottom() + 25, plot.width(), 20, Qt.AlignmentFlag.AlignCenter, "Frequency (Hz)")
+        painter.drawText(plot.left(), plot.bottom() + 25, plot.width(), 20, Qt.AlignmentFlag.AlignCenter,
+            "Frequency (Hz)")
         if not self.response or len(self.response.frequencies) < 2:
             painter.setPen(self._empty_message_color)
             painter.drawText(plot.adjusted(24, 24, -24, -24), Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
@@ -272,7 +304,7 @@ class FilterPreviewPlot(QFrame):
 
 
 class FilterControls(QFrame):
-    # Panel editable de los filtros. este widget es el bloque UI del filtro. Tiene un checkbox por defecto enabled,
+    # Panel editable de los filtros. Este widget es el bloque UI del filtro. Tiene un checkbox por defecto enabled,
     # un low_cut y hight_cut, un selector FIR/IIR, bloque FIR, bloque IIR, label de error y una señal de changed.
 
     changed = Signal() # avisar fuera cuando cambia algo
@@ -467,10 +499,11 @@ class FilterControls(QFrame):
         if message:
             self.error_label.setText(message)
             self.error_label.show()
-        else:
-            self.error_label.clear()
-            self.error_label.hide()
+            return
+        self.error_label.clear()
+        self.error_label.hide()
 
 
-__all__ = ["FilterControls","FilterMode", "FilterPreviewPlot", "FilterResponse", "build_filter_defaults",
-    "compute_filter_response", "filter_response_error", "normalize_choice", "normalize_fir_order"]
+__all__ = ["FilterControls", "FilterMode", "FilterPreviewPlot", "FilterResponse", "build_filter_defaults",
+    "compute_filter_response", "filter_response_error", "filter_validation_errors", "normalize_choice",
+    "normalize_fir_order"]
