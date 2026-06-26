@@ -12,33 +12,51 @@ from medusa_analyzer.frontend.workers import TaskRunner, Worker
 # Script to allow user to select EDF files, load them in a background thread using workers,
 # extract metadata from files and show them on the screen.
 
-def _load_files(loader: Callable[..., dict], paths: list[str],
-    progress_callback: Callable[[int], None] | None = None) -> list[dict]:
-    # Recibimos loader, funciÃ³n que sabe cargar un archivo, y se aplica para cargar varios archivos. Esa funciÃ³n laoder
-    # ahora es mock, pero luego serÃ¡ la que cargue el experimento en BIDS. Hay un progress_callback opcional para
-    # informar del progreso.
+def _load_files(loader_function: Callable[..., dict], paths: list[str],
+    global_progress_callback: Callable[[int], None] | None = None) -> list[dict]:
+    """
+    """
+    # Recibimos loader, función que sabe cargar un archivo, y se aplica para cargar varios archivos.
+    # Hay un progress_callback opcional para informar del progreso.
 
     results = []
     file_count = len(paths)
-    for index, path in enumerate(paths):
-        # Function to convert the progress of one individual file in a global progress
-        def report_progress(value: int, file_index: int = index) -> None:
-            if progress_callback:
-                progress_callback(int((file_index * 100 + value) / file_count))
-        results.append(loader(path, progress_callback=report_progress))
+    for file_index, path in enumerate(paths):
+
+        def report_file_progress(file_progress: int) -> None:
+            """ _load_files carga varios archivos, pero loader_function carga uno. Entonces el laoder
+            sabe decir este archivo va al 50%, pero la barra necesita sabe 'toda la carga va al 30%).
+            Esta función hace de traductora: progreso de este archivo - progreso global"""
+            if global_progress_callback is None:
+                return
+            global_progress = int((file_index * 100 + file_progress) / file_count)
+            global_progress_callback(global_progress) # Aquí es donde emitimos (worker.signals.progress.emit(global_progress))
+
+        # NOTA: la función de loader tiene que estar programada para avisar del progreso.
+        result = loader_function(path, progress_callback=report_file_progress)
+        results.append(result)
+
+        if global_progress_callback is not None:
+            global_progress_callback(int(((file_index + 1) * 100) / file_count))
 
     return results
 
 
 class LoadDataWidget(QScrollArea):
-    # Muestra un botÃ³n "Select EDF files", el usuario selecciona uno o varios ficheros, se limpian los datos anteriores,
-    # se muestran los nombres de los archivos seleccionados, se cargan archivos en segundo planto, se extraen los
-    # metadatos, se guardan los resultados en state, se muestran los metadatos en pantalla, se emite changed para avisar
-    # al WorkFlowShell y can_continue() devuelve True si ya hay datos cargados
+    """
+    - Muestra un botón "Select EDF files"
+    - El usuario selecciona uno o varios ficheros
+    - Se limpian los datos anteriores
+    - Se muestran los nombres de los archivos seleccionados
+    - Se cargan archivos en segundo planto con un Worker
+    - Se extraen los metadatos
+    - Se guardan los resultados en state
+    - Se muestran los metadatos en pantalla
+    - Se emite changed para avisar al WorkFlowShell
+    - can_continue() devuelve True si ya hay datos cargados. """
 
-    changed = Signal() # emit a signal when widget state changes, por example when a file is
-    # selected o when files are loaded correctly.
-    # Esta seÃ±al conectar con la del WorkflowShell
+    changed = Signal() # emit a signal when widget state changes, for example when a file is
+    # selected o when files are loaded correctly. Esta señal conecta con la del WorkflowShell
         # changed_signal = getattr(widget, "changed", None)
         # if changed_signal is not None:
         #     changed_signal.connect(self._refresh_navigation)
@@ -47,17 +65,17 @@ class LoadDataWidget(QScrollArea):
     def __init__(self,
         config: dict[str, Any], # allowed extensions
         state: dict[str, Any], # memoria compartida del experimento
-        loader: Callable[..., dict], # function that knows how to load a file
+        loader_function: Callable[..., dict], # function that knows how to load a file
         title: str, # title to show in the UI
         description: str): # description to show in the UI
 
         super().__init__()
         self.config = config
         self.state = state
-        self.loader = loader
-        self.runner = TaskRunner() # serÃ¡ el encargado de lanzar el trabajo en segundo planto
+        self.loader_function = loader_function
+        self.runner = TaskRunner() # será el encargado de lanzar el trabajo en segundo planto
 
-        # ConstrucciÃ³n visual del widget
+        # Construcción visual del widget
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.content = QWidget()
@@ -73,20 +91,20 @@ class LoadDataWidget(QScrollArea):
         root.addWidget(description_label)
         root.addSpacing(18)
 
-        panel = QFrame() # Panel de selecciÃ³n con un pushButton para seleccioanr archivos
+        panel = QFrame() # Panel de selección con un pushButton para seleccionar archivos
         panel.setProperty("role", "surface-panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(24, 22, 24, 22)
-        self.select_button = QPushButton("Select EDF files")
+        self.select_button = QPushButton("Select EDF files") # Botón
         self.select_button.setProperty("variant", "secondary")
-        self.select_button.clicked.connect(self._select_files) # ConexiÃ³n
+        self.select_button.clicked.connect(self._select_files) # Conexión
 
         self.files = QListWidget() # Visual list to show selected file names
         self.files.setMinimumHeight(125)
         self.files.setProperty("role", "file-list")
 
-        # Texto de estado que al principio dice que elijas archivos, pero luego puede cambiar a 'leyendo...' o
-        # 'registros cargados correctamente'.
+        # Texto de estado. Cambia dinámicamente. Al principio dice que elijas archivos. Luego puede cambiar
+        # a 'leyendo...' o 'registros cargados correctamente'.
         self.status_label = QLabel("Choose one or more recordings to load their metadata.")
         self.status_label.setObjectName("selectionStatus")
         self.status_label.setProperty("status", "idle") # ready or error
@@ -101,53 +119,61 @@ class LoadDataWidget(QScrollArea):
         self.metadata_layout = QGridLayout(self.metadata_panel)
         self.metadata_layout.setContentsMargins(24, 20, 24, 20)
         root.addWidget(self.metadata_panel)
-        self.metadata_panel.hide() # only shown when metadada are laoded
+        self.metadata_panel.hide() # only shown when metadata are loaded
         root.addStretch()
 
         # Creamos una capa de carga, que es una pantalla superpuesta con la barra de progreso
         self.overlay = LoadingOverlay(self)
 
-        # Si en el state ya hay metadatos cargados, los mostramos otra vez. Â¿Por quÃ©? Pues porque quizÃ¡ el usuario
-        # vuelve a este paso despuÃ©s de haber avanzado y no queremos que salga el widget vacÃ­o si ya se habÃ­an
+        # Si en el state ya hay metadatos cargados, los mostramos otra vez. ¿Por qué? Pues porque quizá el usuario
+        # vuelve a este paso después de haber avanzado y no queremos que salga el widget vacío si ya se habían
         # cargado archivos antes.
-
         metadata_list = self.state.get("metadata_list") or []
         if metadata_list:
             self.files.addItems([metadata.file_name for metadata in metadata_list])
             self._show_metadata(metadata_list)
 
     def _select_files(self) -> None:
-        # Abrimos la ventana tÃ­pica para seleccionar archivos
+        """Función para seleccionar archivos a cargar y lanzar el worker.
+        No devuelve ningún resultado con return. El resultado de carga llega más tarde, por señal:
+        worker.signals.result.connect(self._loaded).
+        _loaded(results) recibe los registros cuando el worker termina bien."""
+        # Abrimos la ventana para seleccionar archivos.
         paths, _ = QFileDialog.getOpenFileNames(self, "Select recordings", "", self._dialog_filter())
-        if not paths:
+        if not paths: # devolvemos una lista de rutas seleccionadas.
             return
         self._clear_loaded_state() # Borramos del state cualquier archivo cargado antes
         self.files.clear()
-        self.files.addItems([Path(path).name for path in paths]) # AÃ±adimos solo los nombres de los archivos, no el path completo
-        self.metadata_panel.hide()
+        self.files.addItems([Path(path).name for path in paths]) # Añadimos solo nombres de archivos, no path completo
+        self.metadata_panel.hide() # Ocultamos panel metadatos
         self.status_label.setText(f"Reading {len(paths)} recording(s)...")
         self.status_label.setProperty("status", "idle")
-        self._refresh_status_style()
-        self.changed.emit() # avisamos al WorkflowShell
+        # NOTA EXPLICATIVA: Una propiedad dinámica puede tener tres estados: "idle" (estado neutro / esperando /
+        # cargando), "ready" (carga correcta) y error (carga fallida).
+        self._refresh_status_style() # Actualizamos el texto de la label de estado
+        self.changed.emit() # avisamos al WorkflowShell de cambios para deshabilitar el Next.
         self.select_button.setEnabled(False)
         self.overlay.show_loading("Reading recordings...")
 
-        # Creamos el worker y la tarea que va a ejecutar es la de _load_files
-        worker = Worker(_load_files, self.loader, paths)
-        # Cuando el worker informe del progreso, actualizamos la barra de overlay
+        # Creamos el worker
+        worker = Worker(_load_files, self.loader_function, paths) # tarea a ejecutar: _load_files
+        # Cuando el worker informe del progreso, actualizamos la barra de overlay.
+        # self.overlay es el LoadingOverlay(QFrame). Dentro de esta clase se define atributo progress como QProgressBar()
         worker.signals.progress.connect(self.overlay.progress.setValue)
-        worker.signals.result.connect(self._loaded) # Todo: tengo que mirar esto
-        worker.signals.error.connect(self._failed) # Todo: tengo que mirar esto
+        # Cuando el worker emita el resultado de la carga, ejecutamos self._loaded.
+        worker.signals.result.connect(self._loaded)
+        worker.signals.error.connect(self._failed)
         worker.signals.finished.connect(self._finished_loading)
-        self.runner.start(worker) # Lanzamos el worker
+        self.runner.start(worker) # Lanzamos el worker. Aquí tiene lugar la carga de archivos.
 
     def _dialog_filter(self) -> str:
-        # FunciÃ³n que construye el filtro del diÃ¡logo de archivos.
+        """Construye el filtro del diálogo de archivos."""
         extensions = self.config.get("allowed_extensions", [".edf"])
         patterns = " ".join(f"*{extension}" for extension in extensions)
         return f"Supported files ({patterns});;All files (*.*)"
 
     def _clear_loaded_state(self) -> None:
+        """Eliminar del estado lo relativo a los metadatos."""
         # Delete from state files loaded previously
         self.state["loaded_file_paths"] = []
         self.state["loader_results"] = []
@@ -157,9 +183,9 @@ class LoadDataWidget(QScrollArea):
         self.state.pop("metadata", None)
 
     def _loaded(self, results: list[dict]) -> None:
-        # Esta funciÃ³n se ejecuta cuando el worker terminÃ³ correctamente. Recibe results, que es la lista de
-        # resultados del loader, y convierte cada resultado del loader en un metadata summary.
-        # AdemÃ¡s, guarda un montÃ³n de cosas en el state.
+        """Recibe results (lista de resultados del loader) y los convierte en un MetadataSummary.
+        Se ejecuta cuando el worker terminó correctamente.
+        Guarda los metadata cargados en el state."""
 
         # Convertimos cada resultado del loader en un objeto MetadataSummary.
         metadata_list = [MetadataSummary.from_loader_result(result) for result in results]
@@ -171,34 +197,35 @@ class LoadDataWidget(QScrollArea):
         self.state.pop("metadata", None)
         self.status_label.setText(f"{len(results)} recording(s) loaded successfully.")
         self.status_label.setProperty("status", "ready")
-        self._refresh_status_style()
-        self._show_metadata(metadata_list)
-        # Avisamos al WorkflowShell. DespuÃ©s de cargar bien, can_continue() devolverÃ¡ True, entonces el botÃ³n
-        # Next podrÃ¡ activarse.
+        self._refresh_status_style() # Actualizamos label
+        self._show_metadata(metadata_list) # Mostramos el resumen
+        # Avisamos al WorkflowShell. Después de cargar bien, can_continue() devolverá True, entonces el botón
+        # Next podrá activarse.
         self.changed.emit()
 
     def _failed(self, error: str) -> None:
-        # Se ejecuta si la carga falla, muestra solo la primera lÃ­nea del error y cambia el estado visual a error.
-        self.status_label.setText(error.splitlines()[0])
-        self.status_label.setProperty("status", "error")
+        """ Se ejecuta cuando la carga de datos falla."""
+        self.status_label.setText(error.splitlines()[0]) # Mostramos solo la primera línea de error en la label dinámica
+        self.status_label.setProperty("status", "error") # Cambia el estado visual a error
         self._refresh_status_style()
 
     def _finished_loading(self) -> None:
-        # Se ejecuta al final, tanto si hubo Ã©xito como error. Oculta el overlay y vuelve a activar el botÃ³n de
-        # seleccionar archivos.
-        self.overlay.hide()
-        self.select_button.setEnabled(True)
+        """Se ejecuta al final, tanto si hubo éxito como error"""
+        self.overlay.hide() # ocultar el overlay
+        self.select_button.setEnabled(True) # Volver a activar el botón de seleccionar archivos.
 
     def _refresh_status_style(self) -> None:
-        # FunciÃ³n para forzar a Qt a recalcular el estilo del label porque estamos usando propiedades dinÃ¡micas.
+        """Fuerza a Qt a recalcular el estilo de la label (propiedades dinámicas)."""
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
     def _show_metadata(self, metadata_list: list[MetadataSummary]) -> None:
-        # FunciÃ³n para pintar los metadatos en el panel
-        # Primero limpia los metadatos anteriores porque, por ejemplo si antes cargamos 2 archivos y ahora 3, no
-        # queremos que se mezclen los datos viejos con los nuevos.
+        """Función para pintar los metadatos en el panel"""
+        # TODO: está función va a haber que cambiarla. Lo ideal sería que de alguna forma sea capaz de detectar
+        #  archivos con cosas diferentes. Que haga un summary general de todo lo común, y luego que comente
+        # individualmente lo diferente o algo así.
 
+        # Limpiamos los metadata anteriores
         while self.metadata_layout.count():
             item = self.metadata_layout.takeAt(0)
             if item.widget():
@@ -209,16 +236,16 @@ class LoadDataWidget(QScrollArea):
         sampling_rate = (f"{next(iter(sampling_rates)):g} Hz" if len(sampling_rates) == 1
             else "Mixed") # TODO: que muestre que archivos tienen diferentes y que si sample_rate estÃ¡ vacÃ­o
         # todo muestre "-" en vez de "Mixed"
-        # Creamos una lista con el nÂº de canales de cada archivo
+        # Creamos una lista con el nº de canales de cada archivo
         channel_counts = [len(metadata.channels) for metadata in metadata_list]
-        # Si todos tienen el mismo nÃºmero, ponemos X canales; si varÃ­an ponemos X-Y per file
+        # Si todos tienen el mismo nº, ponemos X canales; si varían ponemos X-Y per file
         channel_count = (str(channel_counts[0]) if len(set(channel_counts)) == 1
             else f"{min(channel_counts)}-{max(channel_counts)} per file")
-        # Suma la duraciÃ³n de todos los registros
+        # Suma la duración de todos los registros
         duration = sum(metadata.duration_seconds or 0.0 for metadata in metadata_list)
-        # Suma el nÂº de muestras
+        # Suma el nº de muestras
         samples = sum(metadata.n_samples or 0 for metadata in metadata_list)
-        # Lista de canales Ãºnicos
+        # Lista de canales únicos
         channels = list(dict.fromkeys(channel for metadata in metadata_list for channel in metadata.channels))
         # Valores a mostrar en el metadata summary de la pantalla
         values = [("Number of files", str(len(metadata_list))),
@@ -240,7 +267,7 @@ class LoadDataWidget(QScrollArea):
         self.metadata_panel.show()
 
     def can_continue(self) -> bool:
-        # Recuerda de WorkflowShell hace lo de if hasattr(widget, "can_continue"). Hasta que no haya una carga vÃ¡lida,
-        # el Next queda deshabilitado.
-        return bool(self.state.get("metadata_list"))
+        """Validación del step. Hasta que no haya una lista de metadatos no avanza.
+        NOTA RECORDATORIA: WorkflowShell hace lo de if hasattr(widget, "can_continue")."""
+        return bool(self.state.get("metadata_list")) # hasta que no haya carga válida, Next queda deshabilitado.
 

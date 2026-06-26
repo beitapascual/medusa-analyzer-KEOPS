@@ -11,7 +11,7 @@ class StepProgressBar(QWidget):
     def __init__(self, labels: list[str]):
         super().__init__()
         self.labels = labels
-        # Inicializamos los estados. Al prinicipio, el primer estado está activo y los demás bloqueados.
+        # Inicializamos los estados. Al principio, el primer estado está activo y los demás bloqueados.
         self.states = ["active"] + ["locked"] * (len(labels) - 1)
         self._line_color = QColor("#DDD7D8")
         self._locked_step_color = QColor("#C9C4C7")

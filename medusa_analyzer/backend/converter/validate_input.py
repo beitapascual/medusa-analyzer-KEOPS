@@ -45,7 +45,7 @@ def validate_input(path: str, extension: str) -> Dict[str, Union[bool, List[str]
             continue
 
         last_entity_index = -1
-        for part in filename_parts[:-1]: # El último elemento en BIDS suele ser el sufijo (ej. 'eeg', 'meg', 'bold'), no una entidad
+        for part in filename_parts[:-1]:
             if not bids_entity_pattern.match(part):
                 errors.append(
                     f"[{filename}] Entity {part} is not valid. It should follow the format 'key-value'.")
