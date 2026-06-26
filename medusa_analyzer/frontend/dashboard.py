@@ -146,7 +146,7 @@ class DashboardPage(QScrollArea):
                 enabled=item.enabled, status=item.status, accent=item.accent)
             if item.enabled:
                 # IMPORTANTE: cuando la clicamos emite señal con la ruta específica. Aquí detectamos que una tarjeta ha
-                # emitido un click y ejecutamos la función lambda. Esta función ahce que DashboardPage emita route_requestec
+                # emitido un click y ejecutamos la función lambda. Esta función hace que DashboardPage emita route_requestec
                 # con la ruta de esa tarjeta.
 
                 # En MainWindow tenemos 'self.dashboard.route_requested.connect(self.router.navigate)' que llama al Router.
