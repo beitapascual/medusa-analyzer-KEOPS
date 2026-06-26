@@ -5,7 +5,7 @@ from typing import Any
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QFileDialog, QFrame, QGridLayout, QLabel, QListWidget,
     QPushButton, QScrollArea, QVBoxLayout, QWidget)
-from medusa_analyzer.frontend.models import MetadataSummary
+from medusa_analyzer.frontend.utils import create_metadata_summaries
 from medusa_analyzer.frontend.widgets.loading_overlay import LoadingOverlay
 from medusa_analyzer.frontend.workers import TaskRunner, Worker
 
@@ -130,7 +130,7 @@ class LoadDataWidget(QScrollArea):
         # cargado archivos antes.
         metadata_list = self.state.get("metadata_list") or []
         if metadata_list:
-            self.files.addItems([metadata.file_name for metadata in metadata_list])
+            self.files.addItems([metadata.get("file_name", "") for metadata in metadata_list])
             self._show_metadata(metadata_list)
 
     def _select_files(self) -> None:
@@ -188,8 +188,8 @@ class LoadDataWidget(QScrollArea):
         Guarda los metadata cargados en el state."""
 
         # Convertimos cada resultado del loader en un objeto MetadataSummary.
-        metadata_list = [MetadataSummary.from_loader_result(result) for result in results]
-        self.state["loaded_file_paths"] = [result.get("path") for result in results]
+        metadata_list = create_metadata_summaries(results)
+        self.state["loaded_file_paths"] = [metadata["file_path"] for metadata in metadata_list]
         self.state["loader_results"] = results
         self.state["metadata_list"] = metadata_list
         self.state.pop("loaded_file_path", None)
@@ -219,7 +219,7 @@ class LoadDataWidget(QScrollArea):
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
-    def _show_metadata(self, metadata_list: list[MetadataSummary]) -> None:
+    def _show_metadata(self, metadata_list: list[dict[str, Any]]) -> None:
         """Función para pintar los metadatos en el panel"""
         # TODO: está función va a haber que cambiarla. Lo ideal sería que de alguna forma sea capaz de detectar
         #  archivos con cosas diferentes. Que haga un summary general de todo lo común, y luego que comente
@@ -232,21 +232,22 @@ class LoadDataWidget(QScrollArea):
                 item.widget().deleteLater()
 
         # Creamos un conjunto con las frecuencias de muestreo
-        sampling_rates = {metadata.sampling_rate for metadata in metadata_list if metadata.sampling_rate is not None}
+        sampling_rates = {metadata.get("sampling_rate") for metadata in metadata_list
+            if metadata.get("sampling_rate") is not None}
         sampling_rate = (f"{next(iter(sampling_rates)):g} Hz" if len(sampling_rates) == 1
             else "Mixed") # TODO: que muestre que archivos tienen diferentes y que si sample_rate estÃ¡ vacÃ­o
         # todo muestre "-" en vez de "Mixed"
         # Creamos una lista con el nº de canales de cada archivo
-        channel_counts = [len(metadata.channels) for metadata in metadata_list]
+        channel_counts = [len(metadata.get("channels") or []) for metadata in metadata_list]
         # Si todos tienen el mismo nº, ponemos X canales; si varían ponemos X-Y per file
         channel_count = (str(channel_counts[0]) if len(set(channel_counts)) == 1
             else f"{min(channel_counts)}-{max(channel_counts)} per file")
         # Suma la duración de todos los registros
-        duration = sum(metadata.duration_seconds or 0.0 for metadata in metadata_list)
+        duration = sum(metadata.get("duration_seconds") or 0.0 for metadata in metadata_list)
         # Suma el nº de muestras
-        samples = sum(metadata.n_samples or 0 for metadata in metadata_list)
+        samples = sum(metadata.get("n_samples") or 0 for metadata in metadata_list)
         # Lista de canales únicos
-        channels = list(dict.fromkeys(channel for metadata in metadata_list for channel in metadata.channels))
+        channels = list(dict.fromkeys(channel for metadata in metadata_list for channel in (metadata.get("channels") or [])))
         # Valores a mostrar en el metadata summary de la pantalla
         values = [("Number of files", str(len(metadata_list))),
             ("Sampling rate", sampling_rate),
