@@ -1,0 +1,24 @@
+{
+    "onset": {
+        "Description": "Tiempo de inicio del evento desde el comienzo del registro",
+        "Units": "s"
+    },
+    "duration": {
+        "Description": "Duración del evento",
+        "Units": "s"
+    },
+    "trial_type": {
+        "Description": "Categoría principal de la prueba o estímulo",
+        "Levels": {
+            "sequence_presentation": "Ensayo de tipo sequence_presentation",
+            "recall_start": "Ensayo de tipo recall_start"
+        }
+    },
+    "value": {
+        "Description": "Código numérico de la marca enviado por hardware",
+        "Levels": {
+            "41": "sequence_presentation",
+            "42": "recall_start"
+        }
+    }
+}

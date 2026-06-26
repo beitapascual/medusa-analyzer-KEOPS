@@ -1,0 +1,19 @@
+{
+    "age": {
+        "Description": "Edad del participante",
+        "Units": "years"
+    },
+    "sex": {
+        "Description": "Sexo asignado al nacer",
+        "Levels": {
+            "M": "Male",
+            "F": "Female"
+        }
+    },
+    "group": {
+        "Description": "Grupo de estudio"
+    },
+    "bdi_score": {
+        "Description": "Beck Depression Inventory score en la evaluación inicial"
+    }
+}

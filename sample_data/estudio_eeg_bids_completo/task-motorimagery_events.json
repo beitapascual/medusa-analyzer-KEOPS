@@ -1,0 +1,24 @@
+{
+    "onset": {
+        "Description": "Tiempo de inicio del evento desde el comienzo del registro",
+        "Units": "s"
+    },
+    "duration": {
+        "Description": "Duración del evento",
+        "Units": "s"
+    },
+    "trial_type": {
+        "Description": "Categoría principal de la prueba o estímulo",
+        "Levels": {
+            "cue_left": "Ensayo de tipo cue_left",
+            "cue_right": "Ensayo de tipo cue_right"
+        }
+    },
+    "value": {
+        "Description": "Código numérico de la marca enviado por hardware",
+        "Levels": {
+            "51": "cue_left",
+            "52": "cue_right"
+        }
+    }
+}

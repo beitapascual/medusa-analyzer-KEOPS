@@ -38,7 +38,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
                 button_layout.addWidget(self.select_button)
 
                 # Create and add the new button.
-                self.load_files_button = QPushButton("Load files")
+                self.load_files_button = QPushButton("Load MEDUSA files")
                 self.load_files_button.setProperty("variant", "secondary")
                 button_layout.addWidget(self.load_files_button)
 
