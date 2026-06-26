@@ -121,7 +121,9 @@ class ExperimentCard(QWidget):
 
     def set_card_width(self, width: int) -> None:
         """
-        Permite cambiar el ancho de la tarjeta y recolocar surface. Esto puede usarlo un grid responsive
+        Permite cambiar el ancho de la tarjeta y recolocar surface. Esto puede usarlo un grid responsive.
+        Se llama en module_grid en el reflow, cuando hay que recalcular el grid donde se menten todas las
+        tarjetas.
         """
         self.setFixedWidth(width)
         self._position_surface()

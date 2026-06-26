@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QStacke
 from medusa_analyzer.frontend.navigator import Navigator
 from medusa_analyzer.frontend.widgets.step_progress_bar import StepProgressBar
 
-# Nota: create_experiment_page() crea los widgets y WorkflowShell los muestra y permite navegar entre ellos
+# Nota: create_experiment_page() crea los widgets y WorkflowShell los muestra y emite señales para que el router
+# pueda navegar a él.
 
 class WorkflowShell(QWidget):
     # Se encarga de mostrar el título del experimento, el subtítulo, la barra de progreso, meter cada widget en una
@@ -56,7 +57,7 @@ class WorkflowShell(QWidget):
         divider.setFrameShape(QFrame.Shape.HLine)
         root.addWidget(divider)
 
-        self.stack = QStackedWidget() # StackWidget para los pasos del experimento
+        self.stack = QStackedWidget() # StackWidget para los pasos del experimento. Se mete dentro del Widget grande (WorkflowShell).
         self.navigator = Navigator(self.stack) # El navegador nos permité movernos por los diferentes steps
         for step in steps:
             widget = step["widget"]
@@ -108,24 +109,28 @@ class WorkflowShell(QWidget):
             self.dashboard_requested.emit()
             return
         # Si no estamos en el último paso, avanza al siguiente y actualiza la interfaz.
-        self.navigator.next()
+        self.navigator.next() # Para realmente avanzar, usamos la función del navigator.
         self._activate_current_step()
         self._refresh_navigation()
 
     def _current_step_can_continue(self) -> bool:
-        # Mira si el widget tiene métoodo de valiadación. Si el widget no tiene can_continue, entonces deja
-        # avanzar por defeto
+        # Mira si el widget tiene métoodo de validación. Si el widget no tiene can_continue, entonces deja
+        # avanzar por defecto
         widget = self.navigator.current_widget()
         if hasattr(widget, "can_continue"):
+            # NOTA: can_continue es un métoodo opcional que puede tener un widget de un step hacer una validación
+            # específica"
             return bool(widget.can_continue())
         return True
 
     def _activate_current_step(self) -> None:
         # Esta función se llama cuando se entra a un paso. Sirve para que un widget actualice su contenido
-        # justo al mostrarse. Es útil para un paso de resultados, porque quizá necesita leer datos que se cargatron
+        # justo al mostrarse. Es útil para un paso de resultados, porque quizá necesita leer datos que se cargaron
         # en el paso anterior.
         widget = self.navigator.current_widget()
         if hasattr(widget, "on_step_activated"):
+            # NOTA: on_step_activated es un métoodo opcional que puede tener un widget de un step para decir
+            # "cuando entres en este paso, actualízame"
             widget.on_step_activated()
 
     def _refresh_navigation(self) -> None:
