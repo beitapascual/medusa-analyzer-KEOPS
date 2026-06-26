@@ -183,11 +183,11 @@ class LoadDataWidget(QScrollArea):
         self.state.pop("metadata", None)
 
     def _loaded(self, results: list[dict]) -> None:
-        """Recibe results (lista de resultados del loader) y los convierte en un MetadataSummary.
+        """Recibe results (lista de resultados del loader) y los convierte en resúmenes normalizados.
         Se ejecuta cuando el worker terminó correctamente.
         Guarda los metadata cargados en el state."""
 
-        # Convertimos cada resultado del loader en un objeto MetadataSummary.
+        # Convertimos cada resultado del loader en un diccionario normalizado.
         metadata_list = create_metadata_summaries(results)
         self.state["loaded_file_paths"] = [metadata["file_path"] for metadata in metadata_list]
         self.state["loader_results"] = results

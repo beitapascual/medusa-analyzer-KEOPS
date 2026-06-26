@@ -148,8 +148,8 @@ class EEGPreprocessingWidget(QScrollArea):
         # Si hay varios registros cogemos la menor fs, porque es la que marca el
         # limite de Nyquist mas restrictivo.
         metadata_list = self.state.get("metadata_list") or []
-        sampling_rates = [metadata.sampling_rate for metadata in metadata_list
-            if metadata.sampling_rate is not None and metadata.sampling_rate > 0]
+        sampling_rates = [metadata.get("sampling_rate") for metadata in metadata_list
+            if metadata.get("sampling_rate") is not None and metadata.get("sampling_rate") > 0]
         if sampling_rates:
             return min(sampling_rates)
         return None

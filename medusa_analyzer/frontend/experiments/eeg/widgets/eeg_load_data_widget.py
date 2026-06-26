@@ -7,6 +7,6 @@ class EEGLoadDataWidget(LoadDataWidget):
         super().__init__(
             config=defaults.get("load_data", {}), # allowed extensions
             state=state,
-            loader=load_edf_file,
+            loader_function=load_edf_file,
             title="Load EEG data",
             description="Select one or more EDF files.")
