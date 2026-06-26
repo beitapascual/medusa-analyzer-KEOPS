@@ -1,0 +1,12 @@
+{
+    "Name": "Estudio Longitudinal de Neurocognición e Imaginación Motora",
+    "BIDSVersion": "1.8.0",
+    "DatasetType": "raw",
+    "License": "CC0",
+    "Authors": [
+        "Víctor Rodríguez-González",
+        "Jesús Poza",
+        "Carlos Gómez",
+        "Daniel de Luis"
+    ]
+}
