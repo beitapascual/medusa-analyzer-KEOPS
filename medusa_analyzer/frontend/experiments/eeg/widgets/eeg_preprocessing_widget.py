@@ -19,7 +19,7 @@ class EEGPreprocessingWidget(QScrollArea):
     changed = Signal()
     _minimum_band_frequency = 0.1
 
-    # Este paso construye y mantiene el estado de preprocesado EEG. Aqui se
+    # Este paso construye y mantiene el estado de preprocesado EEG. Aquí se
     # sincronizan filtros, preview de respuesta y bandas de frecuencia.
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__()
@@ -124,7 +124,6 @@ class EEGPreprocessingWidget(QScrollArea):
             "bandpass": build_filter_defaults(self.config.get("bandpass", {}), "bandpass"),
             "frequency_bands": self._copy_configured_frequency_bands(),
             "selected_frequency_bands": [],
-            "broadband": None,
         }
 
     def _build_filter_plot_panel(self, title: str, plot_attribute: str) -> QFrame:
@@ -211,22 +210,24 @@ class EEGPreprocessingWidget(QScrollArea):
                 "(active bandpass range)."]
         return []
 
-    def _build_broadband(self, maximum_band_frequency: float,
-        bandpass_bounds: tuple[float, float] | None) -> dict[str, Any]:
-        # La broadband efectiva sigue el rango activo actual para que el resto
-        # del flujo trabaje con el mismo marco de frecuencia.
+    def _update_state_broadband(self, maximum_band_frequency: float,
+        bandpass_bounds: tuple[float, float] | None) -> dict[str, Any] | None:
+        broadband = self.state.get("broadband")
+        if broadband is None:
+            return None
+
         low_cut = self._minimum_band_frequency
         if bandpass_bounds is not None:
             low_cut = max(low_cut, float(bandpass_bounds[0]))
-        return {"id": "broadband", "title": "Broadband", "enabled": True, "low_cut": low_cut,
-            "high_cut": float(maximum_band_frequency)}
+        broadband["low_cut"] = low_cut
+        broadband["high_cut"] = float(maximum_band_frequency)
+        return broadband
 
-    def _selected_frequency_bands_with_broadband(self, broadband: dict[str, Any]) -> list[dict[str, Any]]:
+    def _selected_frequency_bands_with_broadband(self, broadband: dict[str, Any] | None) -> list[dict[str, Any]]:
         selected_bands = [deepcopy(row) for row in self.values["frequency_bands"] if row.get("enabled", False)]
-        if selected_bands:
+        if broadband is not None:
             selected_bands.append(deepcopy(broadband))
-            return selected_bands
-        return [deepcopy(broadband)]
+        return selected_bands
 
     def _sync(self) -> None:
         # Metodo central del widget. Aqui se persiste el estado, se recalculan
@@ -237,7 +238,6 @@ class EEGPreprocessingWidget(QScrollArea):
         if fs is None:
             self._set_preprocessing_enabled(False)
             self._filters_are_valid = False
-            self.values["broadband"] = None
             self.values["selected_frequency_bands"] = []
             self.bands.set_frequency_bounds(minimum_frequency=self._minimum_band_frequency,
                 maximum_frequency=10000.0, emit_changed=False)
@@ -281,9 +281,8 @@ class EEGPreprocessingWidget(QScrollArea):
 
         self.bands.set_frequency_bounds(minimum_frequency=self._minimum_band_frequency,
             maximum_frequency=maximum_band_frequency, emit_changed=False)
-        self.values["broadband"] = self._build_broadband(maximum_band_frequency, bandpass_bounds)
-        self.values["selected_frequency_bands"] = self._selected_frequency_bands_with_broadband(
-            self.values["broadband"])
+        broadband = self._update_state_broadband(maximum_band_frequency, bandpass_bounds)
+        self.values["selected_frequency_bands"] = self._selected_frequency_bands_with_broadband(broadband)
         self.changed.emit()
 
     def on_step_activated(self) -> None:

@@ -180,6 +180,7 @@ class LoadDataWidget(QScrollArea):
         self.state["metadata_list"] = []
         self.state.pop("loaded_file_path", None)
         self.state.pop("loader_result", None)
+        self.state.pop("broadband", None)
         self.state.pop("metadata", None)
 
     def _loaded(self, results: list[dict]) -> None:
