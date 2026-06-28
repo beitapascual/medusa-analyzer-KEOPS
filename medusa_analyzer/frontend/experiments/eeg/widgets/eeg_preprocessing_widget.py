@@ -5,7 +5,6 @@ from typing import Any
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
-from pip._internal.operations.build import metadata
 
 from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import EEGFrequencyBandsTable
 from medusa_analyzer.frontend.models import Validation
@@ -28,13 +27,14 @@ class EEGPreprocessingWidget(QScrollArea):
         self.config = defaults.get("preprocessing", {})
         self.state = state
         self.metadata_list = self.state.get("metadata_list", [])
-        self.fs = None
-        if self.metadata_list:
-            fs = self.metadata_list[0].get("sampling_rate")
-            if fs is not None and fs <= 0:
-                fs = None
-        # TODO: no se podría poner aquí también lo del broadband en self.broadband para que quede más ordenado?
-        # Y sacarlo del sync. También lo de que la max sea fs/2 y tal.
+        sampling_rate = self.metadata_list[0].get("sampling_rate") if self.metadata_list else None
+        self.fs = float(sampling_rate) if sampling_rate is not None and sampling_rate > 0 else None
+        self.broadband = self.state.get("broadband")
+        self.bandpass_bounds: tuple[float, float] | None = None
+        self.base_minimum_band_frequency = float((self.broadband or {}).get("low_cut", 0.1))
+        self.minimum_band_frequency = self.base_minimum_band_frequency
+        self.nyquist_frequency = self.fs / 2 if self.fs is not None else None
+        self.maximum_band_frequency = self.nyquist_frequency
 
         # Calculamos los valores por defecto
         default_state = self._build_default_state()
@@ -209,18 +209,23 @@ class EEGPreprocessingWidget(QScrollArea):
         """Función para crear la lista final de bandas. Incluye todas las bandas marcadas como enabled
         y la banda broadband.
         NOTA: la broadband se añade SIEMPRE. Esto está pensado así de cara al run_pipeline."""
-        selected_bands = [deepcopy(row) for row in self.state["preprocessing"]["frequency_bands"] if row.get("enabled", False)]
-        selected_bands.append(deepcopy(self.state["broadband"]))
+        preprocessing_state = self.state["preprocessing"]
+        selected_bands = [
+            deepcopy(row) for row in preprocessing_state["frequency_bands"] if row.get("enabled", False)
+        ]
+        if self.broadband is not None:
+            selected_bands.append(deepcopy(self.broadband))
         return selected_bands
 
     def _sync(self) -> None:
         """Función para sincronizar el estado interno, validar filtros, actualizar plots, recalcular límites de
         bandas y avisar al resto del workflow de que algo ha cambiado."""
 
-        if self.fs is None: # Caso en el que todavía no hay recordings cargados
+        preprocessing_state = self.state["preprocessing"]
+        if self.fs is None or self.broadband is None or self.nyquist_frequency is None: # Caso en el que todavía no hay recordings cargados
             self._set_preprocessing_enabled(False) # desactivamos todos los controles
             self._filters_are_valid = False
-            self.state["preprocessing"]["selected_frequency_bands"] = [] # vacíamos bandas seleccionadas
+            preprocessing_state["selected_frequency_bands"] = [] # vacíamos bandas seleccionadas
             self.notch.set_error_message(None) # eliminamos mensajes previos de error
             self.bandpass.set_error_message(None) # eliminamos mensajes previos de error
             self.notch_plot.set_response(None, "Load recordings first to preview the filter response.")
@@ -231,29 +236,29 @@ class EEGPreprocessingWidget(QScrollArea):
         # Cuando fs existe, activamos los controles
         self._set_preprocessing_enabled(True)
         # Copiamos el valor del checkbox CAR al estado
-        # TODO: seguro que hay que hacerlo aquí, siempre? Porque solo este? No se puede quitar?
-        self.state["preprocessing"]["car_checked"] = self.car_checkbox.isChecked()
+        preprocessing_state["car_checked"] = self.car_checkbox.isChecked()
         # Calculamos la respuesta de los filtros
+        notch_config = preprocessing_state["notch"]
+        bandpass_config = preprocessing_state["bandpass"]
         _, notch_valid = self._update_filter_feedback(self.notch, self.notch_plot,
-                                                      self.state["preprocessing"]["notch"], self.fs, "bandstop")
+                                                      notch_config, self.fs, "bandstop")
         _, bandpass_valid = self._update_filter_feedback(self.bandpass,
-                                                         self.bandpass_plot, self.state["preprocessing"]["bandpass"], self.fs, "bandpass")
+                                                         self.bandpass_plot, bandpass_config, self.fs, "bandpass")
 
-        # TODO: estas dos cosas no se pueden hacer en otro lado?
-        bandpass_bounds = None
-        maximum_band_frequency = self.fs / 2
+        self.bandpass_bounds = None
+        self.minimum_band_frequency = self.base_minimum_band_frequency
+        self.maximum_band_frequency = self.nyquist_frequency
 
         # Si el bandpass está activo y es válido, limitamos el máximo de la broadband
-        if self.state["preprocessing"]["bandpass"].get("enabled", True) and bandpass_valid:
-            bandpass_bounds = (float(self.state["preprocessing"]["bandpass"]["low_cut"]),
-                               float(self.state["preprocessing"]["bandpass"]["high_cut"]))
-        maximum_band_frequency = min(maximum_band_frequency, bandpass_valid[1])
-        # TODO: también habría que mirar el mínimo. Coger el máximo de los mínimos.
+        if bandpass_config.get("enabled", True) and bandpass_valid:
+            self.bandpass_bounds = (float(bandpass_config["low_cut"]), float(bandpass_config["high_cut"]))
+            self.minimum_band_frequency = max(self.minimum_band_frequency, self.bandpass_bounds[0])
+            self.maximum_band_frequency = min(self.maximum_band_frequency, self.bandpass_bounds[1])
         # Regla personalizada: el notch no puede salir del rango de bandpass activo.
         if notch_valid and bandpass_valid:
             notch_bandpass_errors = _preprocessing_validation.validate_errors(
-                self.state["preprocessing"]["notch"], "custom", label="Notch filter",
-                validator=self._notch_bandpass_errors, bandpass_bounds=bandpass_bounds)
+                notch_config, "custom", label="Notch filter",
+                validator=self._notch_bandpass_errors, bandpass_bounds=self.bandpass_bounds)
             if notch_bandpass_errors: # TODO: cambiar de error a warning y que simplemente no se gaurde en estado
                 self.notch.set_error_message(notch_bandpass_errors[0])
                 self.notch_plot.set_response(None, notch_bandpass_errors[0])
@@ -262,16 +267,14 @@ class EEGPreprocessingWidget(QScrollArea):
         self._filters_are_valid = notch_valid and bandpass_valid
 
         # Actualizamos límites de broadband
-        minimum_band_frequency = float(self.state["broadband"]["low_cut"])
-        if bandpass_bounds is not None:
-            minimum_band_frequency = max(minimum_band_frequency, float(bandpass_bounds[0]))
-        self.state["broadband"]["low_cut"] = minimum_band_frequency
-        self.state["broadband"]["high_cut"] = float(maximum_band_frequency)
+        self.broadband["low_cut"] = float(self.minimum_band_frequency)
+        self.broadband["high_cut"] = float(self.maximum_band_frequency)
+        self.state["broadband"] = self.broadband
 
         # Actualizamos límites de la tabla de bandas. No se permiten valores fuera de rango de la broadband actualizada.
-        self.bands.set_frequency_bounds(minimum_frequency=minimum_band_frequency,
-            maximum_frequency=maximum_band_frequency, emit_changed=False)
-        self.state["preprocessing"]["selected_frequency_bands"] = self._build_selected_frequency_bands()
+        self.bands.set_frequency_bounds(minimum_frequency=self.minimum_band_frequency,
+            maximum_frequency=self.maximum_band_frequency, emit_changed=False)
+        preprocessing_state["selected_frequency_bands"] = self._build_selected_frequency_bands()
         self.changed.emit()
 
     def on_step_activated(self) -> None:
