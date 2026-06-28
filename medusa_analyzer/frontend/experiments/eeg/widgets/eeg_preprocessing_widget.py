@@ -36,16 +36,12 @@ class EEGPreprocessingWidget(QScrollArea):
         # TODO: no se podría poner aquí también lo del broadband en self.broadband para que quede más ordenado?
         # Y sacarlo del sync. También lo de que la max sea fs/2 y tal.
 
-        # Guardamos una copia de las bandas disponibles configuradas por defecto.
-        self.default_frequency_bands = [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])]
-
-        # Si state ya tiene preprocessing lo reutilizamos. Si no, creamos el estado inicial
-        existing_values = self.state.get("preprocessing") or {}
-        if not existing_values:
-            existing_values = self._build_default_state()
-            self.state["preprocessing"] = existing_values # creamos el estado inicial con parámetros por defecto
-        # TODO: en las otras cosas no creamos la clave. Porque aquí sí? La podríamos quitar?
-        self.state["preprocessing"].setdefault("selected_frequency_bands", []) # creamos esa clave.
+        # Calculamos los valores por defecto
+        default_state = self._build_default_state()
+        self.default_frequency_bands = [deepcopy(band) for band in default_state["frequency_bands"]]
+        # Si state ya tiene preprocessing lo reutilizamos. Si no, creamos el estado inicial con los valores por defecto.
+        if not self.state.get("preprocessing"):
+            self.state["preprocessing"] = default_state # creamos el estado inicial con parámetros por defecto
         self._filters_are_valid = False
 
         # Parte visual
@@ -119,7 +115,7 @@ class EEGPreprocessingWidget(QScrollArea):
         bands_layout.addWidget(bands_title)
         # La tabla recibe las bandas actuales y los defaults.
         # TODO: igual que con los filtros, parece que la tabla trabaja directamente sobre la lista de diccs de
-        # self.values. Esto es eficiente pero puede ser menos robsuto si quieres control estrictp de cuándo se muta
+        # self.values. Esto es eficiente pero puede ser menos robusto si quieres control estricto de cuándo se muta
         # el estado.
         self.bands = EEGFrequencyBandsTable(self.state["preprocessing"]["frequency_bands"],
                                             default_rows=self.default_frequency_bands)
@@ -130,7 +126,6 @@ class EEGPreprocessingWidget(QScrollArea):
         self.setWidget(content)
 
         # Conectamos todos los parámetros a ._sync para que se actualice el estado
-        # TODO: ahora mismo hace muchas cosas sync, quizá es difícil de mantener
         self.car_checkbox.toggled.connect(self._sync)
         self.notch.changed.connect(self._sync)
         self.bandpass.changed.connect(self._sync)
@@ -142,8 +137,6 @@ class EEGPreprocessingWidget(QScrollArea):
         return {"car_checked": bool(self.config.get("car", {}).get("checked_by_default", False)),
             "notch": build_filter_defaults(self.config.get("notch", {}), "bandstop"),
             "bandpass": build_filter_defaults(self.config.get("bandpass", {}), "bandpass"),
-            # TODO: porque no es vez de hacer esa función _copy_configured_frequency_bands(), lo hacemos directamente
-            # en esta, y luego accedemos al return["frequency_bands]"? Creo que es más limpio.
             "frequency_bands": [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])],
             "selected_frequency_bands": []}
 
@@ -188,31 +181,14 @@ class EEGPreprocessingWidget(QScrollArea):
         return response, True
 
     @staticmethod
-    def _active_bandpass_bounds(bandpass_config: dict[str, Any]) -> tuple[float, float] | None:
-        # TODO: no veo la necesidad de validar lo de float. No se podría poner por código directamente float().
-        # Igual se puede quitar esta función.
-        # TODO: comprobar que compute_filter_response valida que low_cut < high_cut.
-        if not bandpass_config.get("enabled", True):
-            return None
-        try:
-            return Validation.coerce_float(bandpass_config["low_cut"]), Validation.coerce_float(
-                bandpass_config["high_cut"])
-        except (KeyError, ValueError):
-            return None
-
-    @staticmethod
     def _notch_bandpass_errors(notch_config: dict[str, Any], *, label: str,
         bandpass_bounds: tuple[float, float] | None = None, **_: Any) -> list[str]:
         """ Función para regla personalizada. Si hay bandpass activo, el notch tiene que estar dentro de ese rango."""
         _ = label
         if not notch_config.get("enabled", True) or bandpass_bounds is None:
             return []
-        try:
-            # TODO: aquí tampoco veo la necesidad de hacer una validacicón para float. Hacerlo dirctamente.
-            notch_low_cut = Validation.coerce_float(notch_config["low_cut"])
-            notch_high_cut = Validation.coerce_float(notch_config["high_cut"])
-        except (KeyError, ValueError):
-            return []
+        notch_low_cut = float(notch_config["low_cut"])
+        notch_high_cut = float(notch_config["high_cut"])
 
         bandpass_low_cut, bandpass_high_cut = bandpass_bounds
         low_errors = _preprocessing_validation.validate_many(notch_low_cut,
@@ -269,12 +245,10 @@ class EEGPreprocessingWidget(QScrollArea):
 
         # Si el bandpass está activo y es válido, limitamos el máximo de la broadband
         if self.state["preprocessing"]["bandpass"].get("enabled", True) and bandpass_valid:
-            # TODO: creo que se puede quitar esa función y poner directamente float.
-            bandpass_bounds = self._active_bandpass_bounds(self.state["preprocessing"]["bandpass"])
-            if bandpass_bounds is not None:
-                maximum_band_frequency = min(maximum_band_frequency, bandpass_bounds[1])
-                # TODO: también habría que mirar el mínimo. Coger el máximo de los mínimos.
-
+            bandpass_bounds = (float(self.state["preprocessing"]["bandpass"]["low_cut"]),
+                               float(self.state["preprocessing"]["bandpass"]["high_cut"]))
+        maximum_band_frequency = min(maximum_band_frequency, bandpass_valid[1])
+        # TODO: también habría que mirar el mínimo. Coger el máximo de los mínimos.
         # Regla personalizada: el notch no puede salir del rango de bandpass activo.
         if notch_valid and bandpass_valid:
             notch_bandpass_errors = _preprocessing_validation.validate_errors(
