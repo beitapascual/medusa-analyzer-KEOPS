@@ -1,0 +1,99 @@
+{
+  "fir": {
+    "default_window": "hamming",
+    "windows": [
+      {
+        "id": "barthann",
+        "title": "Barthann"
+      },
+      {
+        "id": "bartlett",
+        "title": "Bartlett"
+      },
+      {
+        "id": "blackman",
+        "title": "Blackman"
+      },
+      {
+        "id": "blackmanharris",
+        "title": "Blackman-Harris"
+      },
+      {
+        "id": "bohman",
+        "title": "Bohman"
+      },
+      {
+        "id": "boxcar",
+        "title": "Boxcar"
+      },
+      {
+        "id": "cosine",
+        "title": "Cosine"
+      },
+      {
+        "id": "exponential",
+        "title": "Exponential"
+      },
+      {
+        "id": "flattop",
+        "title": "Flat top"
+      },
+      {
+        "id": "hamming",
+        "title": "Hamming"
+      },
+      {
+        "id": "hann",
+        "title": "Hann"
+      },
+      {
+        "id": "lanczos",
+        "title": "Lanczos"
+      },
+      {
+        "id": "nuttall",
+        "title": "Nuttall"
+      },
+      {
+        "id": "parzen",
+        "title": "Parzen"
+      },
+      {
+        "id": "taylor",
+        "title": "Taylor"
+      },
+      {
+        "id": "triang",
+        "title": "Triangular"
+      }
+    ]
+  },
+  "iir": {
+    "default_design": "butter",
+    "designs": [
+      {
+        "id": "butter",
+        "title": "Butterworth"
+      },
+      {
+        "id": "cheby1",
+        "title": "Chebyshev I"
+      },
+      {
+        "id": "cheby2",
+        "title": "Chebyshev II"
+      },
+      {
+        "id": "ellip",
+        "title": "Elliptic"
+      },
+      {
+        "id": "bessel",
+        "title": "Bessel"
+      }
+    ],
+    "default_order": 4,
+    "default_rp_db": 1.0,
+    "default_rs_db": 40.0
+  }
+}

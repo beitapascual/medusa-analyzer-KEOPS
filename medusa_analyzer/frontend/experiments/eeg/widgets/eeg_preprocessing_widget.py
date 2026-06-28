@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QLabel, QScrollAr
 
 from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import EEGFrequencyBandsTable
 from medusa_analyzer.frontend.widgets.filtering import (FilterControls, FilterPreviewPlot, FilterResponse,
-    build_filter_defaults, compute_filter_response, filter_response_error)
+    build_filter_defaults, compute_filter_response, filter_defaults, filter_response_error)
 
 
 # Definimos un widget de preprocesado de EEG que gestiona CAR, filtros notch y bandpass, preview de la respuesta
@@ -80,13 +80,9 @@ class EEGPreprocessingWidget(QScrollArea):
         filters_grid.setRowStretch(0, 1)
         filters_grid.setRowStretch(1, 1)
 
-        # Extraemos las opciones globales para filtros fir e iir (en defaults.json)
-        filter_options = self.config.get("filter_options", {})
-        fir = filter_options.get("fir", {})
-        iir = filter_options.get("iir", {})
-
-        # TODO: dar una vuelta a tema filtros. No me acaba de convencer que en el json de defaults del eeg
-        # se meta todo lo de la configuración de iir y fir. Igual eso tendría que ir en otro lado ajeno.
+        # Extraemos las opciones globales para filtros fir e iir.
+        fir = filter_defaults.get("fir", {})
+        iir = filter_defaults.get("iir", {})
         # TODO: también dar una vuelta a FilterControls
         self.notch = FilterControls("Notch filter", self.state["preprocessing"]["notch"], fir, iir, "bandstop")
         self.bandpass = FilterControls("Bandpass filter", self.state["preprocessing"]["bandpass"], fir, iir, "bandpass")

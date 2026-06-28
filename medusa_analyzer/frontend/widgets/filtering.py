@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -16,6 +18,8 @@ from medusa_analyzer.frontend.models import Validation
 
 FilterMode = Literal["bandpass", "bandstop"] # tipos de filtros esperados
 _filter_validation = Validation()
+filter_defaults = json.loads(
+    (Path(__file__).resolve().parents[1] / "defaults" / "filtering.json").read_text(encoding="utf-8"))
 
 # En este script vive todo lo relativo al filtrado: defaults, validaciones,
 # preview de respuesta en frecuencia y controles editables de notch/bandpass.
@@ -570,4 +574,4 @@ class FilterControls(QFrame):
 
 __all__ = ["FilterControls", "FilterMode", "FilterPreviewPlot", "FilterResponse", "build_filter_defaults",
     "compute_filter_response", "filter_response_error", "filter_validation_errors", "normalize_choice",
-    "normalize_fir_order"]
+    "normalize_fir_order", "filter_defaults"]
