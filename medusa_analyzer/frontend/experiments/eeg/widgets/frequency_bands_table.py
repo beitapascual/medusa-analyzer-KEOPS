@@ -109,7 +109,7 @@ class EEGFrequencyBandsTable(EditableTable):
         # IMPORTANTE: aquí i que se cambia el mínimo visible del spinbox, pero NO se cambia el
         # máximo visible del spinbox. Por eso puede pasar que el usuario vea escrito 200, pero en la tabla marque error
         # porque el máximo lógico ya es menor.
-        # TODO: aquí no se valida?
+        # TODO: aquí no se valida? Llamar al validator
         self.minimum_frequency = float(minimum_frequency)
         if maximum_frequency is not None:
             self.maximum_frequency = max(self.minimum_frequency, float(maximum_frequency))
