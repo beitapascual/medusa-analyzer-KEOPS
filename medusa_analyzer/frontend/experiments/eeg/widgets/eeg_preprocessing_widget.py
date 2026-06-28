@@ -26,15 +26,14 @@ class EEGPreprocessingWidget(QScrollArea):
         _ = experiment_info
         self.config = defaults.get("preprocessing", {})
         self.state = state
-        self.metadata_list = self.state.get("metadata_list", [])
-        sampling_rate = self.metadata_list[0].get("sampling_rate") if self.metadata_list else None
-        self.fs = float(sampling_rate) if sampling_rate is not None and sampling_rate > 0 else None
-        self.broadband = self.state.get("broadband")
+        self.metadata_list = []
+        self.fs = None
+        self.broadband = None
         self.bandpass_bounds: tuple[float, float] | None = None
-        self.base_minimum_band_frequency = float((self.broadband or {}).get("low_cut", 0.1))
+        self.base_minimum_band_frequency = 0.1
         self.minimum_band_frequency = self.base_minimum_band_frequency
-        self.nyquist_frequency = self.fs / 2 if self.fs is not None else None
-        self.maximum_band_frequency = self.nyquist_frequency
+        self.nyquist_frequency = None
+        self.maximum_band_frequency = None
 
         # Calculamos los valores por defecto
         default_state = self._build_default_state()
@@ -130,7 +129,7 @@ class EEGPreprocessingWidget(QScrollArea):
         self.notch.changed.connect(self._sync)
         self.bandpass.changed.connect(self._sync)
         self.bands.changed.connect(self._sync)
-        self._sync()
+        self.on_step_activated()
 
     def _build_default_state(self) -> dict[str, Any]:
         """Construye el estado inicial del widget desde defaults."""
@@ -279,6 +278,14 @@ class EEGPreprocessingWidget(QScrollArea):
 
     def on_step_activated(self) -> None:
         """WorkflowShell llama a este hook"""
+        self.metadata_list = self.state.get("metadata_list", [])
+        sampling_rate = self.metadata_list[0].get("sampling_rate") if self.metadata_list else None
+        self.fs = float(sampling_rate) if sampling_rate is not None and sampling_rate > 0 else None
+        broadband = self.state.get("broadband")
+        if broadband is not self.broadband:
+            self.base_minimum_band_frequency = float((broadband or {}).get("low_cut", 0.1))
+        self.broadband = broadband
+        self.nyquist_frequency = self.fs / 2 if self.fs is not None else None
         self._sync()
 
     def can_continue(self) -> bool:
