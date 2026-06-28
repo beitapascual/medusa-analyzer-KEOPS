@@ -558,6 +558,9 @@ class FilterControls(QFrame):
     def set_error_message(self, message: str | None) -> None:
         # Función para mostrar/ocultar el mensaje de error
         if message:
+            self.error_label.setProperty("role", "error")
+            self.error_label.style().unpolish(self.error_label)
+            self.error_label.style().polish(self.error_label)
             self.error_label.setText(message)
             self.error_label.show()
             return

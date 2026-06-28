@@ -7,12 +7,9 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import EEGFrequencyBandsTable
-from medusa_analyzer.frontend.models import Validation
 from medusa_analyzer.frontend.widgets.filtering import (FilterControls, FilterPreviewPlot, FilterResponse,
     build_filter_defaults, compute_filter_response, filter_response_error)
 
-
-_preprocessing_validation = Validation()
 
 # Definimos un widget de preprocesado de EEG que gestiona CAR, filtros notch y bandpass, preview de la respuesta
 # de los filtros, bandas de frecuencia, y decide si el paso puede continuar según los metadatos, validaciones
@@ -179,39 +176,11 @@ class EEGPreprocessingWidget(QScrollArea):
         plot.set_response(response)
         return response, True
 
-    @staticmethod
-    def _notch_bandpass_errors(notch_config: dict[str, Any], *, label: str,
-        bandpass_bounds: tuple[float, float] | None = None, **_: Any) -> list[str]:
-        """ Función para regla personalizada. Si hay bandpass activo, el notch tiene que estar dentro de ese rango."""
-        _ = label
-        if not notch_config.get("enabled", True) or bandpass_bounds is None:
-            return []
-        notch_low_cut = float(notch_config["low_cut"])
-        notch_high_cut = float(notch_config["high_cut"])
-
-        bandpass_low_cut, bandpass_high_cut = bandpass_bounds
-        low_errors = _preprocessing_validation.validate_many(notch_low_cut,
-            [("greater_or_equal", {"minimum": bandpass_low_cut, "suffix": " Hz"})],
-            label="Notch filter: low cut")
-        high_errors = _preprocessing_validation.validate_many(notch_high_cut,
-            [("less_or_equal", {"maximum": bandpass_high_cut, "suffix": " Hz"})],
-            label="Notch filter: high cut")
-        if low_errors or high_errors:
-            return [f"Cutoffs must stay within {bandpass_low_cut:g}-{bandpass_high_cut:g} Hz "
-                "(active bandpass range)."]
-        # TODO: desde el punto de vista de UX quizá sería mejor mostrar un warning tipo 'the notch filter is outside the
-        # active bandpass range and will have no practical effect. Algo así. Y que se guarde como que no está marcado en
-        # el estado.
-        return []
-
     def _build_selected_frequency_bands(self) -> list[dict[str, Any]]:
         """Función para crear la lista final de bandas. Incluye todas las bandas marcadas como enabled
         y la banda broadband.
         NOTA: la broadband se añade SIEMPRE. Esto está pensado así de cara al run_pipeline."""
-        preprocessing_state = self.state["preprocessing"]
-        selected_bands = [
-            deepcopy(row) for row in preprocessing_state["frequency_bands"] if row.get("enabled", False)
-        ]
+        selected_bands = [deepcopy(row) for row in self.state["preprocessing"]["frequency_bands"] if row.get("enabled", False)]
         if self.broadband is not None:
             selected_bands.append(deepcopy(self.broadband))
         return selected_bands
@@ -220,11 +189,10 @@ class EEGPreprocessingWidget(QScrollArea):
         """Función para sincronizar el estado interno, validar filtros, actualizar plots, recalcular límites de
         bandas y avisar al resto del workflow de que algo ha cambiado."""
 
-        preprocessing_state = self.state["preprocessing"]
         if self.fs is None or self.broadband is None or self.nyquist_frequency is None: # Caso en el que todavía no hay recordings cargados
             self._set_preprocessing_enabled(False) # desactivamos todos los controles
             self._filters_are_valid = False
-            preprocessing_state["selected_frequency_bands"] = [] # vacíamos bandas seleccionadas
+            self.state["preprocessing"]["selected_frequency_bands"] = [] # vacíamos bandas seleccionadas
             self.notch.set_error_message(None) # eliminamos mensajes previos de error
             self.bandpass.set_error_message(None) # eliminamos mensajes previos de error
             self.notch_plot.set_response(None, "Load recordings first to preview the filter response.")
@@ -235,10 +203,10 @@ class EEGPreprocessingWidget(QScrollArea):
         # Cuando fs existe, activamos los controles
         self._set_preprocessing_enabled(True)
         # Copiamos el valor del checkbox CAR al estado
-        preprocessing_state["car_checked"] = self.car_checkbox.isChecked()
+        self.state["preprocessing"]["car_checked"] = self.car_checkbox.isChecked()
         # Calculamos la respuesta de los filtros
-        notch_config = preprocessing_state["notch"]
-        bandpass_config = preprocessing_state["bandpass"]
+        notch_config = self.state["preprocessing"]["notch"]
+        bandpass_config = self.state["preprocessing"]["bandpass"]
         _, notch_valid = self._update_filter_feedback(self.notch, self.notch_plot,
                                                       notch_config, self.fs, "bandstop")
         _, bandpass_valid = self._update_filter_feedback(self.bandpass,
@@ -253,15 +221,20 @@ class EEGPreprocessingWidget(QScrollArea):
             self.bandpass_bounds = (float(bandpass_config["low_cut"]), float(bandpass_config["high_cut"]))
             self.minimum_band_frequency = max(self.minimum_band_frequency, self.bandpass_bounds[0])
             self.maximum_band_frequency = min(self.maximum_band_frequency, self.bandpass_bounds[1])
-        # Regla personalizada: el notch no puede salir del rango de bandpass activo.
-        if notch_valid and bandpass_valid:
-            notch_bandpass_errors = _preprocessing_validation.validate_errors(
-                notch_config, "custom", label="Notch filter",
-                validator=self._notch_bandpass_errors, bandpass_bounds=self.bandpass_bounds)
-            if notch_bandpass_errors: # TODO: cambiar de error a warning y que simplemente no se gaurde en estado
-                self.notch.set_error_message(notch_bandpass_errors[0])
-                self.notch_plot.set_response(None, notch_bandpass_errors[0])
-                notch_valid = False
+        if notch_valid and bandpass_valid and self.bandpass_bounds and notch_config.get("enabled", True):
+            notch_low_cut, notch_high_cut = float(notch_config["low_cut"]), float(notch_config["high_cut"])
+            bandpass_low_cut, bandpass_high_cut = self.bandpass_bounds
+            if notch_low_cut < bandpass_low_cut or notch_high_cut > bandpass_high_cut:
+                self.notch.blockSignals(True)
+                self.notch.enabled.setChecked(False)
+                self.notch.blockSignals(False)
+                self.notch.set_error_message(
+                    f"Notch filter is outside the active bandpass range ({bandpass_low_cut:g}-{bandpass_high_cut:g} Hz) "
+                    "and will have no practical effect.")
+                self.notch.error_label.setProperty("role", "warning")
+                self.notch.error_label.style().unpolish(self.notch.error_label)
+                self.notch.error_label.style().polish(self.notch.error_label)
+                self.notch_plot.set_response(FilterResponse([0.0, self.nyquist_frequency], [0.0, 0.0]))
 
         self._filters_are_valid = notch_valid and bandpass_valid
 
@@ -273,7 +246,7 @@ class EEGPreprocessingWidget(QScrollArea):
         # Actualizamos límites de la tabla de bandas. No se permiten valores fuera de rango de la broadband actualizada.
         self.bands.set_frequency_bounds(minimum_frequency=self.minimum_band_frequency,
             maximum_frequency=self.maximum_band_frequency, emit_changed=False)
-        preprocessing_state["selected_frequency_bands"] = self._build_selected_frequency_bands()
+        self.state["preprocessing"]["selected_frequency_bands"] = self._build_selected_frequency_bands()
         self.changed.emit()
 
     def on_step_activated(self) -> None:

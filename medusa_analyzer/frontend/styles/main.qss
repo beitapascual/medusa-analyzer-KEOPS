@@ -99,6 +99,10 @@ QLabel[role="error"] {
     color: #FFB6C2;
 }
 
+QLabel[role="warning"] {
+    color: #F6C177;
+}
+
 /* Dashboard */
 QScrollArea#dashboardPage,
 QWidget#dashboard {
