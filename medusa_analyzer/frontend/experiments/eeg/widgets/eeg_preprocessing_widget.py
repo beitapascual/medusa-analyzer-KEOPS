@@ -84,8 +84,10 @@ class EEGPreprocessingWidget(QScrollArea):
         fir = filter_defaults.get("fir", {})
         iir = filter_defaults.get("iir", {})
         # TODO: también dar una vuelta a FilterControls
-        self.notch = FilterControls("Notch filter", self.state["preprocessing"]["notch"], fir, iir, "bandstop")
-        self.bandpass = FilterControls("Bandpass filter", self.state["preprocessing"]["bandpass"], fir, iir, "bandpass")
+        self.notch = FilterControls("Notch filter", self.state["preprocessing"]["notch"], fir, iir, "bandstop",
+            minimum_frequency=self.base_minimum_band_frequency)
+        self.bandpass = FilterControls("Bandpass filter", self.state["preprocessing"]["bandpass"], fir, iir, "bandpass",
+            minimum_frequency=self.base_minimum_band_frequency)
         self.notch.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.bandpass.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         # Panel de los filtros
@@ -127,8 +129,8 @@ class EEGPreprocessingWidget(QScrollArea):
     def _build_default_state(self) -> dict[str, Any]:
         """Construye el estado inicial del widget desde defaults."""
         return {"car_checked": bool(self.config.get("car", {}).get("checked_by_default", False)),
-            "notch": build_filter_defaults(self.config.get("notch", {}), "bandstop"),
-            "bandpass": build_filter_defaults(self.config.get("bandpass", {}), "bandpass"),
+            "notch": build_filter_defaults(self.config["notch"]),
+            "bandpass": build_filter_defaults(self.config["bandpass"]),
             "frequency_bands": [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])],
             "selected_frequency_bands": []}
 
@@ -158,17 +160,19 @@ class EEGPreprocessingWidget(QScrollArea):
         config: dict[str, Any], fs: float, mode: str) -> tuple[FilterResponse | None, bool]:
         """Función para calcular la respuesta de un filtro."""
 
-        response = compute_filter_response(config, fs, mode, fir_options=controls.fir, iir_options=controls.iir)
+        response = compute_filter_response(config, fs, mode, fir_options=controls.fir, iir_options=controls.iir,
+            minimum_frequency=controls.minimum_frequency, maximum_frequency=controls.maximum_frequency)
         # Si da error
         if config.get("enabled", True) and response is None:
             # Construimos el mensaje de error
-            error_message = filter_response_error(config, fs, fir_options=controls.fir, iir_options=controls.iir)
-            controls.set_error_message(error_message) # Mostramos el mensaje de error
+            error_message = filter_response_error(config, fs, fir_options=controls.fir, iir_options=controls.iir,
+                minimum_frequency=controls.minimum_frequency, maximum_frequency=controls.maximum_frequency)
+            controls.set_message(error_message) # Mostramos el mensaje de error
             plot.set_response(None, error_message) #ploteamos el mensaje de error en la gráfica
             return None, False
 
         # Si va bien
-        controls.set_error_message(None)
+        controls.set_message(None)
         plot.set_response(response)
         return response, True
 
@@ -189,8 +193,8 @@ class EEGPreprocessingWidget(QScrollArea):
             self._set_preprocessing_enabled(False) # desactivamos todos los controles
             self._filters_are_valid = False
             self.state["preprocessing"]["selected_frequency_bands"] = [] # vacíamos bandas seleccionadas
-            self.notch.set_error_message(None) # eliminamos mensajes previos de error
-            self.bandpass.set_error_message(None) # eliminamos mensajes previos de error
+            self.notch.set_message(None) # eliminamos mensajes previos de error
+            self.bandpass.set_message(None) # eliminamos mensajes previos de error
             self.notch_plot.set_response(None, "Load recordings first to preview the filter response.")
             self.bandpass_plot.set_response(None, "Load recordings first to preview the filter response.")
             self.changed.emit()
@@ -198,6 +202,8 @@ class EEGPreprocessingWidget(QScrollArea):
 
         # Cuando fs existe, activamos los controles
         self._set_preprocessing_enabled(True)
+        self.notch.set_frequency_bounds(self.base_minimum_band_frequency, self.nyquist_frequency)
+        self.bandpass.set_frequency_bounds(self.base_minimum_band_frequency, self.nyquist_frequency)
         # Copiamos el valor del checkbox CAR al estado
         self.state["preprocessing"]["car_checked"] = self.car_checkbox.isChecked()
         # Calculamos la respuesta de los filtros
@@ -224,12 +230,9 @@ class EEGPreprocessingWidget(QScrollArea):
                 self.notch.blockSignals(True)
                 self.notch.enabled.setChecked(False)
                 self.notch.blockSignals(False)
-                self.notch.set_error_message(
+                self.notch.set_message(
                     f"Notch filter is outside the active bandpass range ({bandpass_low_cut:g}-{bandpass_high_cut:g} Hz) "
-                    "and will have no practical effect.")
-                self.notch.error_label.setProperty("role", "warning")
-                self.notch.error_label.style().unpolish(self.notch.error_label)
-                self.notch.error_label.style().polish(self.notch.error_label)
+                    "and will have no practical effect.", role="warning")
                 self.notch_plot.set_response(FilterResponse([0.0, self.nyquist_frequency], [0.0, 0.0]))
 
         self._filters_are_valid = notch_valid and bandpass_valid

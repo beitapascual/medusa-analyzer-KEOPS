@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGr
     QSpinBox, QVBoxLayout, QWidget)
 from scipy import signal
 from medusa_analyzer.frontend.models import Validation
+from medusa_analyzer.frontend.widgets.plots import LinePlot, PlotSeries
 
 """Script para crear parte de una interfaz gráfica para configurar filtros, calcular su respuesta en 
 frecuencia y dibujar una previsualización en pantalla. El flujo principal es este:
@@ -29,18 +30,15 @@ filter_defaults = json.loads( # Carga de configuración por defecto
     (Path(__file__).resolve().parents[1] / "defaults" / "filtering.json").read_text(encoding="utf-8"))
 
 def normalize_choice(choice: Any) -> tuple[str, str]:
-    # TODO: meter en el validator generalizándolo para otros casos?
-    # Normaliza ids/opciones del JSON para que un combobox siempre reciba
-    # (id_interno, titulo_visible).
+    """Normaliza ids/opciones del JSON para que un combobox siempre reciba (id_interno, titulo_visible)."""
     if isinstance(choice, dict):
         return str(choice["id"]), str(choice.get("title", choice["id"]))
     return str(choice), str(choice).replace("_", " ").title()
 
 
 def normalize_fir_order(value: int, require_odd: bool = False) -> int:
-    # TODO: meter en el validator generalizándolo para otros casos?
-    # Algunos filtros FIR necesitan orden impar. Este helper normaliza eso en
-    # un solo sitio para que la UI y el cálculo hablen el mismo idioma.
+    """Algunos filtros FIR necesitan orden impar. Este helper normaliza eso en
+    un solo sitio para que la UI y el cálculo hablen el mismo idioma."""
     order = max(3, int(value)) # mínimo orden del filtro de valor igual a 3
     if require_odd and order % 2 == 0: # si se trata de un filtro bandstop convertimos el orden a impar
         order += 1
@@ -49,8 +47,6 @@ def normalize_fir_order(value: int, require_odd: bool = False) -> int:
 
 def build_filter_defaults(config: dict[str, Any]) -> dict[str, Any]:
     """ Construye la configuración inicial del filtro."""
-    # TODO: he quitado comprobaciones de aqui de normalize y odd y demás, porque en lo de por defecto siempre va a venir
-    # bien, entonces aquí no hace falta.
     return {"enabled": bool(config["enabled"]),
         "low_cut": float(config["low_cut"]),
         "high_cut": float(config["high_cut"]),
@@ -81,26 +77,29 @@ def _option_ids(options: list[dict[str, Any]] | list[str] | tuple[str, ...] | No
         ids.append(str(option))
     return ids
 
-def _filter_config_errors(config: dict[str, Any], *, label: str, fs: float,
-    fir_options: dict[str, Any] | None = None, iir_options: dict[str, Any] | None = None, **_: Any) -> list[str]:
-    """Revisa si la configuración del filtro es váldia."""
-    _ = label
-    if not config.get("enabled", True): # si el filtro está desactivado no se valida nada
+def filter_validation_errors(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
+    iir_options: dict[str, Any] | None = None, minimum_frequency: float = 0.0,
+    maximum_frequency: float | None = None) -> list[str]:
+    """Función de validación. Llama internamente a _filter_config_error y devuelve una lista de errores. Si no hay problemas,
+    devuelve []"""
+
+    if not config.get("enabled", True):  # si el filtro está desactivado no se valida nada
         return []
 
     errors: list[str] = []
-    nyquist = fs / 2 #  todo: aquí no se debería parchaer, tendría que ser con los datos que se pasen desde un widget individual no??
+    nyquist = fs / 2
+    minimum_frequency = float(minimum_frequency)
+    maximum_frequency = nyquist if maximum_frequency is None else min(float(maximum_frequency), nyquist)
     # Validamos que el filtro sea "fir" o "iir"
-    filter_type_errors = _filter_validation.validate_many(config.get("filter_type"),
-        [("one_of", {"options": ["fir", "iir"]})], label="Filter type")
-    errors.extend(filter_type_errors)
-    # Validamos también low_cut y high_cut. # TODO: LO MISMO, EL MÍNIMO Y MÁXIMO NO TENDRÍAN QUE VENIR DESDE OTRO LADO?
+    errors.extend(_filter_validation.validate_many(config.get("filter_type"),
+        [("one_of", {"options": _option_ids(filter_defaults["families"])})], label="Filter type"))
+    # Validamos también low_cut y high_cut.
     errors.extend(_filter_validation.validate_many(config["low_cut"],
-        ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " Hz"}),
-            ("less_than", {"maximum": nyquist, "suffix": " Hz"})], label="Low cut"))
+        ["finite_number", ("greater_than", {"minimum": minimum_frequency, "suffix": " Hz"}),
+            ("less_than", {"maximum": maximum_frequency, "suffix": " Hz"})], label="Low cut"))
     errors.extend(_filter_validation.validate_many(config["high_cut"],
-        ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " Hz"}),
-            ("less_than", {"maximum": nyquist, "suffix": " Hz"})], label="High cut"))
+        ["finite_number", ("greater_than", {"minimum": minimum_frequency, "suffix": " Hz"}),
+            ("less_than", {"maximum": maximum_frequency, "suffix": " Hz"})], label="High cut"))
     if errors:
         return errors
 
@@ -108,8 +107,7 @@ def _filter_config_errors(config: dict[str, Any], *, label: str, fs: float,
     high_cut = Validation.coerce_float(config.get("high_cut")) # validamos que sea float
     # Validamos que el low_cut sea menor que el high_cut
     errors.extend(_filter_validation.validate_many(low_cut,
-        [("less_than", {"maximum": high_cut, "suffix": " Hz"})],
-        label="Low cut"))
+        [("less_than", {"maximum": high_cut, "suffix": " Hz"})], label="Low cut"))
     if errors:
         return errors
 
@@ -143,18 +141,18 @@ def _filter_config_errors(config: dict[str, Any], *, label: str, fs: float,
             ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " dB"})], label="Stopband attenuation"))
     return errors
 
-
-def filter_validation_errors(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
-    iir_options: dict[str, Any] | None = None) -> list[str]:
-    """Función de validación. Llama internamente a _filter_config_error y deveulve una lista de errores. Si no hay problemas,
-    devuelve []"""
-    # TODO: porque no se unifican en una???
-    return _filter_validation.validate_errors(config, "custom", label="Filter",
-        validator=_filter_config_errors, fs=fs, fir_options=fir_options, iir_options=iir_options)
+def filter_response_error(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
+    iir_options: dict[str, Any] | None = None, minimum_frequency: float = 0.0,
+    maximum_frequency: float | None = None) -> str:
+    """Función para construir los mensajes de error. Devolvemos el primer error de la lista de errores."""
+    errors = filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options,
+        minimum_frequency=minimum_frequency, maximum_frequency=maximum_frequency)
+    return errors[0] if errors else "Unable to design a response with the selected filter parameters."
 
 
 def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode, *,
-    fir_options: dict[str, Any] | None = None, iir_options: dict[str, Any] | None = None) -> FilterResponse | None:
+    fir_options: dict[str, Any] | None = None, iir_options: dict[str, Any] | None = None,
+    minimum_frequency: float = 0.0, maximum_frequency: float | None = None) -> FilterResponse | None:
     """Calcula la respuesta en frecuencia de un filtro. Si la configuración no pasa las
     validaciones básicas devolvemos None y el widget mostrará el error."""
 
@@ -162,7 +160,8 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode,
     if not config.get("enabled", True):
         return FilterResponse([0.0, fs / 2], [0.0, 0.0])
     # Después valida la configuración. Si hay errores, no calcula nada.
-    if filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options):
+    if filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options,
+        minimum_frequency=minimum_frequency, maximum_frequency=maximum_frequency):
         return None
 
     low_cut = Validation.coerce_float(config["low_cut"])
@@ -170,7 +169,6 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode,
 
     try:
         if str(config["filter_type"]).lower() == "fir": # Filtro FIR
-            # TODO: porque hardcodeamos que es bandstop?? No sería en función de lo que se diga en un json? Osea dependiente de argumento??
             numtaps = normalize_fir_order(config["fir_order"], require_odd=mode == "bandstop")
             coefficients = signal.firwin(numtaps, [low_cut, high_cut], pass_zero=mode == "bandstop",
                 fs=fs, window=str(config["fir_window"])) # utilizamos scipy.signal.firwin
@@ -191,187 +189,35 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode,
     return FilterResponse(frequencies.tolist(), magnitude.tolist())
 
 
-def filter_response_error(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
-    iir_options: dict[str, Any] | None = None) -> str:
-    """"Función para construir los mensajes de error."""
-    # Primero pide los errores de validación
-    validation_errors = filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options)
-    if validation_errors:
-        return validation_errors[0] # Si hay alguno el primero
-    # TODO: de alguna forma no se podrían combinar esta función con esta filter_validation_errors y esta _filter_config_errors???
-    return "Unable to design a response with the selected filter parameters."
-
-
-class FilterPreviewPlot(QFrame):
+class FilterPreviewPlot(LinePlot):
     """Widget que pinta la gráfica de respuesta en frecuencia."""
-    # TODO: IGUAL EN UN FUTURO SE PODRÍA HACER UNA CLASE PLOT Y HEREDAR DE ESA
     def __init__(self): # inicializamos el widget de la gráfica, sus colores y su estado vacío
-        super().__init__()
-        self.setProperty("role", "plot")
-        self.setMinimumHeight(225)
-        self._plot_background_color = QColor("#FBFAF8")
-        self._grid_color = QColor("#E5DFDD")
-        self._axis_line_color = QColor("#B8B0B4")
-        self._axis_text_color = QColor("#756F77")
-        self._response_line_color = QColor("#0E7C86")
-        self._empty_message_color = QColor("#756F77")
+        super().__init__(x_axis_label="Frequency (Hz)", top_axis_label="0 dB", bottom_axis_label="-80",
+            y_minimum=-80.0, y_maximum=0.0, empty_message="Valid configuration required")
         self.response: FilterResponse | None = None # Guarda la respuesta
-        self.empty_message = "Valid configuration required" # Guarda mensaje vacío si no hay respuesta
 
     def set_response(self, response: FilterResponse | None, empty_message: str | None = None) -> None:
         """Guarda la respuesta del filtro o el mensaje vacío y repinta el widget."""
         self.response = response
-        self.empty_message = empty_message or "Valid configuration required"
-        self.update()
-
-    def _set_color(self, attribute: str, value) -> None:
-        """Cambia uno de los colores internos y repinta."""
-        setattr(self, attribute, QColor(value))
-        self.update()
-
-    def get_plot_background_color(self) -> QColor:
-        """Devuelve el color del fondo de la gráfica."""
-        return self._plot_background_color
-
-    def set_plot_background_color(self, value) -> None:
-        self._set_color("_plot_background_color", value) # cambia el color de fondo de la gráfica
-
-    def get_grid_color(self) -> QColor:
-        return self._grid_color # devuelve el color de la rejilla
-
-    def set_grid_color(self, value) -> None:
-        self._set_color("_grid_color", value) # cambia el color de la rejilla
-
-    def get_axis_line_color(self) -> QColor:
-        return self._axis_line_color # devuelve el color de la línea del eje
-
-    def set_axis_line_color(self, value) -> None:
-        self._set_color("_axis_line_color", value) # cambia el color de la línea del eje
-
-    def get_axis_text_color(self) -> QColor:
-        return self._axis_text_color # devuelve el color del texto de los ejes
-
-    def set_axis_text_color(self, value) -> None:
-        self._set_color("_axis_text_color", value) # cambia el color del texto de los ejes
-
-    def get_response_line_color(self) -> QColor: # devuelve el color de la curva de la respuesta
-        return self._response_line_color
-
-    def set_response_line_color(self, value) -> None: # cambia el color de la curva de la respuesta
-        self._set_color("_response_line_color", value)
-
-    def get_empty_message_color(self) -> QColor:
-        return self._empty_message_color # devuelve el color del mensaje cuando no hay gráfica
-
-    def set_empty_message_color(self, value) -> None:
-        self._set_color("_empty_message_color", value) # cambia el color del mensaje vacío
-
-    @staticmethod
-    def _nice_step(value: float) -> float:
-        """Función para que el eje X del gráfico quede bonito. Va de la mano de _frequency_ticks."""
-        if value <= 0:
-            return 1.0
-        exponent = math.floor(math.log10(value))
-        fraction = value / 10 ** exponent
-        if fraction <= 1:
-            nice_fraction = 1
-        elif fraction <= 2:
-            nice_fraction = 2
-        elif fraction <= 5:
-            nice_fraction = 5
-        else:
-            nice_fraction = 10
-        return nice_fraction * 10 ** exponent
-
-    @classmethod
-    def _frequency_ticks(cls, maximum_frequency: float, plot_width: float) -> tuple[float, list[float]]:
-        """Función para que el eje X del gráfico quede bonito. Va de la mano de _nice_step."""
-        target_intervals = max(2, min(6, int(plot_width // 72)))
-        step = cls._nice_step(maximum_frequency / target_intervals)
-        axis_maximum = max(step, math.ceil(maximum_frequency / step) * step)
-        tick_count = int(round(axis_maximum / step))
-        ticks = [index * step for index in range(tick_count + 1)]
-        return axis_maximum, ticks
-
-    def paintEvent(self, event):
-        """Función para pintar todoo del gráfico: fondo, rejilla, ejes, etiquetas, mensaje vacío si no hay respuesta,
-        curva (si la hay), etc."""
-
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        plot = self.rect().adjusted(48, 18, -18, -55)
-        painter.fillRect(plot, self._plot_background_color)
-
-        maximum_frequency = max(self.response.frequencies) if self.response and self.response.frequencies else 1.0
-        axis_maximum, frequency_ticks = self._frequency_ticks(maximum_frequency, plot.width())
-
-        painter.setPen(QPen(self._grid_color, 1))
-        for index in range(5):
-            y = plot.top() + plot.height() * index / 4
-            painter.drawLine(plot.left(), int(y), plot.right(), int(y))
-
-        for frequency in frequency_ticks:
-            x = plot.left() + plot.width() * frequency / axis_maximum
-            painter.drawLine(int(x), plot.top(), int(x), plot.bottom())
-
-        painter.setPen(QPen(self._axis_line_color, 1))
-        painter.drawLine(plot.left(), plot.bottom(), plot.right(), plot.bottom())
-
-        axis_font = QFont(painter.font())
-        axis_font.setPointSizeF(max(7.0, axis_font.pointSizeF() - 1.0))
-        painter.setFont(axis_font)
-        painter.setPen(self._axis_text_color)
-        painter.drawText(QRectF(5, plot.top(), 38, 20), Qt.AlignmentFlag.AlignRight, "0 dB")
-        painter.drawText(QRectF(5, plot.bottom() - 15, 38, 20), Qt.AlignmentFlag.AlignRight, "-80")
-
-        for frequency in frequency_ticks:
-            x = plot.left() + plot.width() * frequency / axis_maximum
-            label_width = 58.0
-            label_left = max(1.0, min(self.width() - label_width - 1.0, x - label_width / 2))
-            painter.drawText(QRectF(label_left, plot.bottom() + 4, label_width, 17),
-                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, f"{frequency:g}")
-
-        painter.drawText(plot.left(), plot.bottom() + 25, plot.width(), 20, Qt.AlignmentFlag.AlignCenter,
-            "Frequency (Hz)")
-        if not self.response or len(self.response.frequencies) < 2:
-            painter.setPen(self._empty_message_color)
-            painter.drawText(plot.adjusted(24, 24, -24, -24), Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-                self.empty_message)
-            return
-
-        path = QPainterPath()
-        for index, (frequency, magnitude) in enumerate(zip(self.response.frequencies, self.response.magnitude_db)):
-            x = plot.left() + plot.width() * frequency / axis_maximum
-            y = plot.bottom() - plot.height() * min(80, max(0, magnitude + 80)) / 80
-            point = QPointF(x, y)
-            path.moveTo(point) if index == 0 else path.lineTo(point)
-        painter.setPen(QPen(self._response_line_color, 2.4))
-        painter.drawPath(path)
-
-    plotBackgroundColor = Property(QColor, get_plot_background_color, set_plot_background_color)
-    gridColor = Property(QColor, get_grid_color, set_grid_color)
-    axisLineColor = Property(QColor, get_axis_line_color, set_axis_line_color)
-    axisTextColor = Property(QColor, get_axis_text_color, set_axis_text_color)
-    responseLineColor = Property(QColor, get_response_line_color, set_response_line_color)
-    emptyMessageColor = Property(QColor, get_empty_message_color, set_empty_message_color)
+        series = None if response is None else PlotSeries(response.frequencies, response.magnitude_db)
+        self.set_series(series, empty_message=empty_message)
 
 
 class FilterControls(QFrame):
     """Panel editable de los filtros. Este widget es el bloque UI del filtro. Tiene un checkbox por defecto enabled,
-    un low_cut y hight_cut, un selector FIR/IIR, bloque FIR, bloque IIR, label de error y una señal de changed."""
+    un low_cut y high_cut, un selector FIR/IIR, bloque FIR, bloque IIR, label de error y una señal de changed."""
 
     changed = Signal() # avisar fuera cuando cambia algo
-    # TODO: proque hay que definir aquí esto?? cogerlo del filtering.json no??
-    FILTER_FAMILIES = ("FIR", "IIR") # familias de filtros que puede elegir el usuario
-
     def __init__(self, title: str, config: dict[str, Any], fir: dict[str, Any],
-        iir: dict[str, Any], mode: FilterMode):
+        iir: dict[str, Any], mode: FilterMode, minimum_frequency: float = 0.0,
+        maximum_frequency: float | None = None):
         super().__init__()
         self.config = config
         self.fir = fir # TODO: no entiendo porque hay que guardar esto
         self.iir = iir # TODO: no entiendo porque hay que guardar esto
         self.mode = mode # dice si este panel representa un bandpass o un bandstop
+        self.minimum_frequency = float(minimum_frequency)
+        self.maximum_frequency = float(maximum_frequency) if maximum_frequency is not None else None
         self.setProperty("role", "filter-controls")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         root = QVBoxLayout(self)
@@ -385,12 +231,18 @@ class FilterControls(QFrame):
 
         # Bloque base
         grid = QGridLayout()
-        self.low = self._double(float(config["low_cut"])) # spinbox para low_cut
-        self.high = self._double(float(config["high_cut"])) # spinbox para high_cut
+        frequency_maximum = self.maximum_frequency
+        if frequency_maximum is None:
+            frequency_maximum = max(float(config["low_cut"]), float(config["high_cut"]), self.minimum_frequency + 1.0)
+        self.low = self._double(float(config["low_cut"]), self.minimum_frequency, frequency_maximum) # spinbox para low_cut
+        self.high = self._double(float(config["high_cut"]), self.minimum_frequency, frequency_maximum) # spinbox para high_cut
         self.kind = QComboBox() # combo para elegir FIR o IIR
-        for family in self.FILTER_FAMILIES:
-            self.kind.addItem(str(family))
-        self.kind.setCurrentText(str(config["filter_type"]).upper())
+        for family in filter_defaults.get("families", []):
+            family_id, family_title = normalize_choice(family)
+            self.kind.addItem(family_title, family_id)
+        family_index = self.kind.findData(str(config["filter_type"]).lower())
+        if family_index >= 0:
+            self.kind.setCurrentIndex(family_index)
         grid.addWidget(QLabel("Low cut"), 0, 0)
         grid.addWidget(self.low, 1, 0)
         grid.addWidget(QLabel("High cut"), 0, 1)
@@ -419,7 +271,7 @@ class FilterControls(QFrame):
         self.fir_order = QSpinBox() # spinbox para el orden del filtro
         self.fir_order.setRange(0, 99999)
         self.fir_order.setSingleStep(1)
-        self.fir_order.setValue(int(config["fir_order"], fir["default_order"]))
+        self.fir_order.setValue(int(config["fir_order"]))
         self.fir_order.setMaximumWidth(140)
         self.window = QComboBox() # combobox para la ventana del filtro
         for window in fir.get("windows", []):
@@ -446,7 +298,7 @@ class FilterControls(QFrame):
         iir_layout.setColumnStretch(2, 1)
         self.iir_order = QSpinBox() # spinbox para el orden del filtro
         self.iir_order.setRange(1, 20)
-        self.iir_order.setValue(int(config.get["iir_order"], iir["default_order"]))
+        self.iir_order.setValue(int(config.get["iir_order"]))
         self.iir_order.setMaximumWidth(140)
         self.design = QComboBox() # combobox para el diseño del filtro
         for design in iir["designs"]:
@@ -502,18 +354,32 @@ class FilterControls(QFrame):
         self._sync()
 
     @staticmethod
-    def _double(value: float) -> QDoubleSpinBox:
+    def _double(value: float, minimum_value: float, maximum_value: float) -> QDoubleSpinBox:
         spin = QDoubleSpinBox()
-        spin.setRange(0, 10000) # TODO: no se debería de coger de un argumento?? sin parchear
+        spin.setRange(minimum_value, maximum_value)
         spin.setDecimals(1)
         spin.setValue(value)
         spin.setSuffix(" Hz")
         return spin
 
+    def set_frequency_bounds(self, minimum_frequency: float, maximum_frequency: float | None) -> None:
+        """Actualiza los rangos permitidos para las frecuencias de corte."""
+        self.minimum_frequency = float(minimum_frequency)
+        self.maximum_frequency = float(maximum_frequency) if maximum_frequency is not None else None
+        effective_maximum = self.maximum_frequency
+        if effective_maximum is None:
+            effective_maximum = max(self.low.value(), self.high.value(), self.minimum_frequency + 1.0)
+        for control in (self.low, self.high):
+            signals_were_blocked = control.blockSignals(True)
+            control.setRange(self.minimum_frequency, effective_maximum)
+            control.blockSignals(signals_were_blocked)
+        self.config["low_cut"] = self.low.value()
+        self.config["high_cut"] = self.high.value()
+
     def _sync(self) -> None:
         """Lee la interfaz y actualiza self.config, muestra u oculta controles FIR/IIR, y activa/desactiva
         parámetros según el diseño."""
-        filter_type = self.kind.currentText().lower()
+        filter_type = str(self.kind.currentData() or self.kind.currentText()).lower()
         require_odd_fir_order = self.mode == "bandstop" and filter_type == "fir"
 
         # Leemos toodo lo que el usuario ha puesto en la UI y lo guardamos en self.config
@@ -550,18 +416,19 @@ class FilterControls(QFrame):
         # Emitimos señal de que algo ha cambiado
         self.changed.emit()
 
-    def set_error_message(self, message: str | None) -> None:
-        """Función para mostrar/ocultar el mensaje de error."""
-        # TODO: no es redundante con otras funciones de error que hay arriba???
-        if message:
-            self.error_label.setProperty("role", "error")
-            self.error_label.style().unpolish(self.error_label)
-            self.error_label.style().polish(self.error_label)
-            self.error_label.setText(message)
-            self.error_label.show()
+    def set_message(self, message: str | None, *, role: str = "error") -> None:
+        """Muestra u oculta el mensaje del filtro con estilo de error o warning. La diferencia con
+        filter_response_error es que una dice qué texto sale y la otra decide cómo se enseña en la UI."""
+        if message is None:
+            self.error_label.clear()
+            self.error_label.hide()
             return
-        self.error_label.clear()
-        self.error_label.hide()
+
+        self.error_label.setProperty("role", role)
+        self.error_label.style().unpolish(self.error_label)
+        self.error_label.style().polish(self.error_label)
+        self.error_label.setText(message)
+        self.error_label.show()
 
 
 __all__ = ["FilterControls", "FilterMode", "FilterPreviewPlot", "FilterResponse", "build_filter_defaults",

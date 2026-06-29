@@ -1,4 +1,14 @@
 {
+  "families": [
+    {
+      "id": "fir",
+      "title": "FIR"
+    },
+    {
+      "id": "iir",
+      "title": "IIR"
+    }
+  ],
   "fir": {
     "default_window": "hamming",
     "windows": [
