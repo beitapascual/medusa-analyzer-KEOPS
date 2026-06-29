@@ -17,9 +17,11 @@ _band_validation = Validation()
 
 
 def validate_eeg_frequency_bands(rows: MutableSequence[dict], minimum_frequency: float = 0.1,
-    maximum_frequency: float = 10000.0) -> list[str]:
+    maximum_frequency: float = 10000.0) -> list[str]: # todo: aquí en eque momento se actualiza con broadband? min, max deberían ser pasados como args
     errors: list[str] = []
     for index, row in enumerate(rows, start=1):
+        if not bool(row.get("enabled", True)):
+            continue  # Cuando una fila está desactivada no se valida
         row_prefix = f"Row {index}"
         row_errors: list[str] = []
         row_errors.extend(_band_validation.validate_many(row.get("title"),
@@ -115,14 +117,6 @@ class EEGFrequencyBandsTable(EditableTable):
             self.maximum_frequency = max(self.minimum_frequency, float(maximum_frequency))
         else:
             self.maximum_frequency = max(self.minimum_frequency, self.maximum_frequency)
-
-        for widgets_by_key in self.row_widgets:
-            for key in ("low_cut", "high_cut"):
-                spin = widgets_by_key[key]
-                spin.blockSignals(True)
-                spin.setMinimum(self.minimum_frequency)
-                spin.blockSignals(False)
-
         self._sync(emit_changed=emit_changed)
 
     def _add_new_row(self) -> None:

@@ -91,9 +91,6 @@
         "id": "bessel",
         "title": "Bessel"
       }
-    ],
-    "default_order": 4,
-    "default_rp_db": 1.0,
-    "default_rs_db": 40.0
+    ]
   }
 }
