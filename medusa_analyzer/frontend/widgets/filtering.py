@@ -298,26 +298,26 @@ class FilterControls(QFrame):
         iir_layout.setColumnStretch(2, 1)
         self.iir_order = QSpinBox() # spinbox para el orden del filtro
         self.iir_order.setRange(1, 20)
-        self.iir_order.setValue(int(config.get["iir_order"]))
+        self.iir_order.setValue(int(config.get("iir_order", iir.get("default_order", 4))))
         self.iir_order.setMaximumWidth(140)
         self.design = QComboBox() # combobox para el diseño del filtro
         for design in iir["designs"]:
             design_id, design_title = normalize_choice(design) # normalizamos las opciones del combo
             self.design.addItem(design_title, design_id)
-        design_index = self.design.findData(str(config["iir_design"], iir["default_design"]))
+        design_index = self.design.findData(str(config.get("iir_design", iir.get("default_design", "butter"))))
         if design_index >= 0:
             self.design.setCurrentIndex(design_index)
         self.design.setMaximumWidth(180)
         self.iir_rp = QDoubleSpinBox() # spinbox para el rizado de la banda de paso
         self.iir_rp.setRange(0.1, 20.0)
         self.iir_rp.setDecimals(2)
-        self.iir_rp.setValue(float(config["iir_rp_db"], iir["default_rp_db"]))
+        self.iir_rp.setValue(float(config.get("iir_rp_db", iir.get("default_rp_db", 1.0))))
         self.iir_rp.setSuffix(" dB")
         self.iir_rp.setMaximumWidth(140)
         self.iir_rs = QDoubleSpinBox() # spinbox para la atenuación en la banda de rechazo
         self.iir_rs.setRange(1.0, 200.0)
         self.iir_rs.setDecimals(1)
-        self.iir_rs.setValue(float(config["iir_rs_db"], iir["default_rs_db"]))
+        self.iir_rs.setValue(float(config.get("iir_rs_db", iir.get("default_rs_db", 40.0))))
         self.iir_rs.setSuffix(" dB")
         self.iir_rs.setMaximumWidth(180)
         iir_layout.addWidget(QLabel("IIR order"), 0, 0)
