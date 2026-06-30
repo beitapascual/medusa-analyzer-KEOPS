@@ -298,7 +298,6 @@ class FilterControls(QFrame):
         grid = QGridLayout()
         if self.maximum_frequency is None:
             self.maximum_frequency = max(float(config["low_cut"]), float(config["high_cut"]), self.minimum_frequency + 1.0)
-        # TODO: me puedes comprobar que no estemos creando frecuencias máximas/mínimas antibug innecesarias??
         # Creamos QDoubleSpinBox para los límites de frecuencia
         self.low = self._double(float(config["low_cut"]), self.minimum_frequency, self.maximum_frequency) # spinbox para low_cut
         self.high = self._double(float(config["high_cut"]), self.minimum_frequency, self.maximum_frequency) # spinbox para high_cut
@@ -458,7 +457,6 @@ class FilterControls(QFrame):
     def _sync(self) -> None:
         """Lee la interfaz y actualiza self.config, muestra u oculta controles FIR/IIR, y activa/desactiva
         parámetros según el diseño."""
-        # TODO: veo más util hacer esta en eeg_preprocessing puede ser?? que igual en otros experimentos se quiere otras cosas?? NOSE EH
         # Obtenemos tipo de filtro seleccionado
         filter_type = str(self.kind.currentData() or self.kind.currentText()).lower()
         require_odd_fir_order = self.mode == "bandstop" and filter_type == "fir"
