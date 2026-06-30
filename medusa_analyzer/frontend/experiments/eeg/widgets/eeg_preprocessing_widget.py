@@ -210,7 +210,7 @@ class EEGPreprocessingWidget(QScrollArea):
         self.minimum_band_frequency = float(self.state["broadband"]["low_cut"])
         self.maximum_band_frequency = float(self.state["broadband"]["high_cut"])
         for controls in self.filters.values():
-            controls.set_frequency_bounds(self.minimum_band_frequency, self.fs/2)
+            controls.set_cut_frequency_bounds(self.minimum_band_frequency, self.fs / 2)
             # NOTA: ponemos de límite nyquist, aunque luego se valida con el máximo restringido
 
         # Copiamos el valor del checkbox CAR al estado
