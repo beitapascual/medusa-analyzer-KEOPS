@@ -98,11 +98,11 @@ class EEGReportWidget(ReportWidget):
             return self._section("Pre-processing", [("Status", "Preprocessing step skipped.")])
 
         selected_frequency_bands = preprocessing.get("selected_frequency_bands", [])
-        notch = preprocessing.get("notch", {})
-        bandpass = preprocessing.get("bandpass", {})
+        filters = preprocessing.get("filters", {})
         return self._section("Pre-processing", # llamamos a _section
             [("CAR", "Enabled" if preprocessing.get("car_checked") else "Disabled"),
-                ("Notch", self._filter_description(notch)), ("Bandpass", self._filter_description(bandpass)),
+                *[(str(filter_id).replace("_", " ").title(), self._filter_description(filter_config))
+                    for filter_id, filter_config in filters.items()],
                 ("Analysis bands", self._bands_summary(selected_frequency_bands))])
 
     @classmethod

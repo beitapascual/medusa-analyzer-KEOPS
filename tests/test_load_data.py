@@ -2,7 +2,7 @@ import unittest
 
 from PySide6.QtWidgets import QApplication
 
-from medusa_analyzer.frontend.models import MetadataSummary
+from medusa_analyzer.frontend.utils import create_metadata_summary
 from medusa_analyzer.frontend.widgets.load_data import LoadDataWidget, _load_files
 
 
@@ -40,14 +40,14 @@ class LoadDataTests(unittest.TestCase):
             [result["name"] for result in results],
             ["first.edf", "second.edf"],
         )
-        self.assertEqual(progress, [0, 50, 50, 100])
+        self.assertEqual(progress, [0, 50, 50, 50, 100, 100])
 
     def test_loaded_batch_is_stored_only_as_collections(self):
         state = {}
         widget = LoadDataWidget(
             config={"allowed_extensions": [".edf"]},
             state=state,
-            loader=lambda path, progress_callback: _fake_result(path),
+            loader_function=lambda path, progress_callback: _fake_result(path),
             title="Load data",
             description="Test",
         )
@@ -58,7 +58,7 @@ class LoadDataTests(unittest.TestCase):
         self.assertEqual(state["loaded_file_paths"], ["first.edf", "second.edf"])
         self.assertEqual(len(state["loader_results"]), 2)
         self.assertEqual(
-            [metadata.file_name for metadata in state["metadata_list"]],
+            [metadata.get("file_name", "") for metadata in state["metadata_list"]],
             ["first.edf", "second.edf"],
         )
         self.assertNotIn("loaded_file_path", state)
@@ -70,15 +70,15 @@ class LoadDataTests(unittest.TestCase):
         state = {
             "loaded_file_paths": ["first.edf"],
             "loader_results": [_fake_result("first.edf")],
-            "metadata_list": [MetadataSummary.from_loader_result(_fake_result("first.edf"))],
+            "metadata_list": [create_metadata_summary(_fake_result("first.edf"))],
             "loaded_file_path": "first.edf",
             "loader_result": _fake_result("first.edf"),
-            "metadata": MetadataSummary.from_loader_result(_fake_result("first.edf")),
+            "metadata": create_metadata_summary(_fake_result("first.edf")),
         }
         widget = LoadDataWidget(
             config={},
             state=state,
-            loader=lambda path, progress_callback: _fake_result(path),
+            loader_function=lambda path, progress_callback: _fake_result(path),
             title="Load data",
             description="Test",
         )
@@ -98,7 +98,7 @@ class LoadDataTests(unittest.TestCase):
         widget = LoadDataWidget(
             config={"allowed_extensions": [".edf"]},
             state=state,
-            loader=lambda path, progress_callback: _fake_result(path),
+            loader_function=lambda path, progress_callback: _fake_result(path),
             title="Load data",
             description="Test",
         )

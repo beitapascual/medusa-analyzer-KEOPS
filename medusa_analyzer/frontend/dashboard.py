@@ -77,58 +77,63 @@ class DashboardPage(QScrollArea):
 
     route_requested = Signal(str) # señal para cuando se clique en un item
 
+    # El constructor recibe las categorías o los items
     def __init__(self, categories: list[DashboardCategory], items: list[DashboardItem]):
         super().__init__()
         self.setObjectName("dashboardPage")
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff) # desactivamos scroll horizontal
 
-        self.content = QWidget()
+        self.content = QWidget() # widget interno del scroll
         self.content.setObjectName("dashboard")
-        self.outer = QVBoxLayout(self.content)
+        self.outer = QVBoxLayout(self.content) # layout vertical
         self.outer.setContentsMargins(48, 34, 48, 48)
         self.outer.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
 
-        self.container = QWidget()
+        self.container = QWidget() # columna principal del dashboard
         self.container.setObjectName("dashboardContainer")
         self.container.setMaximumWidth(1120)
-        self.container.setSizePolicy(self.container.sizePolicy().horizontalPolicy(),
-            self.container.sizePolicy().verticalPolicy())
-        layout = QVBoxLayout(self.container)
+        layout = QVBoxLayout(self.container) # Aquí metemos el hero y las categorías
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(28)
-        layout.addWidget(DashboardHero())
+        layout.addWidget(DashboardHero()) # Añadimos el dashboardHero (cabecera visual)
 
-        self.section_layouts: list[QVBoxLayout] = []
+        # Preparamos secciones y agrupamos items
+        self.section_layouts: list[QVBoxLayout] = [] # guardamos los layouts de cada sección
+        # Creamos un diccionario donde cada categoría tendrá una lista de items
         items_by_category: dict[str, list[DashboardItem]] = defaultdict(list)
         for item in items:
-            items_by_category[item.category_id].append(item)
+            items_by_category[item.category_id].append(item) # agrupamos items por categoría
 
-        for category in categories:
-            category_items = items_by_category.get(category.id, [])
+
+        for category in categories: # recorremos las categorías (ya ordenadas antes por build_dashboard_catalog())
+            category_items = items_by_category.get(category.id, []) # buscamos ítems de esa categoría
             if not category_items:
                 continue
-            layout.addWidget(self._create_category_section(category, category_items))
+            layout.addWidget(self._create_category_section(category, category_items)) # creamos sección visual para esa categoría
 
         self.outer.addWidget(self.container)
         self.setWidget(self.content)
 
     def _create_category_section(self, category: DashboardCategory, items: list[DashboardItem]) -> QFrame:
+        """ Métoodo que crea una sección visual del dashboard. Recibe una categoría y los items de esa categoría,
+        y devuelve un QFrame que será la sección completa"""
         section = QFrame()
         section.setObjectName("moduleSection")
         section_layout = QVBoxLayout(section)
         section_layout.setContentsMargins(34, 29, 34, 34)
         section_layout.setSpacing(0)
+        # Guardamos el layout en una lista para modificar sus márgenes cuando la ventana cambie de tamaño.
         self.section_layouts.append(section_layout)
 
-        title = QLabel(category.title)
+        title = QLabel(category.title) # título de la categoría
         title.setObjectName("moduleSectionTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setWordWrap(True)
         section_layout.addWidget(title)
 
-        if category.subtitle:
+        if category.subtitle: # si tiene subtítulo, lo pintamos
             section_layout.addSpacing(8)
             description = QLabel(category.subtitle)
             description.setObjectName("moduleSectionSubtitle")
@@ -138,9 +143,9 @@ class DashboardPage(QScrollArea):
 
         section_layout.addSpacing(24)
 
-        grid = ModuleGrid()
-        for item in items:
-            # Creamos las carpetas de cada experimento
+        grid = ModuleGrid() # Contenedor donde van las ExperimentCard. ModuleGrid las coloca en filas/columnas responsivas.
+        for item in items: # Recorremos los items de esa categoría
+            # Creamos las tarjetas de cada experimento
             card = ExperimentCard(title=item.title, subtitle=item.subtitle,
                 icon_path=Path(item.icon_path) if item.icon_path else None,
                 enabled=item.enabled, status=item.status, accent=item.accent)
@@ -151,12 +156,15 @@ class DashboardPage(QScrollArea):
 
                 # En MainWindow tenemos 'self.dashboard.route_requested.connect(self.router.navigate)' que llama al Router.
                 card.clicked.connect(lambda route=item.route: self.route_requested.emit(route))
-            grid.add_card(card)
-        section_layout.addWidget(grid)
+            grid.add_card(card) # Añadimos tarjeta al grid
+        section_layout.addWidget(grid) # Añadimos el grid completo a la sección
         return section
 
     def resizeEvent(self, event) -> None:
-        # IMPORTANTE: esta función no se llama "a mano" pero sí que se ejecuta.
+        """
+        IMPORTANTE: esta función no se llama "a mano" pero sí que se ejecuta. Qt lo llama automáticamente cuando
+        cambia el tamaño del dashboard.
+        """
         width = event.size().width()
         horizontal_margin = 16 if width < 540 else 28 if width < 860 else 48
         vertical_margin = 18 if width < 540 else 28 if width < 860 else 34

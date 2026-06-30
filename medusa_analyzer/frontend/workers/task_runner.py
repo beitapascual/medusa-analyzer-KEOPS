@@ -11,4 +11,5 @@ class TaskRunner:
     def start(self, worker: Worker) -> None:
         self._active.add(worker)
         worker.signals.finished.connect(lambda: self._active.discard(worker))
+        # Ejecutamos el worker en un hilo de fondo. Esto llama automáticamente a worker.run()
         self.pool.start(worker)

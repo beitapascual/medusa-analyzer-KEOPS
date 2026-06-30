@@ -24,6 +24,7 @@
     {
       "id": "preprocessing",
       "title": "Preprocessing",
+      "subtitle": "Tune the defaults that will be applied to the EEG recording.",
       "widget": "eeg_preprocessing_widget.EEGPreprocessingWidget"
     },
     {

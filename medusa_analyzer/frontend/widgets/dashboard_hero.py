@@ -3,26 +3,29 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 
 class DashboardHero(QFrame):
-    """Dashboard header styled entirely through the global QSS theme."""
+    """Cabecera grande del dashboard. El bloque superior con el nombre de la app, una frase descriptiva
+    y unas "chips" o etiquetas pequeñas."""
 
     def __init__(self):
         super().__init__()
         self.setObjectName("dashboardHero")
         self.setMinimumHeight(224)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True) # esto es para que el fondo se pinte
+        # bien a partir del QSS
 
         root = QVBoxLayout(self)
         root.setContentsMargins(42, 32, 42, 32)
         root.setSpacing(0)
 
-        eyebrow = QLabel("MEDUSA BCI WORKSPACE")
+        eyebrow = QLabel("MEDUSA BCI FRAMEWORK") # etiqueta pequeña superior
         eyebrow.setObjectName("dashboardEyebrow")
 
-        title = QLabel("Medusa Analyzer")
+        title = QLabel("Medusa Analyzer KEOPS") # título principal
         title.setObjectName("dashboardHeroTitle")
         title.setWordWrap(True)
 
-        subtitle = QLabel("Biomedical signal processing workspace")
+        subtitle = QLabel("Create reproducible analysis pipelines for biomedical signals, "
+                          "from data loading to final report.") # subtítulo
         subtitle.setObjectName("dashboardHeroSubtitle")
         subtitle.setWordWrap(True)
 
@@ -33,22 +36,22 @@ class DashboardHero(QFrame):
         root.addWidget(subtitle)
         root.addSpacing(22)
 
-        self.chips = QHBoxLayout()
+        self.chips = QHBoxLayout() # creamos fila horizontal para las etiquetas pequeñas
         self.chips.setSpacing(9)
 
-        for text, tone in (
-            ("Guided pipelines", "burgundy"),
-            ("Scientific workspace", "teal"),
-        ):
+        # Definimos dos chips
+        for text, tone in (("Guided pipelines", "burgundy"), ("BIDS compatible", "teal")):
             chip = QLabel(text)
             chip.setObjectName("heroChip")
             chip.setProperty("tone", tone)
             self.chips.addWidget(chip)
 
-        self.chips.addStretch()
-        root.addLayout(self.chips)
+        self.chips.addStretch() # stretch para empujar las chips a la izquierda
+        root.addLayout(self.chips) # metemos la fila de chips en el hero
 
     def resizeEvent(self, event) -> None:
+        """Métoodo que se ejecuta automáticamente cuando cambia el tamaño del hero. Lo llama Qt cuando la
+        ventana cambia de tamaño."""
         compact = self.width() < 620
         stacked_chips = self.width() < 310
 
@@ -60,11 +63,7 @@ class DashboardHero(QFrame):
             margins = (24, 26, 24, 27) if compact else (42, 32, 42, 32)
             self.layout().setContentsMargins(*margins)
 
-        direction = (
-            QHBoxLayout.Direction.TopToBottom
-            if stacked_chips
-            else QHBoxLayout.Direction.LeftToRight
-        )
+        direction = (QHBoxLayout.Direction.TopToBottom if stacked_chips else QHBoxLayout.Direction.LeftToRight)
 
         if self.chips.direction() != direction:
             self.chips.setDirection(direction)

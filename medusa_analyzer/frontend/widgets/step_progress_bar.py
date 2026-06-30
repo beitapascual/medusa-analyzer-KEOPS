@@ -3,12 +3,15 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
 
+# Barra de progreso visual de los pasos del workflow
 class StepProgressBar(QWidget):
-    STATES = {"locked", "active", "completed", "error"}
+    STATES = {"locked", "active", "completed", "error"} # estados válidos de un paso
 
+    # El constructor recibe una lsita de nombres de pasos
     def __init__(self, labels: list[str]):
         super().__init__()
         self.labels = labels
+        # Inicializamos los estados. Al principio, el primer estado está activo y los demás bloqueados.
         self.states = ["active"] + ["locked"] * (len(labels) - 1)
         self._line_color = QColor("#DDD7D8")
         self._locked_step_color = QColor("#C9C4C7")
@@ -19,36 +22,32 @@ class StepProgressBar(QWidget):
         self._locked_label_color = QColor("white")
         self._active_label_color = QColor("#E35A82")
         self._completed_label_color = QColor("white")
-        self._error_label_color = QColor("white")
+        self._error_label_color = QColor("white") # TODO: si el fondo es claro no se ve
         self.setMinimumHeight(92)
         self.setProperty("role", "step-progress")
 
     def set_states(self, states: list[str]) -> None:
+        """Se llama desde WorkflowShell y sirve para actualizar qué pasos están completed, active o locked."""
         if len(states) != len(self.labels) or any(state not in self.STATES for state in states):
+            # Valida que haya tantos estados como labels, que todos los estados sean válidos.
             raise ValueError("Invalid step states.")
-        self.states = states
-        self.update()
+        self.states = states # guardamos los nuevos estados
+        self.update() # volvemos a pintar
 
     def _set_color(self, attribute: str, value) -> None:
+        """Métoodo auxiliar para cambiar un color interno"""
         setattr(self, attribute, QColor(value))
         self.update()
 
     def _step_color(self, state: str) -> QColor:
-        colors = {
-            "locked": self._locked_step_color,
-            "active": self._active_step_color,
-            "completed": self._completed_step_color,
-            "error": self._error_step_color,
-        }
+        """devuelve el color del círculo según el estado."""
+        colors = {"locked": self._locked_step_color, "active": self._active_step_color,
+            "completed": self._completed_step_color, "error": self._error_step_color}
         return colors[state]
 
     def _label_color(self, state: str) -> QColor:
-        colors = {
-            "locked": self._locked_label_color,
-            "active": self._active_label_color,
-            "completed": self._completed_label_color,
-            "error": self._error_label_color,
-        }
+        colors = {"locked": self._locked_label_color, "active": self._active_label_color,
+            "completed": self._completed_label_color, "error": self._error_label_color}
         return colors[state]
 
     def get_line_color(self) -> QColor:

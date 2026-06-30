@@ -1,3 +1,5 @@
+from typing import Any
+
 from PySide6.QtWidgets import (
     QPushButton,
     QHBoxLayout,
@@ -8,7 +10,6 @@ from PySide6.QtWidgets import (
 )
 
 from medusa_analyzer.backend.io import load_edf_file
-from medusa_analyzer.frontend.models import MetadataSummary
 from medusa_analyzer.frontend.widgets import LoadDataWidget
 
 
@@ -17,7 +18,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
         super().__init__(
             config=defaults.get("load_data", {}),  # allowed extensions
             state=state,
-            loader=load_edf_file,
+            loader_function=load_edf_file,
             title="Load data",
             description="Select a MEDUSA Studio dataset.",
         )
@@ -92,7 +93,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
         else:
             self.output_path_display.clear()
 
-    def _show_metadata(self, metadata_list: list[MetadataSummary]) -> None:
+    def _show_metadata(self, metadata_list: list[dict[str, Any]]) -> None:
         # For showing/hiding the new output panel.
         super()._show_metadata(metadata_list)
         if metadata_list:

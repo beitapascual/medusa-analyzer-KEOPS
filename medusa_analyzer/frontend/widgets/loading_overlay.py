@@ -15,7 +15,7 @@ class LoadingOverlay(QFrame):
         panel_layout.setContentsMargins(36, 28, 36, 28)
         self.label = QLabel("Loading recordings...")
         self.label.setObjectName("loadingTitle")
-        self.progress = QProgressBar()
+        self.progress = QProgressBar() # definimos la barra de progreso
         self.progress.setRange(0, 100)
         self.progress.setFixedWidth(320)
         panel_layout.addWidget(self.label)

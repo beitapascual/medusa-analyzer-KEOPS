@@ -9,129 +9,46 @@
       "enabled": true,
       "checked_by_default": true
     },
-    "filter_options": {
-      "fir": {
-        "default_window": "hamming",
-        "windows": [
-          {
-            "id": "barthann",
-            "title": "Barthann"
-          },
-          {
-            "id": "bartlett",
-            "title": "Bartlett"
-          },
-          {
-            "id": "blackman",
-            "title": "Blackman"
-          },
-          {
-            "id": "blackmanharris",
-            "title": "Blackman-Harris"
-          },
-          {
-            "id": "bohman",
-            "title": "Bohman"
-          },
-          {
-            "id": "boxcar",
-            "title": "Boxcar"
-          },
-          {
-            "id": "cosine",
-            "title": "Cosine"
-          },
-          {
-            "id": "exponential",
-            "title": "Exponential"
-          },
-          {
-            "id": "flattop",
-            "title": "Flat top"
-          },
-          {
-            "id": "hamming",
-            "title": "Hamming"
-          },
-          {
-            "id": "hann",
-            "title": "Hann"
-          },
-          {
-            "id": "lanczos",
-            "title": "Lanczos"
-          },
-          {
-            "id": "nuttall",
-            "title": "Nuttall"
-          },
-          {
-            "id": "parzen",
-            "title": "Parzen"
-          },
-          {
-            "id": "taylor",
-            "title": "Taylor"
-          },
-          {
-            "id": "triang",
-            "title": "Triangular"
-          }
-        ]
+    "filters": [
+      {
+        "id": "notch",
+        "title": "Notch filter",
+        "mode": "bandstop",
+        "plot_title": "Notch filter response",
+        "limits_frequency_bands": false,
+        "must_be_within_filter": "bandpass",
+        "out_of_range_warning": "Notch filter is outside the active bandpass range ({low:g}-{high:g} Hz) and will have no practical effect.",
+        "enabled": true,
+        "filter_type": "fir",
+        "low_cut": 49.0,
+        "high_cut": 51.0,
+        "fir_order": 1001,
+        "fir_window": "hamming",
+        "iir_order": 4,
+        "iir_design": "butter",
+        "iir_rp_db": 1.0,
+        "iir_rs_db": 40.0
       },
-      "iir": {
-        "default_design": "butter",
-        "designs": [
-          {
-            "id": "butter",
-            "title": "Butterworth"
-          },
-          {
-            "id": "cheby1",
-            "title": "Chebyshev I"
-          },
-          {
-            "id": "cheby2",
-            "title": "Chebyshev II"
-          },
-          {
-            "id": "ellip",
-            "title": "Elliptic"
-          },
-          {
-            "id": "bessel",
-            "title": "Bessel"
-          }
-        ],
-        "default_order": 4,
-        "default_rp_db": 1.0,
-        "default_rs_db": 40.0
+      {
+        "id": "bandpass",
+        "title": "Bandpass filter",
+        "mode": "bandpass",
+        "plot_title": "Bandpass filter response",
+        "must_be_within_filter": false,
+        "out_of_range_warning": false,
+        "limits_frequency_bands": true,
+        "enabled": true,
+        "filter_type": "fir",
+        "low_cut": 0.5,
+        "high_cut": 60.0,
+        "fir_order": 1000,
+        "fir_window": "hamming",
+        "iir_order": 4,
+        "iir_design": "butter",
+        "iir_rp_db": 1.0,
+        "iir_rs_db": 40.0
       }
-    },
-    "notch": {
-      "enabled": true,
-      "filter_type": "fir",
-      "low_cut": 49.0,
-      "high_cut": 51.0,
-      "fir_order": 1001,
-      "fir_window": "hamming",
-      "iir_order": 4,
-      "iir_design": "butter",
-      "iir_rp_db": 1.0,
-      "iir_rs_db": 40.0
-    },
-    "bandpass": {
-      "enabled": true,
-      "filter_type": "fir",
-      "low_cut": 0.5,
-      "high_cut": 60.0,
-      "fir_order": 1000,
-      "fir_window": "hamming",
-      "iir_order": 4,
-      "iir_design": "butter",
-      "iir_rp_db": 1.0,
-      "iir_rs_db": 40.0
-    },
+    ],
     "bands": {
       "available": [
         {

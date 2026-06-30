@@ -18,7 +18,6 @@ class EEGFeaturesWidget(FeaturesWidget):
     _multiscale_lz_feature_id = "multiscale_lempel_ziv_complexity"
     _multiscale_lz_scales_param_id = "scales"
     _multiscale_lz_scales_pattern = re.compile(r"^\[(?:[1-9]\d*)(?:, [1-9]\d*)*\]$")
-    _minimum_band_frequency = 0.1
 
     # Este widget añade la logica EEG específica encima del FeaturesWidget genérico
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
@@ -104,26 +103,8 @@ class EEGFeaturesWidget(FeaturesWidget):
         available_bands = preprocessing_defaults.get("bands", {}).get("available", [])
         return cls._copy_rows(available_bands)
 
-    def _resolve_sampling_rate(self) -> float | None:
-        metadata_list = self.state.get("metadata_list") or []
-        sampling_rates = [metadata.sampling_rate for metadata in metadata_list
-            if metadata.sampling_rate is not None and metadata.sampling_rate > 0]
-        if sampling_rates:
-            return min(sampling_rates)
-        return None
-
     def _effective_broadband(self) -> dict[str, Any] | None:
-        preprocessing_state = self.state.get("preprocessing") or {}
-        broadband = deepcopy(preprocessing_state.get("broadband"))
-        if broadband is not None:
-            return broadband
-
-        sampling_rate = self._resolve_sampling_rate()
-        if sampling_rate is None:
-            return None
-
-        return {"id": "broadband", "title": "Broadband", "enabled": True,
-            "low_cut": self._minimum_band_frequency, "high_cut": float(sampling_rate / 2)}
+        return deepcopy(self.state.get("broadband"))
 
     @staticmethod
     def _build_band_message_container() -> tuple[QWidget, QLabel]:
@@ -186,6 +167,8 @@ class EEGFeaturesWidget(FeaturesWidget):
     def _preprocessing_selected_frequency_state(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         # Si preprocessing ya ha calculado las bandas seleccionadas, las usamos.
         # Si no, caemos a las bandas habilitadas o a una broadband derivada de fs.
+        # TODO: REVISAR ESTA FUNCIÓN PARA QUE NO CRASHEE SI SKIPPEAMOS EL PREPROCESSING O NO
+        # ELEGIMOS NINGUNA BANDA EN PREPROCESSING
         preprocessing_state = self.state.get("preprocessing") or {}
         broadband = self._effective_broadband()
         selected_frequency_bands = self._copy_rows(preprocessing_state.get("selected_frequency_bands"))
@@ -252,7 +235,8 @@ class EEGFeaturesWidget(FeaturesWidget):
 
         selected_frequency_bands, broadband = self._preprocessing_selected_frequency_state()
         self._set_band_feature_params(feature_params, self._absolute_band_power_feature_id,
-            bands_source="preprocessing" if self.state.get("preprocessing") else "metadata",
+        bands_source=("preprocessing" if (self.state.get("preprocessing") or {}).get("selected_frequency_bands")
+                                          else "metadata"),
             frequency_bands=self._copy_rows((self.state.get("preprocessing") or {}).get("frequency_bands")),
             selected_frequency_bands=self._copy_rows(selected_frequency_bands),
             broadband=broadband)

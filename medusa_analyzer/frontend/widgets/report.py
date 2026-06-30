@@ -4,8 +4,6 @@ from typing import Any
 
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 
-from medusa_analyzer.frontend.models import MetadataSummary
-
 
 class ReportWidget(QScrollArea):
     # Clase base para montar la estructura comun del report. La clase conoce
@@ -79,20 +77,23 @@ class ReportWidget(QScrollArea):
     def _features_section(self) -> QFrame | None:
         return None
 
-    def _metadata_section(self, metadata_list: list[MetadataSummary]) -> QFrame:
+    def _metadata_section(self, metadata_list: list[dict[str, Any]]) -> QFrame:
         if not metadata_list:
             return self._section("Metadata", [("Status", "No EDF loaded yet.")])
 
-        sampling_rates = {metadata.sampling_rate for metadata in metadata_list if metadata.sampling_rate is not None}
+        sampling_rates = {metadata.get("sampling_rate") for metadata in metadata_list
+            if metadata.get("sampling_rate") is not None}
         sampling_rate = f"{next(iter(sampling_rates)):g} Hz" if len(sampling_rates) == 1 else "Mixed"
-        channels = list(dict.fromkeys(channel for metadata in metadata_list for channel in metadata.channels))
+        channels = list(dict.fromkeys(
+            channel for metadata in metadata_list for channel in (metadata.get("channels") or [])
+        ))
         return self._section("Metadata",
-            [("Files", ", ".join(metadata.file_name for metadata in metadata_list)),
-                ("Paths", ", ".join(metadata.file_path for metadata in metadata_list)),
+            [("Files", ", ".join(str(metadata.get("file_name", "")) for metadata in metadata_list)),
+                ("Paths", ", ".join(str(metadata.get("file_path", "")) for metadata in metadata_list)),
                 ("Channels", ", ".join(channels)),
                 ("Sampling rate", sampling_rate),
-                ("Total duration", f"{sum(metadata.duration_seconds or 0 for metadata in metadata_list):g} s"),
-                ("Total samples", str(sum(metadata.n_samples or 0 for metadata in metadata_list)))])
+                ("Total duration", f"{sum(metadata.get('duration_seconds') or 0 for metadata in metadata_list):g} s"),
+                ("Total samples", str(sum(metadata.get("n_samples") or 0 for metadata in metadata_list)))])
 
     def _section(self, title: str, rows: list[tuple[str, str]]) -> QFrame:
         panel = QFrame()

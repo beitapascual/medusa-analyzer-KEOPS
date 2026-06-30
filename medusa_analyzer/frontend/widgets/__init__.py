@@ -3,6 +3,7 @@
 from .features import FeatureItem, FeaturesWidget
 from .filtering import FilterControls, FilterPreviewPlot, FilterResponse
 from .load_data import LoadDataWidget
+from .plots import LinePlot, PlotSeries
 from .report import ReportWidget
 from .table import EditableTable, TableColumn
 from .workflow_shell import WorkflowShell
@@ -14,7 +15,9 @@ __all__ = [
     "FilterControls",
     "FilterPreviewPlot",
     "FilterResponse",
+    "LinePlot",
     "LoadDataWidget",
+    "PlotSeries",
     "ReportWidget",
     "TableColumn",
     "WorkflowShell",
