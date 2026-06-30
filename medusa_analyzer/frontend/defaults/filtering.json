@@ -11,6 +11,8 @@
   ],
   "fir": {
     "default_window": "hamming",
+    "minimum_order": 3,
+    "maximum_order": 99999,
     "windows": [
       {
         "id": "barthann",
@@ -80,6 +82,16 @@
   },
   "iir": {
     "default_design": "butter",
+    "minimum_order": 1,
+    "maximum_order": 20,
+    "rp_db": {
+      "minimum": 0.1,
+      "maximum": 20.0
+    },
+    "rs_db": {
+      "minimum": 1.0,
+      "maximum": 200.0
+    },
     "designs": [
       {
         "id": "butter",

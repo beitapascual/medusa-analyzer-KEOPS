@@ -25,9 +25,10 @@ class EEGPreprocessingWidget(QScrollArea):
         self.state = state
         self.metadata_list = []
         self.fs = None
-        self.broadband = None
+        self.broadband = self.state["broadband"]
         self.active_filter_bounds: tuple[float, float] | None = None
-        self.base_minimum_band_frequency = 0.1
+        self.base_minimum_band_frequency = (float(self.broadband["low_cut"]) if self.broadband is not None
+            and self.broadband["low_cut"] is not None else None)
         self.minimum_band_frequency = self.base_minimum_band_frequency
         self.nyquist_frequency = None
         self.maximum_band_frequency = None
@@ -39,7 +40,7 @@ class EEGPreprocessingWidget(QScrollArea):
         default_state = self._build_default_state()
         self.default_frequency_bands = [deepcopy(band) for band in default_state["frequency_bands"]]
         # Si state ya tiene preprocessing lo reutilizamos. Si no, creamos el estado inicial con los valores por defecto.
-        if not self.state.get("preprocessing"):
+        if not self.state["preprocessing"]:
             self.state["preprocessing"] = default_state # creamos el estado inicial con parámetros por defecto
         self._filters_are_valid = False
 
@@ -52,6 +53,7 @@ class EEGPreprocessingWidget(QScrollArea):
         root.setContentsMargins(4, 4, 12, 4)
         root.setSpacing(16)
 
+        # TODO: igual esto se puede sacar del info.json? Para poder modificarlo desde allí
         heading = QLabel("Preprocessing")
         heading.setObjectName("pageTitle")
         subtitle = QLabel("Tune the defaults that will be applied to the EEG recording.")
@@ -69,7 +71,7 @@ class EEGPreprocessingWidget(QScrollArea):
         car_title.setObjectName("panelTitle")
         self.car_checkbox = QCheckBox("Apply common average reference")
         # Lo inicializamos desde el estado
-        self.car_checkbox.setChecked(bool(self.state["preprocessing"].get("car_checked", False)))
+        self.car_checkbox.setChecked(bool(self.state["preprocessing"]["car_checked"]))
         car_layout.addWidget(car_title)
         car_layout.addWidget(self.car_checkbox)
         root.addWidget(car_panel)
@@ -84,7 +86,8 @@ class EEGPreprocessingWidget(QScrollArea):
             filter_id = str(filter_definition["id"])
             controls = FilterControls(str(filter_definition["title"]),
                 self.state["preprocessing"]["filters"][filter_id], str(filter_definition["mode"]),
-                minimum_frequency=self.base_minimum_band_frequency)
+                minimum_frequency=(self.base_minimum_band_frequency if self.base_minimum_band_frequency is not None
+                    else float(filter_definition["low_cut"])))
             controls.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             plot_panel, plot = self._build_filter_plot_panel(str(filter_definition["plot_title"]))
             self.filters[filter_id] = controls
@@ -110,7 +113,6 @@ class EEGPreprocessingWidget(QScrollArea):
         bands_layout.addWidget(self.bands)
         root.addWidget(bands_panel)
         root.addStretch()
-
         self.setWidget(content)
 
         # Conectamos todos los parámetros a ._sync para que se actualice el estado
@@ -151,17 +153,17 @@ class EEGPreprocessingWidget(QScrollArea):
 
     def _update_filter_feedback(self, controls: FilterControls, plot: FilterPreviewPlot,
         config: dict[str, Any], fs: float, mode: str) -> tuple[FilterResponse | None, bool]:
-        """Función para calcular la respuesta de un filtro."""
+        """Función para calcular la respuesta de un filtro llamando a funciones específicas de la clase Filering."""
 
         response = compute_filter_response(config, fs, mode, minimum_frequency=controls.minimum_frequency,
             maximum_frequency=controls.maximum_frequency)
         # Si da error
         if config.get("enabled", True) and response is None:
-            # Construimos el mensaje de error
+            # Construimos el mensaje de error/warning
             error_message = filter_response_error(config, fs, minimum_frequency=controls.minimum_frequency,
                 maximum_frequency=controls.maximum_frequency)
-            controls.set_message(error_message) # Mostramos el mensaje de error
-            plot.set_response(None, error_message) #ploteamos el mensaje de error en la gráfica
+            controls.set_message(error_message) # Mostramos el mensaje de error/warning
+            plot.set_response(None, error_message) #ploteamos el mensaje de error/warning en la gráfica
             return None, False
 
         # Si va bien
@@ -182,12 +184,10 @@ class EEGPreprocessingWidget(QScrollArea):
         """Función para sincronizar el estado interno, validar filtros, actualizar plots, recalcular límites de
         bandas y avisar al resto del workflow de que algo ha cambiado."""
 
-        preprocessing_state = self.state["preprocessing"]
-        filter_states = preprocessing_state["filters"]
         if self.fs is None or self.broadband is None or self.nyquist_frequency is None: # Caso en el que todavía no hay recordings cargados
             self._set_preprocessing_enabled(False) # desactivamos todos los controles
             self._filters_are_valid = False
-            preprocessing_state["selected_frequency_bands"] = [] # vacíamos bandas seleccionadas
+            self.state["preprocessing"]["selected_frequency_bands"] = [] # vacíamos bandas seleccionadas
             for filter_id, controls in self.filters.items():
                 controls.set_message(None) # eliminamos mensajes previos de error
                 self.filter_plots[filter_id].set_response(None, "Load recordings first to preview the filter response.")
@@ -196,27 +196,32 @@ class EEGPreprocessingWidget(QScrollArea):
 
         # Cuando fs existe, activamos los controles
         self._set_preprocessing_enabled(True)
+        base_minimum_band_frequency = float(self.base_minimum_band_frequency if self.base_minimum_band_frequency
+            is not None else self.broadband["low_cut"])
         for controls in self.filters.values():
-            controls.set_frequency_bounds(self.base_minimum_band_frequency, self.nyquist_frequency)
+            controls.set_frequency_bounds(base_minimum_band_frequency, self.nyquist_frequency)
         # Copiamos el valor del checkbox CAR al estado
-        preprocessing_state["car_checked"] = self.car_checkbox.isChecked()
+        self.state["preprocessing"]["car_checked"] = self.car_checkbox.isChecked()
+
         # Calculamos la respuesta de los filtros
         filter_validity = {}
         for filter_definition in self.filter_definitions:
             filter_id = str(filter_definition["id"])
             _, filter_validity[filter_id] = self._update_filter_feedback(self.filters[filter_id],
-                self.filter_plots[filter_id], filter_states[filter_id], self.fs, str(filter_definition["mode"]))
+                self.filter_plots[filter_id], self.state["preprocessing"]["filters"][filter_id],
+                self.fs, str(filter_definition["mode"]))
 
         self.active_filter_bounds = None
-        self.minimum_band_frequency = self.base_minimum_band_frequency
+        self.minimum_band_frequency = base_minimum_band_frequency
         self.maximum_band_frequency = self.nyquist_frequency
 
         # Si algún filtro activo y válido limita las bandas, actualizamos el rango útil de la broadband.
+        # TODO: explicar bien línea a línea que hace esto
         for filter_definition in self.filter_definitions:
             if not filter_definition.get("limits_frequency_bands", False):
                 continue
             filter_id = str(filter_definition["id"])
-            filter_config = filter_states.get(filter_id, {})
+            filter_config = self.state["preprocessing"]["filters"].get(filter_id, {})
             if filter_config.get("enabled", True) and filter_validity.get(filter_id, False):
                 filter_bounds = (float(filter_config["low_cut"]), float(filter_config["high_cut"]))
                 self.active_filter_bounds = filter_bounds if self.active_filter_bounds is None else (
@@ -231,8 +236,8 @@ class EEGPreprocessingWidget(QScrollArea):
                 continue
             filter_id = str(filter_definition["id"])
             reference_filter_id = str(reference_filter_id)
-            filter_config = filter_states.get(filter_id, {})
-            reference_config = filter_states.get(reference_filter_id, {})
+            filter_config = self.state["preprocessing"]["filters"].get(filter_id, {})
+            reference_config = self.state["preprocessing"]["filters"].get(reference_filter_id, {})
             if not (filter_config.get("enabled", True) and reference_config.get("enabled", True)
                     and filter_validity.get(filter_id, False) and filter_validity.get(reference_filter_id, False)):
                 continue
@@ -258,7 +263,7 @@ class EEGPreprocessingWidget(QScrollArea):
         # Actualizamos límites de la tabla de bandas. No se permiten valores fuera de rango de la broadband actualizada.
         self.bands.set_frequency_bounds(minimum_frequency=self.minimum_band_frequency,
             maximum_frequency=self.maximum_band_frequency, emit_changed=False)
-        preprocessing_state["selected_frequency_bands"] = self._build_selected_frequency_bands()
+        self.state["preprocessing"]["selected_frequency_bands"] = self._build_selected_frequency_bands()
         self.changed.emit()
 
     def on_step_activated(self) -> None:
@@ -267,8 +272,10 @@ class EEGPreprocessingWidget(QScrollArea):
         sampling_rate = self.metadata_list[0].get("sampling_rate") if self.metadata_list else None
         self.fs = float(sampling_rate) if sampling_rate is not None and sampling_rate > 0 else None
         broadband = self.state.get("broadband")
-        if broadband is not self.broadband:
-            self.base_minimum_band_frequency = float((broadband or {}).get("low_cut", 0.1))
+        if broadband is None:
+            self.base_minimum_band_frequency = None
+        elif broadband is not self.broadband and broadband.get("low_cut") is not None:
+            self.base_minimum_band_frequency = float(broadband["low_cut"])
         self.broadband = broadband
         self.nyquist_frequency = self.fs / 2 if self.fs is not None else None
         self._sync()

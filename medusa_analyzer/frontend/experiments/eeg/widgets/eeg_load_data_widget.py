@@ -3,7 +3,6 @@ from medusa_analyzer.frontend.widgets import LoadDataWidget
 
 
 class EEGLoadDataWidget(LoadDataWidget):
-    _minimum_band_frequency = 0.1
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__(
             config=defaults.get("load_data", {}), # allowed extensions
@@ -11,6 +10,9 @@ class EEGLoadDataWidget(LoadDataWidget):
             loader_function=load_edf_file,
             title="Load EEG data",
             description="Select one or more EDF files.")
+        bands = defaults.get("preprocessing", {}).get("bands", {}).get("available", [])
+        self._minimum_band_frequency = min((float(band["low_cut"]) for band in bands if band.get("low_cut") is not None),
+            default=0.0)
 
     # Hacemos override de varias funciones para añadir la información de la broadband.
     # Lo hacemos aquí para no acoplar el LoadDataWidget al EEG.
