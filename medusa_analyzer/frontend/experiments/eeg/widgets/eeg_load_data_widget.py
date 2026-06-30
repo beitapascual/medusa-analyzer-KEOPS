@@ -1,3 +1,5 @@
+from importlib.metadata import metadata
+
 from medusa_analyzer.backend.io import load_edf_file
 from medusa_analyzer.frontend.widgets import LoadDataWidget
 
@@ -15,20 +17,12 @@ class EEGLoadDataWidget(LoadDataWidget):
     # Lo hacemos aquí para no acoplar el LoadDataWidget al EEG.
     def _loaded(self, results: list[dict]) -> None:
         super()._loaded(results)
-        self.state["broadband"] = self._build_metadata_broadband()
+        sampling_rates = [float(metadata["sampling_rate"]) for metadata in self.state.get("metadata_list", [])
+            if metadata.get("sampling_rate") is not None and metadata.get("sampling_rate") > 0]
+        nyquist = float(sampling_rates[0]/2)
+        self.state["broadband"] = {"id": "broadband", "title": "Broadband", "enabled": True,
+                                   "low_cut": 0.1, "high_cut": nyquist}
         self.changed.emit()
-
-    def _build_metadata_broadband(self) -> dict | None:
-        metadata_bands = [metadata.get("broadband") for metadata in self.state.get("metadata_list", [])
-            if isinstance(metadata.get("broadband"), dict)]
-        if not metadata_bands:
-            return None
-        low_cuts = [float(band["low_cut"]) for band in metadata_bands if band.get("low_cut") is not None]
-        high_cuts = [float(band["high_cut"]) for band in metadata_bands if band.get("high_cut") is not None]
-        if not low_cuts or not high_cuts:
-            return None
-        return {"id": "broadband", "title": "Broadband", "enabled": True,
-                "low_cut": max(low_cuts), "high_cut": min(high_cuts)}
 
     def _clear_loaded_state(self) -> None:
         """ Borrar broadband si el usuario carga otros archivos."""

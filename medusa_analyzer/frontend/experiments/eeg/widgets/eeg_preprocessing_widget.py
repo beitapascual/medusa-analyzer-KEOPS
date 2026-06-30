@@ -28,7 +28,7 @@ class EEGPreprocessingWidget(QScrollArea):
         self.filter_options = filter_defaults
         self.fs = None
         self.active_filter_bounds: tuple[float, float] | None = None
-        self.minimum_band_frequency = 0.0
+        self.minimum_band_frequency = self.state.get("broadband", 0.0)
         self.maximum_band_frequency = None
         self.nyquist_frequency = None
         self.filter_definitions = [deepcopy(filter_config) for filter_config in self.config.get("filters", [])]
