@@ -66,7 +66,7 @@ def file_to_bids(input_path: str, output_path: str):
 
     # Get experiment info
     experiment = keys_to_pascal_case(data.get('experiment'))
-    # experiment['TaskInformation'] = experiment.pop('component_data')
+    experiment['TaskInformation'] = experiment.pop('ComponentData')
 
     # 2. Datos de Participant guardados en el participants.tsv raíz
     sociodemographics = data['bids'].get('participant')
