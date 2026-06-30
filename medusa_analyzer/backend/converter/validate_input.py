@@ -40,8 +40,9 @@ def validate_input(path: str, validation_type: str, extensions: Tuple[str, ...] 
         if any(part.startswith('.') for part in file.parts):
             continue
 
-        is_valid = False
         if validation_type == 'files':
+            is_valid = False
+
             if file.endswith('.mat'):
                 # Cargar fichero .mat
                 data = scipy.io.loadmat(file)

@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Dict, List, Union, Tuple
 import json
 import pandas as pd
-import numpy as np
-import pyedflib.highlevel as highlevel
+import shutil
+
 
 SENSOR_NAMES = {'eeg': 'electrodes',
                 'fnirs': 'optodes'}
@@ -28,11 +28,11 @@ def keys_to_pascal_case(data):
         # Caso base: devuelve el valor tal cual (int, float, str, booleanos)
         return data
 
-def remove_nulls(obj):
+def _remove_nulls(obj):
     if isinstance(obj, dict):
-        return {k: remove_nulls(v) for k, v in obj.items() if v is not None}
+        return {k: _remove_nulls(v) for k, v in obj.items() if v is not None}
     elif isinstance(obj, list):
-        return [remove_nulls(item) for item in obj if item is not None]
+        return [_remove_nulls(item) for item in obj if item is not None]
     return obj
 
 def file_to_bids(input_path: str, output_path: str):
@@ -116,7 +116,7 @@ def file_to_bids(input_path: str, output_path: str):
         if experiment is not None:
             sidecar.update(experiment)
 
-        sidecar = remove_nulls(sidecar)  # Eliminación de campos null
+        sidecar = _remove_nulls(sidecar)  # Eliminación de campos null
         with open(full_output_path / f"{base_name}_{data_type}.json", 'w', encoding='utf-8') as f:
             json.dump(sidecar, f, indent=4)
 
@@ -153,7 +153,7 @@ def file_to_bids(input_path: str, output_path: str):
         events_sidecar = {}
         for col_name, desc_text in events['descriptions'].items():
             events_sidecar[to_pascal_case(col_name)] = desc_text
-        events_sidecar = remove_nulls(events_sidecar)  # Eliminación de campos null
+        events_sidecar = _remove_nulls(events_sidecar)  # Eliminación de campos null
         with open(subject_output_path / f"{base_name}_events.json", 'w', encoding='utf-8') as f:
             json.dump(events_sidecar, f, indent=4)
 
@@ -187,6 +187,18 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
         extension_list_str = ", ".join([f".{ext}" for ext in extensions])
         return {"valid": False, "errors": [f"No files with the following extensions were found: {extension_list_str}."]}
 
+    # Gestión de dataset_description.json en la raíz del output
+    dataset_desc_src = path / "dataset_description.json"
+    # Se evalúa solo si no existe ya en el destino para evitar sobreescrituras en bucles
+    if dataset_desc_src.exists():
+        shutil.copy(dataset_desc_src, output_path / "dataset_description.json")
+    else:
+        default_dataset_desc = {
+            "Name": output_path.name,
+            "BIDSVersion": "MEDUSA-derived BIDS"
+        }
+        with open(output_path / "dataset_description.json", 'w', encoding='utf-8') as f:
+            json.dump(default_dataset_desc, f, indent=4)
 
     for file in files:
         try:
@@ -200,4 +212,14 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
         "errors": errors
     }
 
-# file_to_bids(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\sub-01_task-gonogo_recording.json", rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
+pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
+pathhh.mkdir(parents=True, exist_ok=True)
+
+default_dataset_desc = {
+    "Name": pathhh.name,
+    "BIDSVersion": "MEDUSA-derived BIDS"
+}
+with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
+    json.dump(default_dataset_desc, f, indent=4)
+
+file_to_bids(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\sub-01_task-gonogo_recording.json", pathhh)
