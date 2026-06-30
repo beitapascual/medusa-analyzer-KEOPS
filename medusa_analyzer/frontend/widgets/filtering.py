@@ -77,8 +77,7 @@ def _option_ids(options: list[dict[str, Any]] | list[str] | tuple[str, ...] | No
         ids.append(str(option))
     return ids
 
-def filter_validation_errors(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
-    iir_options: dict[str, Any] | None = None, minimum_frequency: float = 0.0,
+def filter_validation_errors(config: dict[str, Any], fs: float, *, minimum_frequency: float = 0.0,
     maximum_frequency: float | None = None) -> list[str]:
     """Función de validación. Llama internamente a _filter_config_error y devuelve una lista de errores. Si no hay problemas,
     devuelve []"""
@@ -86,6 +85,8 @@ def filter_validation_errors(config: dict[str, Any], fs: float, *, fir_options: 
     if not config.get("enabled", True):  # si el filtro está desactivado no se valida nada
         return []
 
+    fir_options = filter_defaults.get("fir", {})
+    iir_options = filter_defaults.get("iir", {})
     errors: list[str] = []
     nyquist = fs / 2
     minimum_frequency = float(minimum_frequency)
@@ -134,25 +135,23 @@ def filter_validation_errors(config: dict[str, Any], fs: float, *, fir_options: 
         return errors
     # después miramos el tipo de diseño
     if str(config["iir_design"]) in {"cheby1", "ellip"}:
-        errors.extend(_filter_validation.validate_many(config["iir_rp_db"]),
-            ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " dB"})], label="Passband ripple")
-    if str(config["ir_design"]) in {"cheby2", "ellip"}:
+        errors.extend(_filter_validation.validate_many(config["iir_rp_db"],
+            ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " dB"})], label="Passband ripple"))
+    if str(config["iir_design"]) in {"cheby2", "ellip"}:
         errors.extend(_filter_validation.validate_many(config["iir_rs_db"],
             ["finite_number", ("greater_than", {"minimum": 0.0, "suffix": " dB"})], label="Stopband attenuation"))
     return errors
 
-def filter_response_error(config: dict[str, Any], fs: float, *, fir_options: dict[str, Any] | None = None,
-    iir_options: dict[str, Any] | None = None, minimum_frequency: float = 0.0,
+def filter_response_error(config: dict[str, Any], fs: float, *, minimum_frequency: float = 0.0,
     maximum_frequency: float | None = None) -> str:
     """Función para construir los mensajes de error. Devolvemos el primer error de la lista de errores."""
-    errors = filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options,
-        minimum_frequency=minimum_frequency, maximum_frequency=maximum_frequency)
+    errors = filter_validation_errors(config, fs, minimum_frequency=minimum_frequency,
+        maximum_frequency=maximum_frequency)
     return errors[0] if errors else "Unable to design a response with the selected filter parameters."
 
 
-def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode, *,
-    fir_options: dict[str, Any] | None = None, iir_options: dict[str, Any] | None = None,
-    minimum_frequency: float = 0.0, maximum_frequency: float | None = None) -> FilterResponse | None:
+def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode, *, minimum_frequency: float = 0.0,
+    maximum_frequency: float | None = None) -> FilterResponse | None:
     """Calcula la respuesta en frecuencia de un filtro. Si la configuración no pasa las
     validaciones básicas devolvemos None y el widget mostrará el error."""
 
@@ -160,8 +159,7 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode,
     if not config.get("enabled", True):
         return FilterResponse([0.0, fs / 2], [0.0, 0.0])
     # Después valida la configuración. Si hay errores, no calcula nada.
-    if filter_validation_errors(config, fs, fir_options=fir_options, iir_options=iir_options,
-        minimum_frequency=minimum_frequency, maximum_frequency=maximum_frequency):
+    if filter_validation_errors(config, fs, minimum_frequency=minimum_frequency, maximum_frequency=maximum_frequency):
         return None
 
     low_cut = Validation.coerce_float(config["low_cut"])
@@ -208,16 +206,15 @@ class FilterControls(QFrame):
     un low_cut y high_cut, un selector FIR/IIR, bloque FIR, bloque IIR, label de error y una señal de changed."""
 
     changed = Signal() # avisar fuera cuando cambia algo
-    def __init__(self, title: str, config: dict[str, Any], fir: dict[str, Any],
-        iir: dict[str, Any], mode: FilterMode, minimum_frequency: float = 0.0,
+    def __init__(self, title: str, config: dict[str, Any], mode: FilterMode, minimum_frequency: float = 0.0,
         maximum_frequency: float | None = None):
         super().__init__()
         self.config = config
-        self.fir = fir # TODO: no entiendo porque hay que guardar esto
-        self.iir = iir # TODO: no entiendo porque hay que guardar esto
         self.mode = mode # dice si este panel representa un bandpass o un bandstop
         self.minimum_frequency = float(minimum_frequency)
         self.maximum_frequency = float(maximum_frequency) if maximum_frequency is not None else None
+        fir = filter_defaults.get("fir", {})
+        iir = filter_defaults.get("iir", {})
         self.setProperty("role", "filter-controls")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         root = QVBoxLayout(self)
