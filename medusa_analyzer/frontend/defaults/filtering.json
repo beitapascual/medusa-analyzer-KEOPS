@@ -95,23 +95,33 @@
     "designs": [
       {
         "id": "butter",
-        "title": "Butterworth"
+        "title": "Butterworth",
+        "uses_rp_db": false,
+        "uses_rs_db": false
       },
       {
         "id": "cheby1",
-        "title": "Chebyshev I"
+        "title": "Chebyshev I",
+        "uses_rp_db": true,
+        "uses_rs_db": false
       },
       {
         "id": "cheby2",
-        "title": "Chebyshev II"
+        "title": "Chebyshev II",
+        "uses_rp_db": false,
+        "uses_rs_db": true
       },
       {
         "id": "ellip",
-        "title": "Elliptic"
+        "title": "Elliptic",
+        "uses_rp_db": true,
+        "uses_rs_db": true
       },
       {
         "id": "bessel",
-        "title": "Bessel"
+        "title": "Bessel",
+        "uses_rp_db": false,
+        "uses_rs_db": false
       }
     ]
   }
