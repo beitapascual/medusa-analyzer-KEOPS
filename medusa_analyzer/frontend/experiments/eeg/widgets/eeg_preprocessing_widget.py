@@ -26,8 +26,8 @@ class EEGPreprocessingWidget(QScrollArea):
         self.state = state
         self.state.setdefault("preprocessing", {})
         self.fs = None
-        self.minimum_band_frequency = float(self.state["broadband"].get("low_cut", 0.0))
-        self.maximum_band_frequency =  float(self.state["broadband"].get("high_cut"))
+        self.minimum_band_frequency = defaults["preprocessing"]["initial_frequency_values"]["low_cut"]
+        self.maximum_band_frequency =  defaults["preprocessing"]["initial_frequency_values"]["high_cut"]
         # A continuación, definimos una variable para guardar el rango efectivo que queda después de aplicar filtros
         # que limitan las bandas de EEG.
         self.active_filter_bounds: tuple[float, float] | None = None

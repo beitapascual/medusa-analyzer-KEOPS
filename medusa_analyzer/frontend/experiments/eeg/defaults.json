@@ -5,6 +5,10 @@
     ]
   },
   "preprocessing": {
+    "initial_frequency_values": {
+      "low_cut": 0.0,
+      "high_cut": 100
+    },
     "car": {
       "enabled": true,
       "checked_by_default": true
