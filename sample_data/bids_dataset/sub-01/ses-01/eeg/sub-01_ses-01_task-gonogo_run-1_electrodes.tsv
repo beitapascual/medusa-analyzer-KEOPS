@@ -1,0 +1,15 @@
+name	type	location	material	impedance	x	y	z
+Cz	reference	n/a	n/a	n/a	0.0	0.0	1.0
+Fpz	ground	n/a	n/a	n/a	0.0	0.9511	0.309
+Fp1	n/a	n/a	n/a	n/a	-0.2939	0.9045	0.309
+Fp2	n/a	n/a	n/a	n/a	0.2939	0.9045	0.309
+F3	n/a	n/a	n/a	n/a	-0.4591	0.58	0.673
+F4	n/a	n/a	n/a	n/a	0.4591	0.58	0.673
+C3	n/a	n/a	n/a	n/a	-0.5878	0.0	0.809
+C4	n/a	n/a	n/a	n/a	0.5878	0.0	0.809
+P3	n/a	n/a	n/a	n/a	-0.4591	-0.58	0.673
+P4	n/a	n/a	n/a	n/a	0.4591	-0.58	0.673
+VEOG_up	n/a	n/a	n/a	n/a	n	/	a
+VEOG_down	n/a	n/a	n/a	n/a	n	/	a
+HEOG_l	n/a	n/a	n/a	n/a	n	/	a
+HEOG_r	n/a	n/a	n/a	n/a	n	/	a

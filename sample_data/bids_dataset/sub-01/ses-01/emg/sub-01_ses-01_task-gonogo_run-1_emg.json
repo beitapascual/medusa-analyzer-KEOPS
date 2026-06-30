@@ -1,0 +1,19 @@
+{
+    "Manufacturer": "Delsys",
+    "ManufacturersModelName": "Trigno",
+    "TaskName": "go/no-go",
+    "SamplingFrequency": 2000.0,
+    "PowerLineFrequency": 50,
+    "EMGChannelCount": 2,
+    "RecordingDuration": 4.0,
+    "TriggerChannelCount": 0,
+    "ComponentData": {
+        "Paradigm": "go/no-go",
+        "NTrials": 3,
+        "Stimulus": {
+            "Go": "green circle",
+            "Nogo": "red circle"
+        },
+        "MonitorRefreshHz": 60
+    }
+}
