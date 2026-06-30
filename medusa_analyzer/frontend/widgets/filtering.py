@@ -19,22 +19,37 @@ frecuencia y dibujar una previsualización en pantalla. El flujo principal es es
     - Se crea una configuración inicial del filtro
     - La clase FilerControls muestra controles en pantalla_ activar/desactivar, frecuencias de corte, tipo 
     FIR/IIR, orden, ventana, diseño, etc. 
-    - Cuando el usario modifica algo, _sync() actualiza self.config y se emite señal changed.
+    - Cuando el usuario modifica algo, _sync() actualiza self.config y se emite señal changed.
     - Otro widget puede llamar a compute_filter_response()
     - Si la configuración es válida, se calcula la curva del filtro
     - FilerPreviewPlot dibuja la respuesta en frecuencia"""
+
+""" NOTA: Keys soportadas al definir un filtro en un experimento:
+    - `id`
+    - `title`
+    - `mode`
+    - `plot_title` identifican el filtro y su UI
+    - `enabled`
+    - `filter_type`
+    - `low_cut`
+    - `high_cut`
+    - `fir_order`
+    - `fir_window`
+    - `iir_order`
+    - `iir_design`
+    - `iir_rp_db`
+    - `iir_rs_db` fijan el estado inicial
+    `limits_frequency_bands`
+    `must_be_within_filter` 
+    `out_of_range_warning`"""
+
 
 FilterMode = Literal["bandpass", "bandstop"] # modos posibles # TODO: INCLUIR LOWPASS Y HIGHPASS
 _filter_validation = Validation() # objeto de validación
 filter_defaults = json.loads( # Carga de configuración por defecto
     (Path(__file__).resolve().parents[1] / "defaults" / "filtering.json").read_text(encoding="utf-8"))
 
-# Keys soportadas al definir un filtro en un experimento:
-# `id`, `title`, `mode`, `plot_title` identifican el filtro y su UI.
-# `enabled`, `filter_type`, `low_cut`, `high_cut`, `fir_order`, `fir_window`, `iir_order`, `iir_design`,
-# `iir_rp_db`, `iir_rs_db` fijan el estado inicial.
-# `limits_frequency_bands`, `must_be_within_filter` y `out_of_range_warning` controlan su relacion con broadband
-# y con otros filtros activos.
+
 def normalize_choice(choice: Any) -> tuple[str, str]:
     """Normaliza ids/opciones del JSON para que un combobox siempre reciba (id_interno, titulo_visible)."""
     if isinstance(choice, dict):

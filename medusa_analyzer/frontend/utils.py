@@ -14,7 +14,8 @@ def create_metadata_summary(loader_result: dict[str, Any]) -> dict[str, Any]:
     file_name = str(loader_result.get("name") or loader_result.get("file_name") or Path(file_path).name)
     return {"file_name": file_name, "file_path": file_path,
         "channels": list(loader_result.get("channels") or []), "sampling_rate": loader_result.get("sampling_rate"),
-        "duration_seconds": loader_result.get("duration_seconds"), "n_samples": loader_result.get("n_samples")}
+        "duration_seconds": loader_result.get("duration_seconds"), "n_samples": loader_result.get("n_samples"),
+        "broadband": loader_result.get("broadband")}
 
 
 def create_metadata_summaries(loader_results: list[dict[str, Any]]) -> list[dict[str, Any]]:

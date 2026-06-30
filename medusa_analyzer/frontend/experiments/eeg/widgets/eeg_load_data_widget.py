@@ -10,9 +10,6 @@ class EEGLoadDataWidget(LoadDataWidget):
             loader_function=load_edf_file,
             title="Load EEG data",
             description="Select one or more EDF files.")
-        bands = defaults.get("preprocessing", {}).get("bands", {}).get("available", [])
-        self._minimum_band_frequency = min((float(band["low_cut"]) for band in bands if band.get("low_cut") is not None),
-            default=0.0)
 
     # Hacemos override de varias funciones para añadir la información de la broadband.
     # Lo hacemos aquí para no acoplar el LoadDataWidget al EEG.
@@ -22,13 +19,16 @@ class EEGLoadDataWidget(LoadDataWidget):
         self.changed.emit()
 
     def _build_metadata_broadband(self) -> dict | None:
-        metadata_list = self.state.get("metadata_list", [])
-        sampling_rates = [metadata.get("sampling_rate") for metadata in metadata_list
-            if metadata.get("sampling_rate") is not None and metadata.get("sampling_rate") > 0]
-        if not sampling_rates:
+        metadata_bands = [metadata.get("broadband") for metadata in self.state.get("metadata_list", [])
+            if isinstance(metadata.get("broadband"), dict)]
+        if not metadata_bands:
             return None
-        return {"id": "broadband", "title": "Broadband", "enabled": True, "low_cut": self._minimum_band_frequency,
-                "high_cut": float(min(sampling_rates) / 2)}
+        low_cuts = [float(band["low_cut"]) for band in metadata_bands if band.get("low_cut") is not None]
+        high_cuts = [float(band["high_cut"]) for band in metadata_bands if band.get("high_cut") is not None]
+        if not low_cuts or not high_cuts:
+            return None
+        return {"id": "broadband", "title": "Broadband", "enabled": True,
+                "low_cut": max(low_cuts), "high_cut": min(high_cuts)}
 
     def _clear_loaded_state(self) -> None:
         """ Borrar broadband si el usuario carga otros archivos."""
