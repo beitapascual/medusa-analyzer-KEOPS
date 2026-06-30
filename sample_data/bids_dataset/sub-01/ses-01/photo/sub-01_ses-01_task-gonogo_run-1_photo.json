@@ -1,0 +1,12 @@
+{
+    "TaskName": "go/no-go",
+    "ComponentData": {
+        "Paradigm": "go/no-go",
+        "NTrials": 3,
+        "Stimulus": {
+            "Go": "green circle",
+            "Nogo": "red circle"
+        },
+        "MonitorRefreshHz": 60
+    }
+}

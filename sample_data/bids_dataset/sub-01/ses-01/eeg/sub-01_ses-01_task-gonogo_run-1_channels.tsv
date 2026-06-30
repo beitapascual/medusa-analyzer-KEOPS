@@ -1,0 +1,11 @@
+name	type	units	sensor	reference	reference_method
+Fp1	EEG	uV	Fp1	Cz	common
+Fp2	EEG	uV	Fp2	Cz	common
+F3	EEG	uV	F3	Cz	common
+F4	EEG	uV	F4	Cz	common
+C3	EEG	uV	C3	Cz	common
+C4	EEG	uV	C4	Cz	common
+P3	EEG	uV	P3	Cz	common
+P4	EEG	uV	P4	Cz	common
+VEOG	EOG	uV	VEOG_up	VEOG_down	bipolar
+HEOG	EOG	uV	HEOG_l	HEOG_r	bipolar

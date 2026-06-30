@@ -1,0 +1,24 @@
+{
+    "Manufacturer": "Brain Products",
+    "ManufacturersModelName": "actiCHamp Plus",
+    "TaskName": "go/no-go",
+    "EEGReference": "Cz",
+    "SamplingFrequency": 256.0,
+    "PowerLineFrequency": 50,
+    "EEGChannelCount": 8,
+    "ECGChannelCount": 0,
+    "EMGChannelCount": 0,
+    "EOGChannelCount": 2,
+    "MISCChannelCount": 0,
+    "TriggerChannelCount": 0,
+    "RecordingDuration": 4.0,
+    "ComponentData": {
+        "Paradigm": "go/no-go",
+        "NTrials": 3,
+        "Stimulus": {
+            "Go": "green circle",
+            "Nogo": "red circle"
+        },
+        "MonitorRefreshHz": 60
+    }
+}

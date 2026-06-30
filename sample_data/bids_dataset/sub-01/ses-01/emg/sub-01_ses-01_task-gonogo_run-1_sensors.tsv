@@ -1,0 +1,5 @@
+name	type	location	material	impedance	x	y	z
+EMG_R_act	surface	right extensor digitorum	n/a	n/a	n	/	a
+EMG_R_ref	surface	right ulnar styloid	n/a	n/a	n	/	a
+EMG_L_act	surface	left extensor digitorum	n/a	n/a	n	/	a
+EMG_L_ref	surface	left ulnar styloid	n/a	n/a	n	/	a

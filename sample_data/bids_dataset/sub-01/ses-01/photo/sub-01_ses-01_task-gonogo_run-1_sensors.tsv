@@ -1,0 +1,2 @@
+name	type	location	material	impedance	x	y	z
+photosensor	phototransistor	top-left of stimulus monitor	n/a	n/a	n	/	a
