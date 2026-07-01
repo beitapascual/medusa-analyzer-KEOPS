@@ -1,2 +1,0 @@
-name	type	units	sensor	reference	reference_method	description
-photodiode	OTHER	V	photosensor	n/a	n/a	Light sensor over the stimulus monitor (true stim onset)

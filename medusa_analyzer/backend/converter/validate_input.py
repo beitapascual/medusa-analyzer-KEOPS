@@ -2,7 +2,9 @@ import re
 import scipy
 import h5py
 from pathlib import Path
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Union, Tuple, Any
+import json
+import warnings
 
 VALID_BIDS_ENTITIES = ['sub', 'ses', 'task', 'acq', 'run', 'recording']
 accepted_suffix = '_rec'
@@ -16,8 +18,8 @@ def validate_input(path: str, validation_type: str, extensions: Tuple[str, ...] 
     path = Path(path)
     errors: List[str] = []
 
-    if type not in ('studio', 'files'):
-        return {"valid": False, "errors": [f"Unknown input validation type: {validation_type}"]}
+    if validation_type not in ['studio', 'files']:
+        return {"valid": False, "errors": [f"Unknown validation type: {validation_type}"]}
 
     if not path.is_dir():
         return {"valid": False, "errors": [f"Selected path does not exist or is not a directory: {path}"]}
@@ -28,11 +30,11 @@ def validate_input(path: str, validation_type: str, extensions: Tuple[str, ...] 
     # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
     files = []
     for ext in extensions:
-        files.extend(path.rglob(f"*.{ext}"))
+        files.extend(path.rglob(f"*{ext}"))
 
     if not files:
         # 4. Crear un mensaje de error más informativo
-        extension_list_str = ", ".join([f".{ext}" for ext in extensions])
+        extension_list_str = ", ".join([f"{ext}" for ext in extensions])
         errors.append(f"No files with the following extensions were found: {extension_list_str}.")
 
     for file in files:
@@ -43,14 +45,18 @@ def validate_input(path: str, validation_type: str, extensions: Tuple[str, ...] 
         if validation_type == 'files':
             is_valid = False
 
-            if file.endswith('.mat'):
+            if file.suffix == '.mat':
                 # Cargar fichero .mat
                 data = scipy.io.loadmat(file)
-                is_valid = 'BIDS' in data
-            elif file.endswith('.h5') or file.endswith('.hdf5'):
+                is_valid = 'bids' in data
+            elif file.suffix in ['.h5','.hdf5']:
                 # Cargar fichero HDF5
                 with h5py.File(file, 'r') as hf:
-                    is_valid = 'BIDS' in hf
+                    is_valid = 'bids' in hf
+            elif file.suffix == '.json':
+                with open(file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    is_valid = 'bids' in data
 
             # Comprobar si 'BIDS' es una de las claves en el diccionario cargado
             if not is_valid:
@@ -133,6 +139,73 @@ def validate_input(path: str, validation_type: str, extensions: Tuple[str, ...] 
         "errors": errors
     }
 
+def get_dataset_information(path: str, extensions: Tuple[str, ...] = ('.mat', '.h5py')) -> Dict[str, int|List[Any]]:
+    path = Path(path)
+
+    if not path.is_dir():
+        raise ValueError(f"Selected path does not exist or is not a directory: {path}")
+
+    # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
+    files = []
+    for ext in extensions:
+        files.extend(path.rglob(f"*{ext}"))
+
+    if not files:
+        # Crear un mensaje de error más informativo
+        extension_list_str = ", ".join([f"{ext}" for ext in extensions])
+        warnings.warn(
+            f"No files with the following extensions were found: {extension_list_str}.",
+            UserWarning  # Especificamos que es un aviso para el usuario
+        )
+        return {
+            "total_files": 0,
+            "n_sub": 0,
+            "max_ses": 0,
+            "n_tasks": 0,
+            "tasks": []
+        }
+
+    subs = set()
+    tasks = set()
+    sess = set()
+
+    # 1. Recorrer cada fichero para extraer la información
+    for file in files:
+        # .stem coge el nombre del fichero sin la extensión final (ej: .nii.gz)
+        base_name = file.stem
+
+        # Partimos el nombre por las _ para obtener las entidades BIDS
+        parts = base_name.split('_')
+
+
+        for part in parts:
+            # Separamos la clave del valor (ej: 'sub-01' -> ['sub', '01'])
+            if '-' in part:
+                key, value = part.split('-', 1)
+
+                if key == 'sub':
+                    subs.add(value)
+                elif key == 'ses':
+                    sess.add(value)
+                elif key == 'task':
+                    tasks.add(value)
+
+    # 2. Calcular el resumen a partir de la información recolectada
+    total_files = len(files)
+    n_subs = len(subs)
+    n_tasks = len(tasks)
+    max_ses = len(sess) if sess else 0
+
+    # 3. Crear el diccionario final con el resumen
+    return {
+        "total_files": total_files,
+        "n_sub": n_subs,
+        "max_ses": max_ses,
+        "n_tasks": n_tasks,
+        "tasks": list(tasks)
+    }
+
 # --- Ejemplo de Uso ---
 if __name__ == "__main__":
-    a = 0
+    results = validate_input(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', 'files', ('.json',))
+    print(results)

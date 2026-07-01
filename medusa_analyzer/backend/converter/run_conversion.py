@@ -180,11 +180,11 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
     # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
     files = []
     for ext in extensions:
-        files.extend(path.rglob(f"*.{ext}"))
+        files.extend(path.rglob(f"*{ext}"))
 
     if not files:
         # 4. Crear un mensaje de error más informativo
-        extension_list_str = ", ".join([f".{ext}" for ext in extensions])
+        extension_list_str = ", ".join([f"{ext}" for ext in extensions])
         return {"valid": False, "errors": [f"No files with the following extensions were found: {extension_list_str}."]}
 
     # Gestión de dataset_description.json en la raíz del output
@@ -212,14 +212,17 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
         "errors": errors
     }
 
-pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
-pathhh.mkdir(parents=True, exist_ok=True)
+# pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
+# pathhh.mkdir(parents=True, exist_ok=True)
+#
+# default_dataset_desc = {
+#     "Name": pathhh.name,
+#     "BIDSVersion": "MEDUSA-derived BIDS"
+# }
+# with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
+#     json.dump(default_dataset_desc, f, indent=4)
 
-default_dataset_desc = {
-    "Name": pathhh.name,
-    "BIDSVersion": "MEDUSA-derived BIDS"
-}
-with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
-    json.dump(default_dataset_desc, f, indent=4)
-
-file_to_bids(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\sub-01_task-gonogo_recording.json", pathhh)
+# --- Ejemplo de Uso ---
+if __name__ == "__main__":
+    results = run_conversion(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset", ('.json',))
+    print(results)

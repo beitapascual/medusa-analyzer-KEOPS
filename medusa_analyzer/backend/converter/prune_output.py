@@ -141,5 +141,6 @@ def prune_output(bids_root: str):
         if dir_path.is_dir():
             merge_and_clean(dir_path)
 
-# Ejecución
-# optimize_bids_hierarchy(r"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
+# --- Ejemplo de Uso ---
+if __name__ == "__main__":
+    prune_output(r"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
