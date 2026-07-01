@@ -1,8 +1,7 @@
 import traceback
 from collections.abc import Callable
 from typing import Any
-
-from PySide6.QtCore import QObject, QRunnable, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, Signal, Slot, QThreadPool
 
 
 class WorkerSignals(QObject):
@@ -35,3 +34,14 @@ class Worker(QRunnable):
             self.signals.error.emit(f"{exc}\n{traceback.format_exc()}") # emitimos error
         finally:
             self.signals.finished.emit() # emitimos señal de completado
+
+class TaskRunner:
+    def __init__(self):
+        self.pool = QThreadPool.globalInstance()
+        self._active: set[Worker] = set()
+
+    def start(self, worker: Worker) -> None:
+        self._active.add(worker)
+        worker.signals.finished.connect(lambda: self._active.discard(worker))
+        # Ejecutamos el worker en un hilo de fondo. Esto llama automáticamente a worker.run()
+        self.pool.start(worker)

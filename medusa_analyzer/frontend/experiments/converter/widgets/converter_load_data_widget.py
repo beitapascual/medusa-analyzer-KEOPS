@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
-from medusa_analyzer.backend.io import load_edf_file
+from medusa_analyzer.backend.converter.validate_input import read_folder_for_converter
 from medusa_analyzer.frontend.widgets import LoadDataWidget
 
 
@@ -18,7 +18,8 @@ class ConverterLoadDataWidget(LoadDataWidget):
         super().__init__(
             config=defaults.get("load_data", {}),  # allowed extensions
             state=state,
-            loader_function=load_edf_file,
+            loader_function=read_folder_for_converter,
+            args=[rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', 'files', ('.json',)],
             title="Load data",
             description="Select a MEDUSA Studio dataset.",
         )

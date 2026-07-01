@@ -2,7 +2,7 @@ import re
 import scipy
 import h5py
 from pathlib import Path
-from typing import Dict, List, Union, Tuple, Any
+from typing import Dict, List, Union, Tuple, Any, Callable
 import json
 import warnings
 
@@ -205,7 +205,19 @@ def get_dataset_information(path: str, extensions: Tuple[str, ...] = ('.mat', '.
         "tasks": list(tasks)
     }
 
+def read_folder_for_converter(path: str, validation_type: str, extensions: Tuple[str, ...] = ('.mat', '.h5py'),
+    global_progress_callback: Callable[[int], None] | None = None):
+    print('Tonto el que lo lea')
+    global_progress_callback(50)
+    aa = validate_input(path, validation_type, extensions)
+
+    # 91-100%
+    global_progress_callback(990)
+    bb = get_dataset_information(path, extensions)
+
+    return bb
+
 # --- Ejemplo de Uso ---
 if __name__ == "__main__":
-    results = validate_input(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', 'files', ('.json',))
+    results = read_folder_for_converter(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', 'files', ('.json',))
     print(results)

@@ -8,6 +8,7 @@ class EEGLoadDataWidget(LoadDataWidget):
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__(
             config=defaults.get("load_data", {}), # allowed extensions
+            args=[0],
             state=state,
             loader_function=load_edf_file,
             title="Load EEG data",

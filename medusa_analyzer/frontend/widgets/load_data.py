@@ -1,13 +1,13 @@
 ﻿from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QFileDialog, QFrame, QGridLayout, QLabel, QListWidget,
     QPushButton, QScrollArea, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.utils import create_metadata_summaries
 from medusa_analyzer.frontend.widgets.loading_overlay import LoadingOverlay
-from medusa_analyzer.frontend.workers import TaskRunner, Worker
+from medusa_analyzer.frontend.worker import TaskRunner, Worker
 
 # Script to allow user to select EDF files, load them in a background thread using workers,
 # extract metadata from files and show them on the screen.
@@ -66,6 +66,7 @@ class LoadDataWidget(QScrollArea):
         config: dict[str, Any], # allowed extensions
         state: dict[str, Any], # memoria compartida del experimento
         loader_function: Callable[..., dict], # function that knows how to load a file
+        args: List[Any],
         title: str, # title to show in the UI
         description: str): # description to show in the UI
 
@@ -73,6 +74,7 @@ class LoadDataWidget(QScrollArea):
         self.config = config
         self.state = state
         self.loader_function = loader_function
+        self.args = args
         self.runner = TaskRunner() # será el encargado de lanzar el trabajo en segundo planto
 
         # Construcción visual del widget
@@ -153,10 +155,10 @@ class LoadDataWidget(QScrollArea):
         self._refresh_status_style() # Actualizamos el texto de la label de estado
         self.changed.emit() # avisamos al WorkflowShell de cambios para deshabilitar el Next.
         self.select_button.setEnabled(False)
-        self.overlay.show_loading("Reading recordings...")
+        self.overlay.start_process("Reading recordings...")
 
         # Creamos el worker
-        worker = Worker(_load_files, self.loader_function, paths) # tarea a ejecutar: _load_files
+        worker = Worker(self.loader_function, *self.args) # tarea a ejecutar: _load_files
         # Cuando el worker informe del progreso, actualizamos la barra de overlay.
         # self.overlay es el LoadingOverlay(QFrame). Dentro de esta clase se define atributo progress como QProgressBar()
         worker.signals.progress.connect(self.overlay.progress.setValue)
