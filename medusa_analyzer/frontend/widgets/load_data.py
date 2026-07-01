@@ -6,14 +6,14 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QFileDialog, QFrame, QGridLayout, QLabel, QListWidget,
     QPushButton, QScrollArea, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.utils import create_metadata_summaries
-from medusa_analyzer.frontend.widgets.loading_overlay import LoadingOverlay
+from medusa_analyzer.frontend.widgets.progress_overlay import ProgressOverlay
 from medusa_analyzer.frontend.worker import TaskRunner, Worker
 
 # Script to allow user to select EDF files, load them in a background thread using workers,
 # extract metadata from files and show them on the screen.
 
 def _load_files(loader_function: Callable[..., dict], paths: list[str],
-    global_progress_callback: Callable[[int], None] | None = None) -> list[dict]:
+    progress_callback: Callable[[int], None] | None = None) -> list[dict]:
     """
     """
     # Recibimos loader, función que sabe cargar un archivo, y se aplica para cargar varios archivos.
@@ -27,17 +27,17 @@ def _load_files(loader_function: Callable[..., dict], paths: list[str],
             """ _load_files carga varios archivos, pero loader_function carga uno. Entonces el laoder
             sabe decir este archivo va al 50%, pero la barra necesita sabe 'toda la carga va al 30%).
             Esta función hace de traductora: progreso de este archivo - progreso global"""
-            if global_progress_callback is None:
+            if progress_callback is None:
                 return
-            global_progress = int((file_index * 100 + file_progress) / file_count)
-            global_progress_callback(global_progress) # Aquí es donde emitimos (worker.signals.progress.emit(global_progress))
+            progress_callback = int((file_index * 100 + file_progress) / file_count)
+            progress_callback(progress_callback) # Aquí es donde emitimos (worker.signals.progress.emit(global_progress))
 
         # NOTA: la función de loader tiene que estar programada para avisar del progreso.
         result = loader_function(path, progress_callback=report_file_progress)
         results.append(result)
 
-        if global_progress_callback is not None:
-            global_progress_callback(int(((file_index + 1) * 100) / file_count))
+        if progress_callback is not None:
+            progress_callback(int(((file_index + 1) * 100) / file_count))
 
     return results
 
@@ -125,7 +125,7 @@ class LoadDataWidget(QScrollArea):
         root.addStretch()
 
         # Creamos una capa de carga, que es una pantalla superpuesta con la barra de progreso
-        self.overlay = LoadingOverlay(self)
+        self.overlay = ProgressOverlay(self)
 
         # Si en el state ya hay metadatos cargados, los mostramos otra vez. ¿Por qué? Pues porque quizá el usuario
         # vuelve a este paso después de haber avanzado y no queremos que salga el widget vacío si ya se habían
@@ -135,20 +135,28 @@ class LoadDataWidget(QScrollArea):
             self.files.addItems([metadata.get("file_name", "") for metadata in metadata_list])
             self._show_metadata(metadata_list)
 
-    def _select_files(self) -> None:
+    def _select_files(self, mode: str = 'files') -> None:
         """Función para seleccionar archivos a cargar y lanzar el worker.
         No devuelve ningún resultado con return. El resultado de carga llega más tarde, por señal:
         worker.signals.result.connect(self._loaded).
         _loaded(results) recibe los registros cuando el worker termina bien."""
         # Abrimos la ventana para seleccionar archivos.
-        paths, _ = QFileDialog.getOpenFileNames(self, "Select recordings", "", self._dialog_filter())
-        if not paths: # devolvemos una lista de rutas seleccionadas.
-            return
+        if mode == 'files':
+            paths, _ = QFileDialog.getOpenFileNames(self, "Select recordings", "", self._dialog_filter())
+            if not paths: # devolvemos una lista de rutas seleccionadas.
+                return
+            self.files.clear()
+            self.files.addItems([Path(path).name for path in paths]) # Añadimos solo nombres de archivos, no path completo
+            self.status_label.setText(f"Reading {len(paths)} recording(s)...")
+            self.args.insert(0, paths)  # Metemos el path como argumento :S
+        elif mode == 'folder':
+            path = QFileDialog.getExistingDirectory(self, "Select directory", "") # TODO: Añadir las files?
+            self.status_label.setText(f"Reading folder...")
+            self.args.insert(0, path)  # Metemos el path como argumento :S
+
+        self.args.insert(1, mode)  # Metemos el path como argumento :S
         self._clear_loaded_state() # Borramos del state cualquier archivo cargado antes
-        self.files.clear()
-        self.files.addItems([Path(path).name for path in paths]) # Añadimos solo nombres de archivos, no path completo
         self.metadata_panel.hide() # Ocultamos panel metadatos
-        self.status_label.setText(f"Reading {len(paths)} recording(s)...")
         self.status_label.setProperty("status", "idle")
         # NOTA EXPLICATIVA: Una propiedad dinámica puede tener tres estados: "idle" (estado neutro / esperando /
         # cargando), "ready" (carga correcta) y error (carga fallida).
@@ -162,6 +170,7 @@ class LoadDataWidget(QScrollArea):
         # Cuando el worker informe del progreso, actualizamos la barra de overlay.
         # self.overlay es el LoadingOverlay(QFrame). Dentro de esta clase se define atributo progress como QProgressBar()
         worker.signals.progress.connect(self.overlay.progress.setValue)
+        worker.signals.logging.connect(self.overlay.add_log_message)
         # Cuando el worker emita el resultado de la carga, ejecutamos self._loaded.
         worker.signals.result.connect(self._loaded)
         worker.signals.error.connect(self._failed)
@@ -172,7 +181,7 @@ class LoadDataWidget(QScrollArea):
         """Construye el filtro del diálogo de archivos."""
         extensions = self.config.get("allowed_extensions", [".edf"])
         patterns = " ".join(f"*{extension}" for extension in extensions)
-        return f"Supported files ({patterns});;All files (*.*)"
+        return f"Supported files ({patterns})"
 
     def _clear_loaded_state(self) -> None:
         """Eliminar del estado lo relativo a los metadatos."""

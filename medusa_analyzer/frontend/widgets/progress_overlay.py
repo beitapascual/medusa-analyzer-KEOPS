@@ -1,7 +1,5 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QLabel, QProgressBar, QTextEdit, QVBoxLayout, QWidget, QPushButton, QHBoxLayout
-import re
-
 
 class ProgressOverlay(QFrame):
     def __init__(self, parent: QWidget, show_log: bool = False):
@@ -69,7 +67,7 @@ class ProgressOverlay(QFrame):
         self.raise_()
         self.show()
 
-    def finish_process(self, summary: str = '') -> None:
+    def finish_process(self, summary: str | None = None) -> None:
         self.label.setText('Process finished')
         if self.show_log:
             self.add_log_message('----------- SUMMARY -----------')

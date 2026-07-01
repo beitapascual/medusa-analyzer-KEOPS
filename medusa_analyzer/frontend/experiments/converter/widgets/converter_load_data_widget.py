@@ -19,12 +19,12 @@ class ConverterLoadDataWidget(LoadDataWidget):
             config=defaults.get("load_data", {}),  # allowed extensions
             state=state,
             loader_function=read_folder_for_converter,
-            args=[rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', 'files', ('.json',)],
+            args=[defaults.get("load_data").get("allowed_extensions")],
             title="Load data",
             description="Select a MEDUSA Studio dataset.",
         )
 
-        self.select_button.setText("Load MEDUSA Studio")
+        self.select_button.setText("Load MEDUSA Files")
 
         # The parent widget's layout is where the button is.
         original_layout = self.select_button.parentWidget().layout()
@@ -40,8 +40,9 @@ class ConverterLoadDataWidget(LoadDataWidget):
                 button_layout.addWidget(self.select_button)
 
                 # Create and add the new button.
-                self.load_files_button = QPushButton("Load MEDUSA files")
+                self.load_files_button = QPushButton("Load MEDUSA Studio")
                 self.load_files_button.setProperty("variant", "secondary")
+                self.load_files_button.clicked.connect(lambda: self._select_files('folder'))
                 button_layout.addWidget(self.load_files_button)
 
                 # Insert the new horizontal layout of buttons at the original button's position.
@@ -78,6 +79,8 @@ class ConverterLoadDataWidget(LoadDataWidget):
         root_layout.insertWidget(metadata_panel_index + 1, self.output_panel)
 
         self.output_panel.hide()
+
+
 
     def _select_output_path(self):
         path = QFileDialog.getExistingDirectory(self, "Select Output Directory")
