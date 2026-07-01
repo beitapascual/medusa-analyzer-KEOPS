@@ -42,7 +42,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
                 # Create and add the new button.
                 self.load_files_button = QPushButton("Load MEDUSA Studio")
                 self.load_files_button.setProperty("variant", "secondary")
-                self.load_files_button.clicked.connect(lambda: self._select_files('folder'))
+                self.load_files_button.clicked.connect(lambda: self._select_files(True))
                 button_layout.addWidget(self.load_files_button)
 
                 # Insert the new horizontal layout of buttons at the original button's position.

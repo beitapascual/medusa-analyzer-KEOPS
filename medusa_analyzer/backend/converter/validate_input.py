@@ -16,7 +16,7 @@ def validate_input(input: Path|List[Path], validation_type: str, extensions: Tup
     """
     errors: List[str] = []
 
-    if validation_type == 'folder':
+    if validation_type == 'studio':
         path = input
         # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
         files = []

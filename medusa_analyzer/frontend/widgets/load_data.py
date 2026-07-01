@@ -99,7 +99,7 @@ class LoadDataWidget(QScrollArea):
         layout.setContentsMargins(24, 22, 24, 22)
         self.select_button = QPushButton("Select EDF files") # Botón
         self.select_button.setProperty("variant", "secondary")
-        self.select_button.clicked.connect(self._select_files) # Conexión
+        self.select_button.clicked.connect(lambda: self._select_files(False)) # Conexión
 
         self.files = QListWidget() # Visual list to show selected file names
         self.files.setMinimumHeight(125)
@@ -135,13 +135,13 @@ class LoadDataWidget(QScrollArea):
             self.files.addItems([metadata.get("file_name", "") for metadata in metadata_list])
             self._show_metadata(metadata_list)
 
-    def _select_files(self, mode: str = 'files') -> None:
+    def _select_files(self, folder_mode: bool) -> None:
         """Función para seleccionar archivos a cargar y lanzar el worker.
         No devuelve ningún resultado con return. El resultado de carga llega más tarde, por señal:
         worker.signals.result.connect(self._loaded).
         _loaded(results) recibe los registros cuando el worker termina bien."""
         # Abrimos la ventana para seleccionar archivos.
-        if mode == 'files':
+        if not folder_mode:
             paths, _ = QFileDialog.getOpenFileNames(self, "Select recordings", "", self._dialog_filter())
             if not paths: # devolvemos una lista de rutas seleccionadas.
                 return
@@ -149,12 +149,13 @@ class LoadDataWidget(QScrollArea):
             self.files.addItems([Path(path).name for path in paths]) # Añadimos solo nombres de archivos, no path completo
             self.status_label.setText(f"Reading {len(paths)} recording(s)...")
             self.args.insert(0, paths)  # Metemos el path como argumento :S
-        elif mode == 'folder':
+            self.args.insert(1, 'files')  # Metemos el path como argumento :S
+        else:
             path = QFileDialog.getExistingDirectory(self, "Select directory", "") # TODO: Añadir las files?
             self.status_label.setText(f"Reading folder...")
             self.args.insert(0, path)  # Metemos el path como argumento :S
+            self.args.insert(1, 'studio')  # Metemos el path como argumento :S
 
-        self.args.insert(1, mode)  # Metemos el path como argumento :S
         self._clear_loaded_state() # Borramos del state cualquier archivo cargado antes
         self.metadata_panel.hide() # Ocultamos panel metadatos
         self.status_label.setProperty("status", "idle")
