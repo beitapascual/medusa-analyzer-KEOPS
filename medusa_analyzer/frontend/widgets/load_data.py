@@ -140,8 +140,6 @@ class LoadDataWidget(QScrollArea):
         self.overlay = ProgressOverlay(self)
 
         metadata = self.state.get("metadata")
-        # TODO: ahora mismo esta lo de metadata_list para que no rompa con lo que ya habría, pero hay que quitar
-        #  y refactorizar aguas abajo
         loaded_file_paths = self.state.get("loaded_file_paths", [])
         if loaded_file_paths:
             self.files.addItems([Path(path).name for path in loaded_file_paths])

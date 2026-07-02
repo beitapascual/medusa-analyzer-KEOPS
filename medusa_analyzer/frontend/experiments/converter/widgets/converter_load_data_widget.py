@@ -3,7 +3,7 @@ from typing import Any
 
 from PySide6.QtWidgets import QHBoxLayout,QLabel,QLineEdit,QFrame,QFileDialog,QPushButton
 
-from medusa_analyzer.backend.converter.inspect_source import inspect_converter_source
+from medusa_analyzer.backend.converter.inspect_source import load_converter_source
 from medusa_analyzer.frontend.widgets import LoadDataAction, LoadDataWidget, WorkerCall
 
 
@@ -21,7 +21,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
                     label="Load MEDUSA Files",
                     select=lambda widget: widget.select_files("Select MEDUSA files"),
                     build_call=lambda paths: WorkerCall(
-                        function=inspect_converter_source,
+                        function=load_converter_source,
                         kwargs={
                             "path": [Path(path) for path in paths],
                             "validation_type": "files",
@@ -36,7 +36,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
                     label="Load MEDUSA Studio",
                     select=lambda widget: widget.select_directory("Select MEDUSA Studio directory"),
                     build_call=lambda path: WorkerCall(
-                        function=inspect_converter_source,
+                        function=load_converter_source,
                         kwargs={
                             "path": Path(path),
                             "validation_type": "studio",
