@@ -27,9 +27,7 @@ class EEGLoadDataWidget(LoadDataWidget):
     # Lo hacemos aquí para no acoplar el LoadDataWidget al EEG.
     def _loaded(self, results: list[dict]) -> None:
         super()._loaded(results)
-        sampling_rates = [float(metadata["sampling_rate"]) for metadata in self.state.get("metadata_list", [])
-            if metadata.get("sampling_rate") is not None and metadata.get("sampling_rate") > 0]
-        nyquist = float(sampling_rates[0]/2)
+        nyquist = float(float(self.state["metadata"]["fs"])/2)
         self.state["broadband"] = {"id": "broadband", "title": "Broadband", "enabled": True,
                                    "low_cut": 0.1, "high_cut": nyquist}
         self.changed.emit()

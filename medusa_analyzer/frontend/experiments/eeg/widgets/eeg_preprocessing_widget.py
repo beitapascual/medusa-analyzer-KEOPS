@@ -288,10 +288,7 @@ class EEGPreprocessingWidget(QScrollArea):
 
     def on_step_activated(self) -> None:
         """WorkflowShell llama a este hook"""
-        metadata_list = self.state.get("metadata_list", [])
-        sampling_rates = [float(metadata["sampling_rate"]) for metadata in metadata_list
-            if metadata.get("sampling_rate") is not None and metadata.get("sampling_rate") > 0]
-        self.fs = min(sampling_rates) if sampling_rates else None
+        self.fs = (self.state.get("metadata") or {}).get("fs")
         self._sync()
 
     def can_continue(self) -> bool:
