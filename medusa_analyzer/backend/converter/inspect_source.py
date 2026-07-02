@@ -9,10 +9,9 @@ import warnings
 VALID_BIDS_ENTITIES = ['sub', 'ses', 'task', 'acq', 'run', 'recording']
 accepted_suffix = '_rec'
 
-def inspect_converter_source(files: Path|List[Path], validation_type: str,
-                             path: Path | None = None,
+def inspect_converter_source(files: Path|List[Path], validation_type: str, path: Path | None = None,
                              progress_callback: Callable[[int], None] | None = None,
-                             log_callback: Callable[[str], None] | None = None) -> Dict[str, Union[bool, List[str]]]:
+                             log_callback: Callable[[str], None] | None = None) -> None:
     """
     Valida un árbol de directorios para asegurar que los archivos .mat
     y sus carpetas contenedoras siguen la convención estándar de BIDS.
