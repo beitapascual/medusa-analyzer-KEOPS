@@ -114,7 +114,7 @@ class LoadDataWidget(QScrollArea):
             button.clicked.connect(lambda checked=False, selected_action=action: self._run_action(selected_action))
             button_layout.addWidget(button)
             self.action_buttons[action.id] = button
-        self.select_button = next(iter(self.action_buttons.values()))
+        # self.select_button = next(iter(self.action_buttons.values()))
 
         self.files = QListWidget()
         self.files.setMinimumHeight(125)

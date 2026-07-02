@@ -32,7 +32,6 @@ class ConverterLoadDataWidget(LoadDataWidget):
                         kwargs={
                             "path": [Path(path) for path in paths],
                             "validation_type": "files",
-                            "extensions": allowed_extensions,
                         },
                     ),
                     display_names=lambda paths: [Path(path).name for path in paths],
