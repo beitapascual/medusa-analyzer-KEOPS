@@ -212,17 +212,17 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
         "errors": errors
     }
 
-# pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
-# pathhh.mkdir(parents=True, exist_ok=True)
+# # pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
+# # pathhh.mkdir(parents=True, exist_ok=True)
+# #
+# # default_dataset_desc = {
+# #     "Name": pathhh.name,
+# #     "BIDSVersion": "MEDUSA-derived BIDS"
+# # }
+# # with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
+# #     json.dump(default_dataset_desc, f, indent=4)
 #
-# default_dataset_desc = {
-#     "Name": pathhh.name,
-#     "BIDSVersion": "MEDUSA-derived BIDS"
-# }
-# with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
-#     json.dump(default_dataset_desc, f, indent=4)
-
-# --- Ejemplo de Uso ---
-if __name__ == "__main__":
-    results = run_conversion(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset", ('.json',))
-    print(results)
+# # --- Ejemplo de Uso ---
+# if __name__ == "__main__":
+#     results = run_conversion(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset", ('.json',))
+#     print(results)
