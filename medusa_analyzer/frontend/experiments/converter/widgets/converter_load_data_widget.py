@@ -22,27 +22,20 @@ class ConverterLoadDataWidget(LoadDataWidget):
                     select=lambda widget: widget.select_files("Select MEDUSA files"),
                     build_call=lambda paths: WorkerCall(
                         function=load_converter_source,
-                        kwargs={
-                            "input_data": [Path(path) for path in paths],
-                            "validation_type": "files",
-                        },
-                    ),
+                        kwargs={"input_data": [Path(path) for path in paths],
+                            "validation_type": "files"}),
                     display_names=lambda paths: [Path(path).name for path in paths],
                     status_text=lambda paths: f"Reading {len(paths)} MEDUSA file(s)...",
                     overlay_text="Reading MEDUSA files...",
                 ),
-                LoadDataAction(
-                    id="medusa_studio",
+                LoadDataAction(id="medusa_studio",
                     label="Load MEDUSA Studio",
                     select=lambda widget: widget.select_directory("Select MEDUSA Studio directory"),
                     build_call=lambda path: WorkerCall(
                         function=load_converter_source,
-                        kwargs={
-                            "input_data": Path(path),
+                        kwargs={"input_data": Path(path),
                             "validation_type": "studio",
-                            "extensions": allowed_extensions,
-                        },
-                    ),
+                            "extensions": allowed_extensions}),
                     display_names=lambda path: [Path(path).name or str(path)],
                     status_text="Reading folder...",
                     overlay_text="Reading MEDUSA Studio folder...",
@@ -89,7 +82,6 @@ class ConverterLoadDataWidget(LoadDataWidget):
         root_layout.insertWidget(metadata_panel_index + 1, self.output_panel)
 
         self.output_panel.hide()
-
 
 
     def _select_output_path(self):
