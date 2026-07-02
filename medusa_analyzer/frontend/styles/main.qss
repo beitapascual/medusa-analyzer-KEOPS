@@ -103,6 +103,11 @@ QLabel[role="warning"] {
     color: #F6C177;
 }
 
+ProgressOverlay {
+    qproperty-errorColor: #FFB6C2;
+    qproperty-warningColor: #F6C177;
+}
+
 /* Dashboard */
 QScrollArea#dashboardPage,
 QWidget#dashboard {

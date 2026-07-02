@@ -2,40 +2,35 @@ import re
 import scipy
 import h5py
 from pathlib import Path
-from typing import Dict, List, Union, Tuple, Any
+from typing import Dict, List, Union, Tuple, Any, Callable
 import json
 import warnings
 
 VALID_BIDS_ENTITIES = ['sub', 'ses', 'task', 'acq', 'run', 'recording']
 accepted_suffix = '_rec'
 
-def validate_input(path: str, validation_type: str, extensions: Tuple[str, ...] = ('.mat', '.h5py')) -> Dict[str, Union[bool, List[str]]]:
+def validate_input(input: Path|List[Path], validation_type: str, extensions: Tuple[str, ...] = ('.mat', '.h5py')) -> Dict[str, Union[bool, List[str]]]:
     """
     Valida un árbol de directorios para asegurar que los archivos .mat
     y sus carpetas contenedoras siguen la convención estándar de BIDS.
     """
-
-    path = Path(path)
     errors: List[str] = []
 
-    if validation_type not in ['studio', 'files']:
-        return {"valid": False, "errors": [f"Unknown validation type: {validation_type}"]}
-
-    if not path.is_dir():
-        return {"valid": False, "errors": [f"Selected path does not exist or is not a directory: {path}"]}
+    if validation_type == 'studio':
+        path = input
+        # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
+        files = []
+        for ext in extensions:
+            files.extend(path.rglob(f"*{ext}"))
+        if not files:
+            # 4. Crear un mensaje de error más informativo
+            extension_list_str = ", ".join([f"{ext}" for ext in extensions])
+            errors.append(f"No files with the following extensions were found: {extension_list_str}.")
+    else:
+        files = input
 
     # Expresión regular para validar el formato de una entidad BIDS (ej. sub-01, task-rest)
     bids_entity_pattern = re.compile(r'^[a-zA-Z0-9]+-[a-zA-Z0-9]+$')
-
-    # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
-    files = []
-    for ext in extensions:
-        files.extend(path.rglob(f"*{ext}"))
-
-    if not files:
-        # 4. Crear un mensaje de error más informativo
-        extension_list_str = ", ".join([f"{ext}" for ext in extensions])
-        errors.append(f"No files with the following extensions were found: {extension_list_str}.")
 
     for file in files:
         # Ignorar archivos o carpetas ocultas (que empiezan por .)
@@ -205,7 +200,36 @@ def get_dataset_information(path: str, extensions: Tuple[str, ...] = ('.mat', '.
         "tasks": list(tasks)
     }
 
+def read_folder_for_converter(path: str, validation_type: str, extensions: Tuple[str, ...] = ('.mat', '.h5py'),
+    progress_callback: Callable[[int], None] | None = None, log_callback: Callable[[str], None] | None = None):
+
+    progress_callback(50)
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+    log_callback('Holaaaa jijij','info')
+
+    aa = validate_input(path, validation_type, extensions)
+
+    # 91-100%
+    progress_callback(990)
+    bb = get_dataset_information(path, extensions)
+
+    return bb
+
 # --- Ejemplo de Uso ---
 if __name__ == "__main__":
-    results = validate_input(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', 'files', ('.json',))
+    results = read_folder_for_converter(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', 'files', ('.json',))
     print(results)
