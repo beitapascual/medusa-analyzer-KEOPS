@@ -9,48 +9,12 @@ from medusa_analyzer.frontend.models import Validation
 from medusa_analyzer.frontend.widgets.table import EditableTable, TableColumn
 
 
-# Creamos una tabla especializada para bandas EEG usando la tabla genérica EditableTable. En esta table, se validan
-# nombres y cortes de las bandas, se crean las columnas [Enabled, title, low_cut y high_cut], se añaden botones de
-# añadir fila y reset y se actualizan los límites mínimos/máximos permitidos en función de la frecuencia de nyqust
-# y si se ha activado o no un filtro pasobanda.
+"""Creamos una tabla especializada para bandas EEG usando la tabla genérica EditableTable. En esta table, se validan
+nombres y cortes de las bandas, se crean las columnas [Enabled, title, low_cut y high_cut], se añaden botones de
+añadir fila y reset y se actualizan los límites mínimos/máximos permitidos en función de la frecuencia de nyqust
+y si se ha activado o no un filtro pasobanda."""
 _band_validation = Validation()
 
-
-def validate_eeg_frequency_bands(rows: MutableSequence[dict], minimum_frequency: float = 0.1,
-    maximum_frequency: float = 10000.0) -> list[str]: # todo: aquí en que momento se actualiza con broadband? min, max deberían ser pasados como args
-    errors: list[str] = []
-    for index, row in enumerate(rows, start=1):
-        if not bool(row.get("enabled", True)):
-            continue  # Cuando una fila está desactivada no se valida
-        row_prefix = f"Row {index}"
-        row_errors: list[str] = []
-        row_errors.extend(_band_validation.validate_many(row.get("title"),
-            ["required_text", "no_whitespace"],
-            label=f"{row_prefix}: band name"))
-
-        row_errors.extend(_band_validation.validate_many(row.get("low_cut"),
-            ["finite_number", ("greater_or_equal", {"minimum": minimum_frequency, "suffix": " Hz"}),
-                ("less_or_equal", {"maximum": maximum_frequency, "suffix": " Hz"})],
-            label=f"{row_prefix}: low cut"))
-
-        row_errors.extend(_band_validation.validate_many(row.get("high_cut"),
-            ["finite_number", ("greater_or_equal", {"minimum": minimum_frequency, "suffix": " Hz"}),
-                ("less_or_equal", {"maximum": maximum_frequency, "suffix": " Hz"})],
-            label=f"{row_prefix}: high cut"))
-
-        if row_errors:
-            errors.extend(row_errors)
-            # Si ya ha fallado una validación básica de la fila, evitamos
-            # comparaciones numéricas para no añadir ruido.
-            continue
-
-        low_cut = Validation.coerce_float(row.get("low_cut"))
-        high_cut = Validation.coerce_float(row.get("high_cut"))
-        row_errors.extend(_band_validation.validate_many(high_cut,
-            [("greater_than", {"minimum": low_cut, "suffix": " Hz"})],
-            label=f"{row_prefix}: high cut"))
-        errors.extend(row_errors)
-    return errors
 
 # Hereda de la clase genérica
 class EEGFrequencyBandsTable(EditableTable):
@@ -100,20 +64,44 @@ class EEGFrequencyBandsTable(EditableTable):
             maximum_frequency=self.maximum_frequency, emit_changed=False)
 
     def _validate_rows(self, current_rows: MutableSequence[dict]) -> list[str]:
-        return validate_eeg_frequency_bands(current_rows, minimum_frequency=self.minimum_frequency,
-            maximum_frequency=self.maximum_frequency)
+        errors: list[str] = []
+        for index, row in enumerate(current_rows, start=1):
+            if not bool(row.get("enabled", True)):
+                continue  # Cuando una fila está desactivada no se valida
+
+            row_prefix = f"Row {index}"
+            row_errors: list[str] = []
+            row_errors.extend(_band_validation.validate_many(row.get("title"), ["required_text", "no_whitespace"],
+                                                             label=f"{row_prefix}: band name"))
+            row_errors.extend(_band_validation.validate_many(row.get("low_cut"),["finite_number", ("greater_or_equal",
+                            {"minimum": self.minimum_frequency, "suffix": " Hz"}), ("less_or_equal",
+                               {"maximum": self.maximum_frequency, "suffix": " Hz"})], label=f"{row_prefix}: low cut"))
+            row_errors.extend(_band_validation.validate_many(row.get("high_cut"), ["finite_number", ("greater_or_equal",
+                             {"minimum": self.minimum_frequency, "suffix": " Hz"}), ("less_or_equal",
+                            {"maximum": self.maximum_frequency, "suffix": " Hz"})], label=f"{row_prefix}: high cut"))
+            if row_errors:
+                errors.extend(row_errors)
+                # Si ya ha fallado una validación básica de la fila, evitamos
+                # comparaciones numéricas para no añadir ruido.
+                continue
+
+            low_cut = Validation.coerce_float(row.get("low_cut"))
+            high_cut = Validation.coerce_float(row.get("high_cut"))
+            row_errors.extend(_band_validation.validate_many(high_cut, [("greater_than", {"minimum": low_cut, "suffix": " Hz"})],
+                                                                                        label=f"{row_prefix}: high cut"))
+            errors.extend(row_errors)
+        return errors
 
     def set_frequency_bounds(self, minimum_frequency: float = 0.1, maximum_frequency: float | None = None,
         emit_changed: bool = True) -> None:
         """Ajusta los límites lógicos de la tabla según Nyquist o bandpass. No modificamos ni el mínimo ni el
         máximo visible, solo es a nivel de validación."""
-        # TODO: aquí no se valida? Llamar al validator
         self.minimum_frequency = float(minimum_frequency)
         if maximum_frequency is not None:
             self.maximum_frequency = max(self.minimum_frequency, float(maximum_frequency))
         else:
             self.maximum_frequency = max(self.minimum_frequency, self.maximum_frequency)
-        self._sync(emit_changed=emit_changed)
+        self._sync(emit_changed=emit_changed) # El sync ejecuta _run_validator
 
     def _add_new_row(self) -> None:
         """Method para el botón de 'add new row'"""
@@ -152,4 +140,4 @@ class EEGFrequencyBandsTable(EditableTable):
         return row # devuelve la fila ya normalizada
 
 
-__all__ = ["EEGFrequencyBandsTable", "validate_eeg_frequency_bands"]
+__all__ = ["EEGFrequencyBandsTable"]
