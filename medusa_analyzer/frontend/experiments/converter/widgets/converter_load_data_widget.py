@@ -23,7 +23,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
                     build_call=lambda paths: WorkerCall(
                         function=load_converter_source,
                         kwargs={
-                            "path": [Path(path) for path in paths],
+                            "input_data": [Path(path) for path in paths],
                             "validation_type": "files",
                         },
                     ),
@@ -38,7 +38,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
                     build_call=lambda path: WorkerCall(
                         function=load_converter_source,
                         kwargs={
-                            "path": Path(path),
+                            "input_data": Path(path),
                             "validation_type": "studio",
                             "extensions": allowed_extensions,
                         },
@@ -50,6 +50,12 @@ class ConverterLoadDataWidget(LoadDataWidget):
             ],
             title="Load data",
             description="Select a MEDUSA Studio dataset.",
+            metadata_labels={
+                "Total files": "Total files",
+                "Number of subjects": "Number of subjects",
+                "Number of tasks": "Number of tasks",
+                "Task list": "Task list",
+            },
         )
 
         # --- New sections for dataset name and output path ---

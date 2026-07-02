@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 from typing import Any
 
 from PySide6.QtCore import Signal
@@ -70,10 +69,10 @@ class LoadDataWidget(QScrollArea):
     """
 
     changed = Signal()
-    _task_pattern = re.compile(r"(?:^|_)task[-_]([^_]+)", re.IGNORECASE)
 
     def __init__(self, config: dict[str, Any], state: dict[str, Any], actions: list[LoadDataAction],
-        title: str, description: str):
+        title: str, description: str, metadata_labels: dict[str, str],
+        metadata_builder: Callable[[list[dict] | dict[str, Any], Any], dict[str, Any]] | None = None):
         super().__init__()
         if not actions:
             raise ValueError("LoadDataWidget requires at least one LoadDataAction.")
@@ -83,6 +82,8 @@ class LoadDataWidget(QScrollArea):
         self.actions = actions
         self.action_buttons: dict[str, QPushButton] = {}
         self._selected_source: Any | None = None
+        self.metadata_builder = metadata_builder or self._build_metadata
+        self.metadata_labels = dict(metadata_labels)
         self.runner = TaskRunner()
 
         self.setWidgetResizable(True)
@@ -171,7 +172,7 @@ class LoadDataWidget(QScrollArea):
 
         self._clear_loaded_state() # Borramos del state lo cargado anteriormente
         # Guardamos la selección anterior para usarla luego en _loaded, por ejemplo para contar
-        # archios y extraer task de los nombres.
+        # archivos y extraer task de los nombres.
         # TODO: independientemente de la selección vamos a extraer la TASK-
         self._selected_source = selection
         worker_call = action.build_call(selection) # definimos la función, args y kwargs del worker
@@ -213,45 +214,11 @@ class LoadDataWidget(QScrollArea):
         self.state.pop("broadband", None)
         self.state.pop("metadata", None)
 
-    @classmethod
-    def _build_metadata(cls, results: list[dict] | dict[str, Any], selection: Any) -> dict[str, Any]:
+    @staticmethod
+    def _build_metadata(results: dict[str, Any], selection: Any) -> dict[str, Any]:
         """Construye el metadata nuevo para el panel partiendo del primer archivo y de la seleccion completa."""
-        if isinstance(results, dict):
-            return dict(results)
-        if not results:
-            return {}
-
-        if isinstance(selection, (list, tuple)):
-            file_paths = [str(path) for path in selection]
-        elif selection is None:
-            file_paths = []
-        else:
-            file_paths = [str(selection)]
-
-        tasks: list[str] = []
-        missing_task = False
-        for path in file_paths:
-            match = cls._task_pattern.search(Path(path).stem)
-            if match is None:
-                missing_task = True
-                continue
-            task_name = match.group(1).strip()
-            if task_name:
-                tasks.append(task_name)
-
-        ordered_tasks = list(dict.fromkeys(tasks))
-        if missing_task:
-            ordered_tasks.append("No task")
-
-        first_result = results[0]
-        channels = list(first_result.get("channels") or [])
-        return {
-            "n_files": len(file_paths) if file_paths else len(results),
-            "n_channels": int(first_result.get("n_channels") or len(channels)),
-            "channel_set": channels,
-            "fs": first_result.get("sampling_rate"),
-            "task": ordered_tasks,
-        }
+        del selection
+        return dict(results)
 
     def _loaded(self, results: list[dict] | dict[str, Any]) -> None:
         """Recibe el resultado del loader, guarda el estado y pinta el panel de metadata."""
@@ -264,7 +231,7 @@ class LoadDataWidget(QScrollArea):
             selected_paths = [str(self._selected_source)]
 
         loader_results = [] if isinstance(results, dict) else list(results)
-        metadata = self._build_metadata(results, self._selected_source)
+        metadata = dict(self.metadata_builder(results, self._selected_source) or {})
 
         self.state["loaded_file_paths"] = selected_paths
         self.state["loader_results"] = loader_results
@@ -306,28 +273,10 @@ class LoadDataWidget(QScrollArea):
             self.metadata_panel.hide()
             return
 
-        labels = {
-            "n_files": "Number of files",
-            "n_channels": "Number of channels",
-            "channel_set": "Channel set",
-            "fs": "Sampling rate",
-            "task": "Task",
-        }
-
         for index, (key, value) in enumerate(metadata.items()):
-            label = labels.get(key, str(key).replace("_", " ").strip().title())
-            if value is None:
-                formatted_value = "-"
-            elif isinstance(value, dict):
-                formatted_value = ", ".join(f"{sub_key}: {sub_value}" for sub_key, sub_value in value.items()) if value else "-"
-            elif isinstance(value, (list, tuple, set)):
-                items = [str(item) for item in value if str(item)]
-                formatted_value = ", ".join(items) if items else "-"
-            elif key == "fs":
-                try:
-                    formatted_value = f"{float(value):g} Hz"
-                except (TypeError, ValueError):
-                    formatted_value = str(value)
+            label = self.metadata_labels[key]
+            if isinstance(value, (list, tuple, set)):
+                formatted_value = ", ".join(str(item) for item in value)
             else:
                 formatted_value = str(value)
 
