@@ -1,52 +1,64 @@
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtWidgets import (
-    QPushButton,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QFrame,
     QFileDialog,
+    QPushButton,
 )
 
 from medusa_analyzer.backend.converter.validate_input import read_folder_for_converter
-from medusa_analyzer.frontend.widgets import LoadDataWidget
+from medusa_analyzer.frontend.widgets import LoadDataAction, LoadDataWidget, WorkerCall
 
 
 class ConverterLoadDataWidget(LoadDataWidget):
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
+        load_data_config = defaults.get("load_data", {})
+        allowed_extensions = tuple(load_data_config.get("allowed_extensions", ()))
+
         super().__init__(
-            config=defaults.get("load_data", {}),  # allowed extensions
+            config=load_data_config,  # allowed extensions
             state=state,
-            loader_function=read_folder_for_converter,
-            args=[defaults.get("load_data").get("allowed_extensions")],
+            actions=[
+                LoadDataAction(
+                    id="medusa_files",
+                    label="Load MEDUSA Files",
+                    select=lambda widget: widget.select_files("Select MEDUSA files"),
+                    build_call=lambda paths: WorkerCall(
+                        function=read_folder_for_converter,
+                        kwargs={
+                            "path": [Path(path) for path in paths],
+                            "validation_type": "files",
+                            "extensions": allowed_extensions,
+                        },
+                    ),
+                    display_names=lambda paths: [Path(path).name for path in paths],
+                    status_text=lambda paths: f"Reading {len(paths)} MEDUSA file(s)...",
+                    overlay_text="Reading MEDUSA files...",
+                ),
+                LoadDataAction(
+                    id="medusa_studio",
+                    label="Load MEDUSA Studio",
+                    select=lambda widget: widget.select_directory("Select MEDUSA Studio directory"),
+                    build_call=lambda path: WorkerCall(
+                        function=read_folder_for_converter,
+                        kwargs={
+                            "path": Path(path),
+                            "validation_type": "studio",
+                            "extensions": allowed_extensions,
+                        },
+                    ),
+                    display_names=lambda path: [Path(path).name or str(path)],
+                    status_text="Reading folder...",
+                    overlay_text="Reading MEDUSA Studio folder...",
+                ),
+            ],
             title="Load data",
             description="Select a MEDUSA Studio dataset.",
         )
-
-        self.select_button.setText("Load MEDUSA Files")
-
-        # The parent widget's layout is where the button is.
-        original_layout = self.select_button.parentWidget().layout()
-        if original_layout:
-            # Find the position of the button.
-            index = original_layout.indexOf(self.select_button)
-            if index != -1:
-                # Create a horizontal layout to hold the buttons side-by-side.
-                button_layout = QHBoxLayout()
-
-                # When we add the existing button to the new layout, it's
-                # automatically removed from the old one. No duplication occurs.
-                button_layout.addWidget(self.select_button)
-
-                # Create and add the new button.
-                self.load_files_button = QPushButton("Load MEDUSA Studio")
-                self.load_files_button.setProperty("variant", "secondary")
-                self.load_files_button.clicked.connect(lambda: self._select_files(True))
-                button_layout.addWidget(self.load_files_button)
-
-                # Insert the new horizontal layout of buttons at the original button's position.
-                original_layout.insertLayout(index, button_layout)
 
         # --- New sections for dataset name and output path ---
 

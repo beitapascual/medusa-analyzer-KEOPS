@@ -1,16 +1,25 @@
-from importlib.metadata import metadata
+from pathlib import Path
 
 from medusa_analyzer.backend.io import load_edf_file
-from medusa_analyzer.frontend.widgets import LoadDataWidget
+from medusa_analyzer.frontend.widgets import LoadDataAction, LoadDataWidget, WorkerCall, load_files
 
 
 class EEGLoadDataWidget(LoadDataWidget):
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__(
             config=defaults.get("load_data", {}), # allowed extensions
-            args=[0],
             state=state,
-            loader_function=load_edf_file,
+            actions=[
+                LoadDataAction(
+                    id="eeg_files",
+                    label="Select EDF files",
+                    select=lambda widget: widget.select_files("Select recordings"),
+                    build_call=lambda paths: WorkerCall(function=load_files, args=(load_edf_file, paths)),
+                    display_names=lambda paths: [Path(path).name for path in paths],
+                    status_text=lambda paths: f"Reading {len(paths)} recording(s)...",
+                    overlay_text="Reading recordings...",
+                )
+            ],
             title="Load EEG data",
             description="Select one or more EDF files.")
 
