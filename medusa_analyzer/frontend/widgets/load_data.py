@@ -142,20 +142,12 @@ class LoadDataWidget(QScrollArea):
         metadata = self.state.get("metadata")
         # TODO: ahora mismo esta lo de metadata_list para que no rompa con lo que ya habría, pero hay que quitar
         #  y refactorizar aguas abajo
-        metadata_list = self.state.get("metadata_list") or []
         loaded_file_paths = self.state.get("loaded_file_paths", [])
         if loaded_file_paths:
             self.files.addItems([Path(path).name for path in loaded_file_paths])
-        elif metadata_list: # TODO: quitar
-            file_names = [metadata_item.get("file_name", "") for metadata_item in metadata_list
-                if isinstance(metadata_item, dict) and metadata_item.get("file_name")]
-            if file_names:
-                self.files.addItems(file_names)
 
         if isinstance(metadata, dict) and metadata:
             self._show_metadata(metadata)
-        elif metadata_list: # TODO: quitar
-            self._show_metadata(self._metadata_from_legacy_list(metadata_list))
 
     def select_files(self, caption: str = "Select recordings") -> list[str] | None:
         """Open a multi-file dialog using this widget's configured extension filter."""
@@ -218,29 +210,29 @@ class LoadDataWidget(QScrollArea):
         self._selected_source = None
         self.state["loaded_file_paths"] = []
         self.state["loader_results"] = []
-        self.state["metadata_list"] = []
         self.state.pop("loaded_file_path", None)
         self.state.pop("loader_result", None)
         self.state.pop("broadband", None)
         self.state.pop("metadata", None)
 
-    @staticmethod
-    def _selection_file_paths(selection: Any) -> list[str]:
-        """Devuelve una lista con los paths de todos los archivos cargados."""
-        if isinstance(selection, (list, tuple)):
-            return [str(path) for path in selection]
-        if selection is None:
-            return []
-        return [str(selection)]
-
     @classmethod
-    def _extract_tasks_from_paths(cls, paths: list[str]) -> list[str]:
-        """Method para extraer la tarea directamente de los nombres de los archivos, sin abrir
-        los registros. """
+    def _build_metadata(cls, results: list[dict] | dict[str, Any], selection: Any) -> dict[str, Any]:
+        """Construye el metadata nuevo para el panel partiendo del primer archivo y de la seleccion completa."""
+        if isinstance(results, dict):
+            return dict(results)
+        if not results:
+            return {}
+
+        if isinstance(selection, (list, tuple)):
+            file_paths = [str(path) for path in selection]
+        elif selection is None:
+            file_paths = []
+        else:
+            file_paths = [str(selection)]
+
         tasks: list[str] = []
         missing_task = False
-
-        for path in paths:
+        for path in file_paths:
             match = cls._task_pattern.search(Path(path).stem)
             if match is None:
                 missing_task = True
@@ -248,113 +240,37 @@ class LoadDataWidget(QScrollArea):
             task_name = match.group(1).strip()
             if task_name:
                 tasks.append(task_name)
+
         ordered_tasks = list(dict.fromkeys(tasks))
         if missing_task:
             ordered_tasks.append("No task")
-        return ordered_tasks
 
-    @classmethod
-    def _build_metadata_from_first_result(cls, first_result: dict[str, Any], file_paths: list[str]) -> dict[str, Any]:
+        first_result = results[0]
         channels = list(first_result.get("channels") or [])
         return {
-            "n_files": len(file_paths) if file_paths else 1,
+            "n_files": len(file_paths) if file_paths else len(results),
             "n_channels": int(first_result.get("n_channels") or len(channels)),
             "channel_set": channels,
             "fs": first_result.get("sampling_rate"),
-            "task": cls._extract_tasks_from_paths(file_paths),
+            "task": ordered_tasks,
         }
-
-    @classmethod
-    def _build_metadata_state_entry(cls, first_result: dict[str, Any], file_paths: list[str]) -> dict[str, Any]:
-        file_path = file_paths[0] if file_paths else str(first_result.get("path") or "")
-        file_name = str(first_result.get("name") or first_result.get("file_name") or Path(file_path).name)
-        metadata_entry = {
-            "file_name": file_name,
-            "file_path": file_path,
-            "channels": list(first_result.get("channels") or []),
-            "sampling_rate": first_result.get("sampling_rate"),
-            "duration_seconds": first_result.get("duration_seconds"),
-            "n_samples": first_result.get("n_samples"),
-            "task": cls._extract_tasks_from_paths(file_paths),
-        }
-        if "broadband" in first_result:
-            metadata_entry["broadband"] = first_result.get("broadband")
-        return metadata_entry
-
-    @classmethod
-    def _metadata_from_legacy_list(cls, metadata_list: list[dict[str, Any]]) -> dict[str, Any]:
-        if not metadata_list:
-            return {}
-
-        first_metadata = metadata_list[0]
-        channels = list(first_metadata.get("channels") or [])
-        file_paths = [str(metadata.get("file_path") or "") for metadata in metadata_list if metadata.get("file_path")]
-        return {
-            "n_files": len(metadata_list),
-            "n_channels": len(channels),
-            "channel_set": channels,
-            "fs": first_metadata.get("sampling_rate"),
-            "task": cls._extract_tasks_from_paths(file_paths),
-        }
-
-    @staticmethod
-    def _metadata_label(key: str) -> str:
-        labels = {
-            "n_files": "Number of files",
-            "n_channels": "Number of channels",
-            "channel_set": "Channel set",
-            "fs": "Sampling rate",
-            "task": "Task",
-        }
-        if key in labels:
-            return labels[key]
-        return str(key).replace("_", " ").strip().title()
-
-    @classmethod
-    def _format_metadata_value(cls, key: str, value: Any) -> str:
-        if value is None:
-            return "-"
-
-        if isinstance(value, dict):
-            if not value:
-                return "-"
-            return ", ".join(f"{sub_key}: {sub_value}" for sub_key, sub_value in value.items())
-
-        if isinstance(value, (list, tuple, set)):
-            items = [str(item) for item in value if str(item)]
-            return ", ".join(items) if items else "-"
-
-        if key == "fs":
-            try:
-                return f"{float(value):g} Hz"
-            except (TypeError, ValueError):
-                return str(value)
-
-        return str(value)
 
     def _loaded(self, results: list[dict] | dict[str, Any]) -> None:
         """Recibe el resultado del loader, guarda el estado y pinta el panel de metadata."""
 
-        selected_paths = self._selection_file_paths(self._selected_source)
-        metadata: dict[str, Any]
-        metadata_list: list[dict[str, Any]]
-        loader_results: list[dict[str, Any]]
-
-        if isinstance(results, dict):
-            metadata = dict(results)
-            metadata_list = [metadata]
-            loader_results = []
+        if isinstance(self._selected_source, (list, tuple)):
+            selected_paths = [str(path) for path in self._selected_source]
+        elif self._selected_source is None:
+            selected_paths = []
         else:
-            loader_results = list(results)
-            metadata = (self._build_metadata_from_first_result(loader_results[0], selected_paths)
-                if loader_results else {})
-            metadata_list = ([self._build_metadata_state_entry(loader_results[0], selected_paths)]
-                if loader_results else [])
+            selected_paths = [str(self._selected_source)]
+
+        loader_results = [] if isinstance(results, dict) else list(results)
+        metadata = self._build_metadata(results, self._selected_source)
 
         self.state["loaded_file_paths"] = selected_paths
         self.state["loader_results"] = loader_results
         self.state["metadata"] = metadata
-        self.state["metadata_list"] = metadata_list
         self.state.pop("loaded_file_path", None)
         self.state.pop("loader_result", None)
 
@@ -392,13 +308,34 @@ class LoadDataWidget(QScrollArea):
             self.metadata_panel.hide()
             return
 
-        values = [(self._metadata_label(key), self._format_metadata_value(key, value))
-            for key, value in metadata.items()]
+        labels = {
+            "n_files": "Number of files",
+            "n_channels": "Number of channels",
+            "channel_set": "Channel set",
+            "fs": "Sampling rate",
+            "task": "Task",
+        }
 
-        for index, (label, value) in enumerate(values):
+        for index, (key, value) in enumerate(metadata.items()):
+            label = labels.get(key, str(key).replace("_", " ").strip().title())
+            if value is None:
+                formatted_value = "-"
+            elif isinstance(value, dict):
+                formatted_value = ", ".join(f"{sub_key}: {sub_value}" for sub_key, sub_value in value.items()) if value else "-"
+            elif isinstance(value, (list, tuple, set)):
+                items = [str(item) for item in value if str(item)]
+                formatted_value = ", ".join(items) if items else "-"
+            elif key == "fs":
+                try:
+                    formatted_value = f"{float(value):g} Hz"
+                except (TypeError, ValueError):
+                    formatted_value = str(value)
+            else:
+                formatted_value = str(value)
+
             name = QLabel(label)
             name.setObjectName("metricLabel")
-            number = QLabel(value)
+            number = QLabel(formatted_value)
             number.setObjectName("metricValue")
             number.setWordWrap(True)
             self.metadata_layout.addWidget(name, (index // 3) * 2, index % 3)
@@ -408,4 +345,4 @@ class LoadDataWidget(QScrollArea):
     def can_continue(self) -> bool:
         """Validacion del step. Hasta que no haya una lista de metadatos no avanza.
         NOTA RECORDATORIA: WorkflowShell hace lo de if hasattr(widget, "can_continue")."""
-        return bool(self.state.get("metadata") or self.state.get("metadata_list"))
+        return bool(self.state.get("metadata"))
