@@ -254,7 +254,7 @@ class LoadDataWidget(QScrollArea):
 
     def _finished_loading(self) -> None:
         """Se ejecuta al final, tanto si hubo exito como error."""
-        self.overlay.hide()
+        self.overlay.close_button.show()
         self._set_action_buttons_enabled(True)
 
     def _refresh_status_style(self) -> None:

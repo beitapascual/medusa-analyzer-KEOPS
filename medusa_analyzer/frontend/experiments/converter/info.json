@@ -22,9 +22,9 @@
       "widget": "converter_load_data_widget.ConverterLoadDataWidget"
     },
     {
-      "id": "load_data",
-      "title": "Load data",
-      "widget": "converter_load_data_widget.ConverterLoadDataWidget"
+      "id": "run_experiment",
+      "title": "Run conversion",
+      "widget": "converter_run_experiment_widget.ConverterRunExperimentWidget"
     }
   ]
 }

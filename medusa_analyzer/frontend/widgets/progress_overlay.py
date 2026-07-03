@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QLabel, QProgressBar, QTextEdit, QVBoxLayout, QWidget, QPushButton, QHBoxLayout
 
 class ProgressOverlay(QFrame):
-    def __init__(self, parent: QWidget, show_log: bool = False):
+    def __init__(self, parent: QWidget, show_log: bool = True):
         super().__init__(parent)
         self.show_log = show_log
         self.setObjectName("progressOverlay")

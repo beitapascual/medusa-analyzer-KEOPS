@@ -1,4 +1,6 @@
 import re
+import time
+
 import scipy
 import h5py
 from pathlib import Path
@@ -11,7 +13,7 @@ accepted_suffix = '_rec'
 
 def inspect_converter_source(files: Path|List[Path], validation_type: str, path: Path | None = None,
                              progress_callback: Callable[[int], None] | None = None,
-                             log_callback: Callable[[str], None] | None = None) -> List[Path|None]:
+                             log_callback: Callable[[str, str], None] | None = None) -> List[Path|None]:
     """
     Valida un árbol de directorios para asegurar que los archivos .mat
     y sus carpetas contenedoras siguen la convención estándar de BIDS.
@@ -194,7 +196,7 @@ def summarize_source_dataset(files: List[Path]) -> Dict[str, int|List[Any]]:
 
 def load_converter_source(input_data: Path|List[Path], validation_type: str, extensions: Tuple[str, ...] | None = None,
                          progress_callback: Callable[[int], None] | None = None,
-                         log_callback: Callable[[str], None] | None = None):
+                         log_callback: Callable[[str, str], None] | None = None):
 
     progress_callback(0)
 
@@ -221,6 +223,8 @@ def load_converter_source(input_data: Path|List[Path], validation_type: str, ext
         log_callback(rf"From a total number of {len(files)} files, none of them were valid. Please check that you have recorded them with the proper MEDUSA version (≥2026).", "error")
         return {}
 
+    log_callback(rf"Everything OK :)","")
+    time.sleep(5)
     progress_callback(95)
     summary = summarize_source_dataset(valid_files)
     progress_callback(100)

@@ -70,6 +70,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
         output_layout.addWidget(QLabel("Output path:"))
         self.output_path_display = QLineEdit()
         self.output_path_display.setReadOnly(True)
+        self.output_path_display.setStyleSheet("border: none; background-color: transparent;")
         self.base_path = ""
         output_layout.addWidget(self.output_path_display)
         self.select_path_button = QPushButton("...")
@@ -99,7 +100,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
         else:
             self.output_path_display.clear()
 
-    def _show_metadata(self, metadata_list: list[dict[str, Any]]) -> None:
+    def _show_metadata(self, metadata_list: dict[str, Any]) -> None:
         # For showing/hiding the new output panel.
         super()._show_metadata(metadata_list)
         if metadata_list:
