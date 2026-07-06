@@ -99,6 +99,15 @@ class ConverterLoadDataWidget(LoadDataWidget):
             self.output_path_display.setText(self.base_path)
         else:
             self.output_path_display.clear()
+        # TODO: lo de guardarlo en el estado no lo metería aquí
+        self.state["converter_dataset_name"] = dataset_name
+        self.state["converter_output_path"] = self.output_path_display.text().strip()
+        completion = self.state.get("completion", {})
+        # TODO: esto sobraría de aquí
+        if completion.get("requires_pipeline"):
+            completion["status"] = "incompleted"
+            completion["error"] = None
+            completion["result"] = None
         self.changed.emit()
 
     def _show_metadata(self, metadata_list: dict[str, Any]) -> None:
@@ -118,6 +127,13 @@ class ConverterLoadDataWidget(LoadDataWidget):
         self.dataset_name_input.clear()
         self.output_path_display.clear()
         self.base_path = ""
+        self.state.pop("converter_dataset_name", None)
+        self.state.pop("converter_output_path", None)
+        completion = self.state.get("completion", {})
+        if completion.get("requires_pipeline"):
+            completion["status"] = "incompleted"
+            completion["error"] = None
+            completion["result"] = None
 
     def can_continue(self) -> bool:
         dataset_name = self.dataset_name_input.text().strip()
