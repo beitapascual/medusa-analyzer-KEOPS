@@ -44,7 +44,7 @@ class ConverterRunExperimentWidget(QWidget):
         """Clear the shared progress overlay log."""
         self.log_area.clear()
 
-    def run_conversion_process(self):
+    def run_pipeline(self):
         """
         A placeholder method to demonstrate how you might run a process
         and update the UI.

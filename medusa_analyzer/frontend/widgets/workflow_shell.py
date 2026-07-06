@@ -104,10 +104,19 @@ class WorkflowShell(QWidget):
         # Primero comprueba si se puede continuar. Si no se puede, no hace nada.
         if not self._current_step_can_continue():
             return
-        # Si estamos en el último paso, pulsar Next significa terminar, así que vuelve al dashboard.
+        # Si estamos en el último paso, verificamos si el experimento está completado o no.
         if self.navigator.current_index() == self.navigator.count() - 1:
-            self.dashboard_requested.emit()
-            return
+            completion = self.state.get("completion", {})
+            # Si está completado, podremos pulsar en finish y volver al dashboard
+            if completion.get("status") == "completed":
+                self.dashboard_requested.emit()
+                return
+            # Si no, ejecutamos el run_pipeline y el botón será 'Run' en vez de 'Finish'
+            if completion.get("requires_pipeline"):
+                widget = self.navigator.current_widget()
+                widget.run_pipeline()
+                self._refresh_navigation()
+                return
         # Si no estamos en el último paso, avanza al siguiente y actualiza la interfaz.
         self.navigator.next() # Para realmente avanzar, usamos la función del navigator.
         self._activate_current_step()
@@ -149,7 +158,15 @@ class WorkflowShell(QWidget):
         self.stepper.set_states(states)
         self.back_button.setText("Back" if current > 0 else "Dashboard")
         if current == len(self.steps) - 1:
-            self.next_button.setText("Run")
+            completion = self.state.get("completion", {})
+            if completion.get("running"):
+                self.next_button.setText("Running...")
+            elif completion.get("status") == "completed":
+                self.next_button.setText("Finish")
+            else:
+                self.next_button.setText("Run")
         else:
             self.next_button.setText("Next")
-        self.next_button.setEnabled(self._current_step_can_continue())
+
+        self.next_button.setEnabled(self._current_step_can_continue()
+            and not self.state.get("completion", {}).get("running", False))

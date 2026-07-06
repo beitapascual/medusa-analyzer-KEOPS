@@ -15,6 +15,7 @@
   },
   "route": "converter",
   "icon": "icon.png",
+  "has_run_pipeline": true,
   "workflow": [
     {
       "id": "load_data",
