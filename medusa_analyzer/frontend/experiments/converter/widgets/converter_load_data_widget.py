@@ -92,17 +92,20 @@ class ConverterLoadDataWidget(LoadDataWidget):
             self._update_full_path()
 
     def _update_full_path(self):
-        dataset_name = self.dataset_name_input.text()
+        dataset_name = self.dataset_name_input.text().strip()
         if self.base_path and dataset_name:
             self.output_path_display.setText(f"{self.base_path}/{dataset_name}")
         elif self.base_path:
             self.output_path_display.setText(self.base_path)
         else:
             self.output_path_display.clear()
+        self.changed.emit()
 
     def _show_metadata(self, metadata_list: dict[str, Any]) -> None:
         # For showing/hiding the new output panel.
         super()._show_metadata(metadata_list)
+        if not hasattr(self, "output_panel"):
+            return
         if metadata_list:
             self.output_panel.show()
         else:
@@ -115,3 +118,8 @@ class ConverterLoadDataWidget(LoadDataWidget):
         self.dataset_name_input.clear()
         self.output_path_display.clear()
         self.base_path = ""
+
+    def can_continue(self) -> bool:
+        dataset_name = self.dataset_name_input.text().strip()
+        output_path = self.output_path_display.text().strip()
+        return super().can_continue() and bool(dataset_name) and bool(output_path) and Path(output_path).parent.is_dir()

@@ -139,6 +139,7 @@ class LoadDataWidget(QScrollArea):
         root.addStretch()
 
         self.overlay = ProgressOverlay(self)
+        self.overlay.close_button.clicked.connect(lambda checked=False: self.changed.emit())
 
         metadata = self.state.get("metadata")
         loaded_file_paths = self.state.get("loaded_file_paths", [])
@@ -292,4 +293,4 @@ class LoadDataWidget(QScrollArea):
     def can_continue(self) -> bool:
         """Validacion del step. Hasta que no haya una lista de metadatos no avanza.
         NOTA RECORDATORIA: WorkflowShell hace lo de if hasattr(widget, "can_continue")."""
-        return bool(self.state.get("metadata"))
+        return bool(self.state.get("metadata")) and not self.overlay.isVisible()

@@ -103,9 +103,60 @@ QLabel[role="warning"] {
     color: #F6C177;
 }
 
-ProgressOverlay {
+QFrame#progressOverlay {
     qproperty-errorColor: #FFB6C2;
     qproperty-warningColor: #F6C177;
+    background: rgba(8, 5, 7, 176);
+}
+
+QFrame#progressWindow {
+    background: #261B21;
+    border: 1px solid #7A4055;
+    border-radius: 14px;
+}
+
+QLabel#progressWindowTitle {
+    color: #FFF7FA;
+    font-size: 18px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#progressTitle {
+    color: #EDE2E7;
+    font-size: 14px;
+    font-weight: 600;
+    background: transparent;
+}
+
+QPushButton#progressCloseButton {
+    min-height: 32px;
+    padding: 0 14px;
+}
+
+QProgressBar#overlayProgressBar {
+    min-height: 13px;
+    max-height: 13px;
+    background: #151014;
+    border: 1px solid #42303B;
+    border-radius: 6px;
+}
+
+QProgressBar#overlayProgressBar::chunk {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #E35A82,
+        stop: 1 #39B8C1
+    );
+    border-radius: 5px;
+}
+
+QTextEdit#progressLogArea {
+    color: #F4E9ED;
+    background: #171115;
+    border: 1px solid #443139;
+    border-radius: 8px;
+    padding: 8px;
 }
 
 /* Dashboard */
