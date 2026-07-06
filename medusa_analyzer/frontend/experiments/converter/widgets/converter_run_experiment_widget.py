@@ -19,6 +19,7 @@ class ConverterRunExperimentWidget(QWidget):
         self.defaults = defaults
         self.state = state
         self.runner = TaskRunner()
+        self.pipeline_running = False
         self.setObjectName("converterRunExperimentWidget")
 
         layout = QVBoxLayout(self)
@@ -50,26 +51,13 @@ class ConverterRunExperimentWidget(QWidget):
         """Clear the shared progress overlay log."""
         self.log_area.clear()
 
-    # TODO: REVISAR
-    def _completion_state(self) -> dict[str, Any]:
-        completion = self.state.setdefault("completion", {})
-        completion.setdefault("requires_pipeline", True)
-        completion.setdefault("status", "incompleted")
-        completion.setdefault("running", False)
-        completion.setdefault("error", None)
-        completion.setdefault("result", None)
-        return completion
-
     def run_pipeline(self):
         """Start the converter pipeline in a background worker."""
-        completion = self._completion_state()
-        if completion.get("running", False):
+        if self.pipeline_running:
             return
 
-        completion["status"] = "incompleted"
-        completion["running"] = True
-        completion["error"] = None
-        completion["result"] = None
+        self.pipeline_running = True
+        self.state["completion_status"] = "incompleted"
         self.changed.emit()
 
         self.overlay.start_process("Running conversion...")
@@ -105,40 +93,30 @@ class ConverterRunExperimentWidget(QWidget):
 
         return {"valid": True}
 
-    # TODO: REVISAR
     def _pipeline_completed(self, result: Any) -> None:
-        completion = self._completion_state()
-
         if isinstance(result, dict) and result.get("valid") is False:
             errors = result.get("errors") or ["Conversion finished with errors."]
             self._mark_pipeline_failed("\n".join(str(error) for error in errors))
             return
 
-        completion["status"] = "completed"
-        completion["result"] = result
-        completion["error"] = None
+        self.state["completion_status"] = "completed"
         self.set_progress(100)
         self.overlay.finish_process("Conversion finished successfully!")
 
-    # TODO: REVISAR
     def _pipeline_failed(self, error: str) -> None:
         self._mark_pipeline_failed(error)
 
-    # TODO: REVISAR
     def _mark_pipeline_failed(self, error: str) -> None:
-        completion = self._completion_state()
-        completion["status"] = "incompleted"
-        completion["error"] = error
-        completion["result"] = None
+        self.state["completion_status"] = "incompleted"
         self.overlay.add_log_message(error, "error")
         self.overlay.finish_process("Conversion failed. Fix the issue and run again.")
 
-    # TODO: REVISAR
     def _pipeline_finished(self) -> None:
-        completion = self._completion_state()
-        completion["running"] = False
+        self.pipeline_running = False
         self.changed.emit()
 
-    # TODO: REVISAR
+    def can_continue(self) -> bool:
+        return not self.pipeline_running
+
     def run_conversion_process(self):
         self.run_pipeline()

@@ -34,8 +34,9 @@
       "widget": "eeg_features_widget.EEGFeaturesWidget"
     },
     {
-      "id": "report",
-      "title": "Final report",
+      "id": "run_pipeline",
+      "title": "Run pipeline",
+      "subtitle": "Review the EEG configuration and run the processing pipeline.",
       "widget": "eeg_report_widget.EEGReportWidget"
     }
   ]

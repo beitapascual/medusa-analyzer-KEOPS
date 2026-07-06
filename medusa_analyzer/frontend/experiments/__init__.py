@@ -121,13 +121,7 @@ def create_experiment_page(definition: ExperimentDefinition) -> WorkflowShell:
         "loader_results": [],
         "metadata_list": [],
         "loaded_file_paths": [],
-        "completion": {
-            "requires_pipeline": bool(definition.info.get("has_run_pipeline", False)),
-            "status": "incompleted" if bool(definition.info.get("has_run_pipeline", False)) else "completed",
-            "running": False,
-            "error": None,
-            "result": None,
-        },
+        "completion_status": "incompleted" if bool(definition.info.get("has_run_pipeline", False)) else "completed",
     }
 
     # Leemos los pasos definidos en el info.json
