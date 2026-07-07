@@ -63,7 +63,7 @@ def discover_experiments() -> list[ExperimentDefinition]:
             logger.warning("Ignoring experiment folder %s: %s", directory.name, exc)
             continue
 
-        experiment_id = info.get("id", directory.name)
+        experiment_id = info.get("id")
         route = info.get("route")
         workflow = info.get("workflow")
         if not route or not isinstance(workflow, list) or not workflow:

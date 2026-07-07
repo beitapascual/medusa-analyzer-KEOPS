@@ -3,7 +3,7 @@ from typing import Dict, List, Union, Tuple, Callable
 import json
 import pandas as pd
 import shutil
-from prune_output import prune_output
+from medusa_analyzer.backend.converter.prune_output import prune_output
 
 SENSOR_NAMES = {'eeg': 'electrodes',
                 'fnirs': 'optodes'}

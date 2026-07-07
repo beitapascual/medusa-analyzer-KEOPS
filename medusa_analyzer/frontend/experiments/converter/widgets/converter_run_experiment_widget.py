@@ -71,7 +71,7 @@ class ConverterRunExperimentWidget(QWidget):
                   "progress_callback": self.set_progress,
                   "log_callback": self.log_callback}
 
-        worker = Worker(run_conversion, [], kwargs)
+        worker = Worker(run_conversion, **kwargs)
         worker.signals.progress.connect(self.set_progress)
         worker.signals.logging.connect(self.log_callback)
         worker.signals.result.connect(self._pipeline_completed)
@@ -79,26 +79,26 @@ class ConverterRunExperimentWidget(QWidget):
         worker.signals.finished.connect(self._pipeline_finished)
         self.runner.start(worker)
 
-    def _run_pipeline(self, progress_callback=None, log_callback=None) -> dict[str, Any]:
-        """
-        Worker entry point.
-
-        Worker injects progress_callback and log_callback as keyword arguments.
-        Replace this body with the real converter pipeline when it exists.
-        """
-        if progress_callback is not None:
-            progress_callback(0)
-        if log_callback is not None:
-            log_callback("Preparing converter pipeline...", "info")
-
-        for i in range(101):
-            time.sleep(0.03)
-            if progress_callback is not None:
-                progress_callback(i)
-            if log_callback is not None and i % 20 == 0:
-                log_callback(f"Conversion progress: {i}%", "info")
-
-        return {"valid": True}
+    # def _run_pipeline(self, progress_callback=None, log_callback=None) -> dict[str, Any]:
+    #     """
+    #     Worker entry point.
+    #
+    #     Worker injects progress_callback and log_callback as keyword arguments.
+    #     Replace this body with the real converter pipeline when it exists.
+    #     """
+    #     if progress_callback is not None:
+    #         progress_callback(0)
+    #     if log_callback is not None:
+    #         log_callback("Preparing converter pipeline...", "info")
+    #
+    #     for i in range(101):
+    #         time.sleep(0.03)
+    #         if progress_callback is not None:
+    #             progress_callback(i)
+    #         if log_callback is not None and i % 20 == 0:
+    #             log_callback(f"Conversion progress: {i}%", "info")
+    #
+    #     return {"valid": True}
 
     def _pipeline_completed(self, result: Any) -> None:
         if isinstance(result, dict) and result.get("valid") is False:

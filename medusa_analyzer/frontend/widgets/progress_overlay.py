@@ -72,8 +72,8 @@ class ProgressOverlay(QFrame):
             self.log_area = QTextEdit()
             self.log_area.setObjectName("progressLogArea")
             self.log_area.setReadOnly(True)
-            self.log_area.setMinimumHeight(150)
-            self.log_area.setMaximumHeight(210)
+            self.log_area.setMinimumHeight(125)
+            self.log_area.setMaximumHeight(125)
             self.log_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             panel_layout.addSpacing(16)
             panel_layout.addWidget(self.log_area)
@@ -82,6 +82,7 @@ class ProgressOverlay(QFrame):
         button_layout.setContentsMargins(0, 18, 0, 0)
         button_layout.addStretch()
         button_layout.addWidget(self.close_button)
+        panel_layout.addSpacing(30)
         panel_layout.addLayout(button_layout)
 
         self._update_panel_width()
