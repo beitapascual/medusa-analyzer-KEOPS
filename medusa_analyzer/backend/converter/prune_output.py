@@ -97,7 +97,7 @@ def run_promotion(bids_root: Path, suffix: str):
     _evaluate_and_promote(all_jsons, target_dir=bids_root)
 
 
-def merge_and_clean(directory: Path):
+def merge_and_clean(directory: Path) -> None:
     """Busca archivos temporales en el directorio, los fusiona si coinciden y restaura el formato BIDS."""
     files = list(directory.glob("*_tempTask.json")) + list(directory.glob("*_tempHw.json"))
     base_groups = {}
@@ -118,9 +118,8 @@ def merge_and_clean(directory: Path):
             json.dump(merged_data, f, indent=4)
 
 
-def prune_output(bids_root: str):
+def prune_output(bids_root: Path):
     """Función principal orquestadora."""
-    bids_root = Path(bids_root)
 
     # Fase 0: División de archivos JSON
     for json_file in bids_root.rglob("*.json"):
@@ -140,6 +139,8 @@ def prune_output(bids_root: str):
     for dir_path in [bids_root] + list(bids_root.rglob("*")):
         if dir_path.is_dir():
             merge_and_clean(dir_path)
+
+    return None
 
 # --- Ejemplo de Uso ---
 if __name__ == "__main__":

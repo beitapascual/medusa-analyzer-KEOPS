@@ -120,7 +120,7 @@ def create_experiment_page(definition: ExperimentDefinition) -> WorkflowShell:
         "defaults": copy.deepcopy(definition.defaults),
         "loader_results": [],
         "metadata_list": [],
-        "loaded_file_paths": [],
+        "input_data": [],
         "completion_status": "incompleted" if bool(definition.info.get("has_run_pipeline", False)) else "completed",
     }
 

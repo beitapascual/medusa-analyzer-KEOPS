@@ -22,7 +22,7 @@ def inspect_converter_source(files: Path|List[Path], validation_type: str, path:
     # Expresión regular para validar el formato de una entidad BIDS (ej. sub-01, task-rest)
     bids_entity_pattern = re.compile(r'^[a-zA-Z0-9]+-[a-zA-Z0-9]+$')
 
-    idx_callback = 95 / len(files)
+    idx_callback = 90 / len(files)
 
     valid_files = files.copy()
 

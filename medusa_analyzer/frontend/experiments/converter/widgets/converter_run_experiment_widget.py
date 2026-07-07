@@ -65,9 +65,9 @@ class ConverterRunExperimentWidget(QWidget):
         self.log_callback("Starting conversion...")
         self.set_progress(0)
 
-        kwargs = {"path": Path(path),
-                  "output_path": Coger Output Path,
-                  "extensions": None,
+        kwargs = {"input_data": self.state['input_data'],
+                  "output_path": self.state['output_path'],
+                  "extensions": self.defaults.get("load_data",{}).get("allowed_extensions",{}),
                   "progress_callback": self.set_progress,
                   "log_callback": self.log_callback}
 

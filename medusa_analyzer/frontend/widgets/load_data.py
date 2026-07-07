@@ -142,9 +142,9 @@ class LoadDataWidget(QScrollArea):
         self.overlay.close_button.clicked.connect(lambda checked=False: self.changed.emit())
 
         metadata = self.state.get("metadata")
-        loaded_file_paths = self.state.get("loaded_file_paths", [])
-        if loaded_file_paths:
-            self.files.addItems([Path(path).name for path in loaded_file_paths])
+        input_data = self.state.get("input_data", [])
+        if input_data:
+            self.files.addItems([Path(path).name for path in input_data])
 
         if isinstance(metadata, dict) and metadata:
             self._show_metadata(metadata)
@@ -208,7 +208,7 @@ class LoadDataWidget(QScrollArea):
     def _clear_loaded_state(self) -> None:
         """Eliminar del estado lo relativo a los metadatos."""
         self._selected_source = None
-        self.state["loaded_file_paths"] = []
+        self.state["input_data"] = []
         self.state["loader_results"] = []
         self.state.pop("loaded_file_path", None)
         self.state.pop("loader_result", None)
@@ -234,7 +234,7 @@ class LoadDataWidget(QScrollArea):
         loader_results = [] if isinstance(results, dict) else list(results)
         metadata = dict(self.metadata_builder(results, self._selected_source) or {})
 
-        self.state["loaded_file_paths"] = selected_paths
+        self.state["input_data"] = selected_paths
         self.state["loader_results"] = loader_results
         self.state["metadata"] = metadata
         self.state.pop("loaded_file_path", None)

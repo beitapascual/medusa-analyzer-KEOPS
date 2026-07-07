@@ -3,7 +3,7 @@ from typing import Dict, List, Union, Tuple, Callable
 import json
 import pandas as pd
 import shutil
-
+from prune_output import prune_output
 
 SENSOR_NAMES = {'eeg': 'electrodes',
                 'fnirs': 'optodes'}
@@ -35,12 +35,12 @@ def _remove_nulls(obj):
         return [_remove_nulls(item) for item in obj if item is not None]
     return obj
 
-def file_to_bids(input_path: str, output_path: str):
+def file_to_bids(input_path: Path, output_path: Path):
     """
     Lee un archivo JSON estructurado y lo exporta en un formato compatible con BIDS.
     """
 
-    with open(Path(input_path), 'r', encoding='utf-8') as f:
+    with open(input_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     # 1. Extracción de entidades BIDS
@@ -158,7 +158,7 @@ def file_to_bids(input_path: str, output_path: str):
             json.dump(events_sidecar, f, indent=4)
 
 
-def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('.mat', '.h5py'),
+def run_conversion(input_data: List[str], output_path: str, extensions: Tuple[str, ...] = ('.mat', '.h5py'),
                    progress_callback: Callable[[int], None] | None = None,
                    log_callback: Callable[[str, str], None] | None = None) -> None:
     """
@@ -171,7 +171,6 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
         bool: Devuelve True si la conversión fue exitosa, False en caso contrario.
     """
 
-    path = Path(path)
     output_path = Path(output_path)
     try:
         output_path.mkdir(parents=True, exist_ok=True)
@@ -180,20 +179,25 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
         log_callback(error_msg, "error")
         raise Exception(error_msg)
 
-    # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
-    files = []
-    for ext in extensions:
-        files.extend(path.rglob(f"*{ext}"))
+    if not len(input_data) == 1 and Path(*input_data).is_dir():
+        root_path = Path(*input_data)
+        # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
+        files = []
+        for ext in extensions:
+            files.extend(root_path.rglob(f"*{ext}"))
 
-    if not files:
-        # 4. Crear un mensaje de error más informativo
-        extension_list_str = ", ".join([f"{ext}" for ext in extensions])
-        error_msg = f"No files with the following extensions were found: {extension_list_str}."
-        log_callback(error_msg, "error")
-        raise Exception(error_msg)
+        if not files:
+            # 4. Crear un mensaje de error más informativo
+            extension_list_str = ", ".join([f"{ext}" for ext in extensions])
+            error_msg = f"No files with the following extensions were found: {extension_list_str}."
+            log_callback(error_msg, "error")
+            raise Exception(error_msg)
+    else:
+        files = [Path(file) for file in input_data]
+        root_path = files[0].parent
 
     # Gestión de dataset_description.json en la raíz del output
-    dataset_desc_src = path / "dataset_description.json"
+    dataset_desc_src = root_path / "dataset_description.json"
     # Se evalúa solo si no existe ya en el destino para evitar sobreescrituras en bucles
     try:
         if dataset_desc_src.exists():
@@ -217,17 +221,15 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
             error_msg = f"[{file}] Exception {e} during conversion"
             log_callback(error_msg, "error")
             raise Exception(error_msg)
-    return
 
-# pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
-# pathhh.mkdir(parents=True, exist_ok=True)
-#
-# default_dataset_desc = {
-#     "Name": pathhh.name,
-#     "BIDSVersion": "MEDUSA-derived BIDS"
-# }
-# with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
-#     json.dump(default_dataset_desc, f, indent=4)
+    try:
+        prune_output(output_path)
+    except Exception as e:
+        error_msg = f"Exception during dataset inheritance-based file pruning: {e}"
+        log_callback(error_msg, "error")
+        raise Exception(error_msg)
+
+    return
 
 # --- Ejemplo de Uso ---
 if __name__ == "__main__":
