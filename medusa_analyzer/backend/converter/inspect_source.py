@@ -231,7 +231,7 @@ def load_converter_source(input_data: Path|List[Path], validation_type: str, ext
     log_callback(rf"Successfully validated input data","")
     log_callback(rf"{len(valid_files)} files detected","")
     log_callback(rf"Creating dataset summary...","")
-    time.sleep(2)
+    time.sleep(1)
     summary = summarize_source_dataset(valid_files)
     log_callback(rf"Dataset summary created","")
     progress_callback(100)

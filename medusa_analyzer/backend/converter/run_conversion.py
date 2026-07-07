@@ -3,6 +3,7 @@ from typing import Dict, List, Union, Tuple, Callable
 import json
 import pandas as pd
 import shutil
+import time
 from medusa_analyzer.backend.converter.prune_output import prune_output
 
 SENSOR_NAMES = {'eeg': 'electrodes',
@@ -170,6 +171,10 @@ def run_conversion(input_data: List[str], output_path: str, extensions: Tuple[st
     Returns:
         bool: Devuelve True si la conversión fue exitosa, False en caso contrario.
     """
+    progress_callback(0)
+    log_callback(f"MEDUSA file converter started", "")
+    log_callback(f"Reading input data...", "")
+    time.sleep(1)
 
     output_path = Path(output_path)
     try:
@@ -214,13 +219,31 @@ def run_conversion(input_data: List[str], output_path: str, extensions: Tuple[st
         log_callback(error_msg, "error")
         raise Exception(error_msg)
 
+    progress_callback(5)
+    log_callback(rf"Successfully read input data","")
+    log_callback(rf"{len(files)} files detected","")
+    log_callback(rf"Starting conversion...","")
+    time.sleep(1)
+
+    idx_callback = 90 / len(files)
+
+    valid_files = files.copy()
     for file in files:
         try:
             file_to_bids(file, output_path)
+
+            progress_callback(int(idx_callback * (files.index(file) + 1) - 0.5 * idx_callback + 5))
+            log_callback(f"[{file}] Successfully converted", "")
+            time.sleep(1)
         except Exception as e:
             error_msg = f"[{file}] Exception {e} during conversion"
             log_callback(error_msg, "error")
-            raise Exception(error_msg)
+            valid_files.remove(file)
+
+    progress_callback(95)
+    log_callback(rf"Successfully converted {len(valid_files)} files","")
+    log_callback(rf"Starting inheritance-based file pruning...","")
+    time.sleep(1)
 
     try:
         prune_output(output_path)
@@ -228,6 +251,9 @@ def run_conversion(input_data: List[str], output_path: str, extensions: Tuple[st
         error_msg = f"Exception during dataset inheritance-based file pruning: {e}"
         log_callback(error_msg, "error")
         raise Exception(error_msg)
+
+    progress_callback(100)
+    log_callback(rf"Inheritance-based file pruning successfully run","")
 
     return
 
