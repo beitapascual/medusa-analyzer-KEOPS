@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Union, Tuple, Callable
 import json
 import pandas as pd
 import shutil
@@ -158,7 +158,9 @@ def file_to_bids(input_path: str, output_path: str):
             json.dump(events_sidecar, f, indent=4)
 
 
-def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('.mat', '.h5py')) -> Dict[str, Union[bool, List[str]]]:
+def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('.mat', '.h5py'),
+                   progress_callback: Callable[[int], None] | None = None,
+                   log_callback: Callable[[str, str], None] | None = None) -> None:
     """
     Ejecuta el proceso de conversión para la ruta especificada.
 
@@ -174,8 +176,9 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
     try:
         output_path.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        return {"valid": False, "errors": [f"Cannot create output folder: {e}."]}
-    errors: List[str] = []
+        error_msg = rf"Cannot create output folder: {e}."
+        log_callback(error_msg, "error")
+        raise Exception(error_msg)
 
     # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
     files = []
@@ -185,44 +188,48 @@ def run_conversion(path: str, output_path: str, extensions: Tuple[str, ...] = ('
     if not files:
         # 4. Crear un mensaje de error más informativo
         extension_list_str = ", ".join([f"{ext}" for ext in extensions])
-        return {"valid": False, "errors": [f"No files with the following extensions were found: {extension_list_str}."]}
+        error_msg = f"No files with the following extensions were found: {extension_list_str}."
+        log_callback(error_msg, "error")
+        raise Exception(error_msg)
 
     # Gestión de dataset_description.json en la raíz del output
     dataset_desc_src = path / "dataset_description.json"
     # Se evalúa solo si no existe ya en el destino para evitar sobreescrituras en bucles
-    if dataset_desc_src.exists():
-        shutil.copy(dataset_desc_src, output_path / "dataset_description.json")
-    else:
-        default_dataset_desc = {
-            "Name": output_path.name,
-            "BIDSVersion": "MEDUSA-derived BIDS"
-        }
-        with open(output_path / "dataset_description.json", 'w', encoding='utf-8') as f:
-            json.dump(default_dataset_desc, f, indent=4)
+    try:
+        if dataset_desc_src.exists():
+            shutil.copy(dataset_desc_src, output_path / "dataset_description.json")
+        else:
+            default_dataset_desc = {
+                "Name": output_path.name,
+                "BIDSVersion": "MEDUSA-derived BIDS"
+            }
+            with open(output_path / "dataset_description.json", 'w', encoding='utf-8') as f:
+                json.dump(default_dataset_desc, f, indent=4)
+    except Exception as e:
+        error_msg = f"Unable to create dataset_description.json. Verify permissions."
+        log_callback(error_msg, "error")
+        raise Exception(error_msg)
 
     for file in files:
         try:
             file_to_bids(file, output_path)
         except Exception as e:
-            errors.append(
-                f"[{file}] Exception {e} during conversion")
+            error_msg = f"[{file}] Exception {e} during conversion"
+            log_callback(error_msg, "error")
+            raise Exception(error_msg)
+    return
 
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors
-    }
-
-# # pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
-# # pathhh.mkdir(parents=True, exist_ok=True)
-# #
-# # default_dataset_desc = {
-# #     "Name": pathhh.name,
-# #     "BIDSVersion": "MEDUSA-derived BIDS"
-# # }
-# # with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
-# #     json.dump(default_dataset_desc, f, indent=4)
+# pathhh = Path(rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset")
+# pathhh.mkdir(parents=True, exist_ok=True)
 #
-# # --- Ejemplo de Uso ---
-# if __name__ == "__main__":
-#     results = run_conversion(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset", ('.json',))
-#     print(results)
+# default_dataset_desc = {
+#     "Name": pathhh.name,
+#     "BIDSVersion": "MEDUSA-derived BIDS"
+# }
+# with open(pathhh / "dataset_description.json", 'w', encoding='utf-8') as f:
+#     json.dump(default_dataset_desc, f, indent=4)
+
+# --- Ejemplo de Uso ---
+if __name__ == "__main__":
+    results = run_conversion(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset", ('.json',))
+    print(results)

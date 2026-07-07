@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from medusa_analyzer.frontend.worker import TaskRunner, Worker
 from medusa_analyzer.frontend.widgets.progress_overlay import ProgressOverlay
+from medusa_analyzer.backend.converter.run_conversion import run_conversion
 
 
 class ConverterRunExperimentWidget(QWidget):
@@ -39,7 +40,7 @@ class ConverterRunExperimentWidget(QWidget):
         self.progress_bar = self.overlay.progress
         self.log_area = self.overlay.log_area
 
-    def add_log_message(self, message: str, role: str = "info"):
+    def log_callback(self, message: str, role: str = "info"):
         """Append a message to the shared progress overlay log."""
         self.overlay.add_log_message(message, role)
 
@@ -61,12 +62,18 @@ class ConverterRunExperimentWidget(QWidget):
         self.changed.emit()
 
         self.overlay.start_process("Running conversion...")
-        self.add_log_message("Starting conversion...")
+        self.log_callback("Starting conversion...")
         self.set_progress(0)
 
-        worker = Worker(self._run_pipeline)
+        kwargs = {"path": Path(path),
+                  "output_path": Coger Output Path,
+                  "extensions": None,
+                  "progress_callback": self.set_progress,
+                  "log_callback": self.log_callback}
+
+        worker = Worker(run_conversion, [], kwargs)
         worker.signals.progress.connect(self.set_progress)
-        worker.signals.logging.connect(self.add_log_message)
+        worker.signals.logging.connect(self.log_callback)
         worker.signals.result.connect(self._pipeline_completed)
         worker.signals.error.connect(self._pipeline_failed)
         worker.signals.finished.connect(self._pipeline_finished)

@@ -28,7 +28,7 @@ def inspect_converter_source(files: Path|List[Path], validation_type: str, path:
 
     for file in files:
 
-        progress_callback(int(idx_callback*(files.index(file)+1) - 0.5*idx_callback))
+        progress_callback(int(idx_callback*(files.index(file)+1) - 0.5*idx_callback + 5))
 
         # Ignorar archivos o carpetas ocultas (que empiezan por .)
         if any(part.startswith('.') for part in file.parts):
@@ -198,7 +198,9 @@ def load_converter_source(input_data: Path|List[Path], validation_type: str, ext
                          progress_callback: Callable[[int], None] | None = None,
                          log_callback: Callable[[str, str], None] | None = None):
 
-    progress_callback(0)
+    progress_callback(5)
+    log_callback(rf"Analysing input data...", "")
+    time.sleep(2)
 
     if validation_type == 'studio':
         # Iterar de forma recursiva buscando solo archivos con las extensiones indicadas
@@ -208,8 +210,9 @@ def load_converter_source(input_data: Path|List[Path], validation_type: str, ext
         if not files:
             # 4. Crear un mensaje de error más informativo
             extension_list_str = ", ".join([f"{ext}" for ext in extensions])
-            log_callback(f"No files with the following extensions were found: {extension_list_str}.","error")
-            return {}
+            error_msg = f"No files with the following extensions were found: {extension_list_str}."
+            log_callback(error_msg,"error")
+            raise Exception(error_msg)
         if not isinstance(files, list):
             files = [files]
         valid_files = inspect_converter_source(files, validation_type, input_data, progress_callback, log_callback)
@@ -220,12 +223,17 @@ def load_converter_source(input_data: Path|List[Path], validation_type: str, ext
         valid_files = inspect_converter_source(files, validation_type, None, progress_callback, log_callback)
 
     if not valid_files:
-        log_callback(rf"From a total number of {len(files)} files, none of them were valid. Please check that you have recorded them with the proper MEDUSA version (≥2026).", "error")
-        return {}
+        error_msg = rf"From a total number of {len(files)} files, none of them were valid. Please check that you have recorded them with the proper MEDUSA version (≥2026)."
+        log_callback(error_msg, "error")
+        raise Exception(error_msg)
 
-    log_callback(rf"Everything OK :)","")
-    time.sleep(5)
     progress_callback(95)
+    log_callback(rf"Successfully validated input data","")
+    log_callback(rf"{len(valid_files)} files detected","")
+    time.sleep(2)
+    progress_callback(95)
+    log_callback(rf"Creating dataset summary...","")
+    time.sleep(2)
     summary = summarize_source_dataset(valid_files)
     progress_callback(100)
 
