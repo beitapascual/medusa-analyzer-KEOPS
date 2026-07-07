@@ -256,8 +256,3 @@ def run_conversion(input_data: List[str], output_path: str, extensions: Tuple[st
     log_callback(rf"Inheritance-based file pruning successfully run","")
 
     return
-
-# --- Ejemplo de Uso ---
-if __name__ == "__main__":
-    results = run_conversion(rf'D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\medusa_files_new_model', rf"D:\MEDUSA\medusa-analyzer-KEOPS\sample_data\bids_dataset", ('.json',))
-    print(results)
