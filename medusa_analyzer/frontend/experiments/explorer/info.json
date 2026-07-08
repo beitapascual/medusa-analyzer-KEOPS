@@ -1,0 +1,31 @@
+{
+  "id": "explorer",
+  "title": "Explorer",
+  "subtitle": "Explore and inspect your MEDUSA data.",
+  "description": "Browse the contents of your MEDUSA files, inspect metadata, review recordings, and quickly understand the structure of your dataset.",
+  "status": "Ready",
+  "accent": "burgundy",
+  "enabled": true,
+  "order": 10,
+  "category": {
+    "id": "utils",
+    "title": "Utils",
+    "description": "Additional MEDUSA Analyzer features.",
+    "order": 10
+  },
+  "route": "explorer",
+  "icon": "icon.png",
+  "has_run_pipeline": false,
+  "workflow": [
+    {
+      "id": "load_data",
+      "title": "Load data",
+      "widget": "converter_load_data_widget.ConverterLoadDataWidget"
+    },
+    {
+      "id": "run_experiment",
+      "title": "Run conversion",
+      "widget": "converter_run_experiment_widget.ConverterRunExperimentWidget"
+    }
+  ]
+}
