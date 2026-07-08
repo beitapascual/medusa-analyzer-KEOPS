@@ -107,8 +107,7 @@ class ConverterRunExperimentWidget(QWidget):
             return
 
         self.state["completion_status"] = "completed"
-        self.set_progress(100)
-        self.overlay.finish_process("Conversion finished successfully!")
+        self.overlay.finish_process()
 
     def _pipeline_failed(self, error: str) -> None:
         self._mark_pipeline_failed(error)

@@ -234,6 +234,7 @@ def load_converter_source(input_data: Path|List[Path], validation_type: str, ext
     time.sleep(1)
     summary = summarize_source_dataset(valid_files)
     log_callback(rf"Dataset summary created","")
+    log_callback(rf"Input data analysis finished","")
     progress_callback(100)
 
     return summary
