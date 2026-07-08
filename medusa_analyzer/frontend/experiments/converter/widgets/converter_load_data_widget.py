@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import QRegularExpression
+from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtWidgets import QHBoxLayout,QLabel,QLineEdit,QFrame,QFileDialog,QPushButton
 
 from medusa_analyzer.backend.converter.inspect_source import load_converter_source
@@ -61,6 +63,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
         # Dataset name
         output_layout.addWidget(QLabel("Dataset name:"))
         self.dataset_name_input = QLineEdit()
+        self.dataset_name_input.setValidator(QRegularExpressionValidator(QRegularExpression(r"[A-Za-z0-9_]*"), self))
         self.dataset_name_input.textChanged.connect(self._update_full_path)
         output_layout.addWidget(self.dataset_name_input)
 
@@ -101,12 +104,12 @@ class ConverterLoadDataWidget(LoadDataWidget):
             self.output_path_display.clear()
         self.changed.emit()
 
-    def _show_metadata(self, metadata_list: dict[str, Any]) -> None:
+    def _show_metadata(self, metadata: dict[str, Any]) -> None:
         # For showing/hiding the new output panel.
-        super()._show_metadata(metadata_list)
+        super()._show_metadata(metadata)
         if not hasattr(self, "output_panel"):
             return
-        if metadata_list:
+        if metadata:
             self.output_panel.show()
         else:
             self.output_panel.hide()

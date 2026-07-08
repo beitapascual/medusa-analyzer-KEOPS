@@ -29,6 +29,12 @@
       "widget": "eeg_preprocessing_widget.EEGPreprocessingWidget"
     },
     {
+      "id": "segmentation",
+      "title": "Segmentation",
+      "subtitle": "Select events, epoch windows and epoch-level options.",
+      "widget": "eeg_segmentation_widget.EEGSegmentationWidget"
+    },
+    {
       "id": "features",
       "title": "Features",
       "widget": "eeg_features_widget.EEGFeaturesWidget"

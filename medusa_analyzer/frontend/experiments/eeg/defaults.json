@@ -1,8 +1,8 @@
 {
   "load_data": {
-    "allowed_extensions": [
-      ".edf", ".mat"
-    ]
+    "allowed_datatypes": ["eeg"],
+    "raw_extensions": [".edf", ".vhdr", ".vmrk", ".eeg", ".set", ".fdt", ".bdf", ".mpl"],
+    "sidecar_extensions": [".json", ".tsv"]
   },
   "preprocessing": {
     "initial_frequency_values": {
@@ -91,6 +91,37 @@
           "enabled": true
         }
       ]
+    }
+  },
+  "segmentation": {
+    "selection_mode": "none",
+    "instant_events_inside_duration_events": false,
+    "selected_duration_events": [],
+    "selected_instant_events": [],
+    "epoch_window_ms": {
+      "start": -300,
+      "end": 700
+    },
+    "duration_epoch_length_ms": 1000,
+    "stride_percent": 0,
+    "average_epochs": false,
+    "normalization": {
+      "enabled": false,
+      "mode": "mean_std",
+      "baseline_window_ms": {
+        "start": -100,
+        "end": 0
+      }
+    },
+    "thresholding": {
+      "enabled": false,
+      "sigma": 2.0,
+      "samples": 2,
+      "channels": 1
+    },
+    "resampling": {
+      "enabled": false,
+      "target_sampling_frequency": 250
     }
   },
   "features": {
@@ -437,6 +468,7 @@
   "report": {
     "include_metadata": true,
     "include_preprocessing_summary": true,
+    "include_segmentation_summary": true,
     "include_selected_features": true
   }
 }

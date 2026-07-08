@@ -174,7 +174,6 @@ class LoadDataWidget(QScrollArea):
         self._clear_loaded_state() # Borramos del state lo cargado anteriormente
         # Guardamos la selección anterior para usarla luego en _loaded, por ejemplo para contar
         # archivos y extraer task de los nombres.
-        # TODO: independientemente de la selección vamos a extraer la TASK-
         self._selected_source = selection
         worker_call = action.build_call(selection) # definimos la función, args y kwargs del worker
         self.metadata_panel.hide() # ocultamos panel mientras se procesa la nueva carga
@@ -210,8 +209,6 @@ class LoadDataWidget(QScrollArea):
         self._selected_source = None
         self.state["input_data"] = []
         self.state["loader_results"] = []
-        self.state.pop("loaded_file_path", None)
-        self.state.pop("loader_result", None)
         self.state.pop("broadband", None)
         self.state.pop("metadata", None)
 
@@ -237,11 +234,8 @@ class LoadDataWidget(QScrollArea):
         self.state["input_data"] = selected_paths
         self.state["loader_results"] = loader_results
         self.state["metadata"] = metadata
-        self.state.pop("loaded_file_path", None)
-        self.state.pop("loader_result", None)
 
-        loaded_count = metadata.get("n_files") or metadata.get("total_files") or len(selected_paths) or len(loader_results)
-        self.status_label.setText(f"{loaded_count} recording(s) loaded successfully.")
+        self.status_label.setText("Data loaded successfully.")
         self.status_label.setProperty("status", "ready")
         self._refresh_status_style()
         self._show_metadata(metadata)

@@ -1,12 +1,37 @@
-import time
 from typing import Any
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import Property, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QFrame, QLabel, QProgressBar, QTextEdit, QVBoxLayout, QWidget
 
 from medusa_analyzer.frontend.worker import TaskRunner, Worker
-from medusa_analyzer.frontend.widgets.progress_overlay import ProgressOverlay
 from medusa_analyzer.backend.converter.run_conversion import run_conversion
+
+
+class _ProgressLogColors(QFrame):
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self._error_color = QColor("#FFB6C2")
+        self._warning_color = QColor("#F6C177")
+        self.setObjectName("progressOverlay")
+        self.hide()
+
+    def get_error_color(self) -> QColor:
+        return QColor(self._error_color)
+
+    def set_error_color(self, color: QColor) -> None:
+        if color.isValid():
+            self._error_color = QColor(color)
+
+    def get_warning_color(self) -> QColor:
+        return QColor(self._warning_color)
+
+    def set_warning_color(self, color: QColor) -> None:
+        if color.isValid():
+            self._warning_color = QColor(color)
+
+    errorColor = Property(QColor, get_error_color, set_error_color)
+    warningColor = Property(QColor, get_warning_color, set_warning_color)
 
 
 class ConverterRunExperimentWidget(QWidget):
@@ -22,6 +47,7 @@ class ConverterRunExperimentWidget(QWidget):
         self.runner = TaskRunner()
         self.pipeline_running = False
         self.setObjectName("converterRunExperimentWidget")
+        self.log_colors = _ProgressLogColors(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -34,22 +60,55 @@ class ConverterRunExperimentWidget(QWidget):
 
         layout.addWidget(title_label)
         layout.addWidget(description_label)
+        layout.addSpacing(18)
+
+        progress_panel = QFrame()
+        progress_panel.setProperty("role", "surface-panel")
+        progress_layout = QVBoxLayout(progress_panel)
+        progress_layout.setContentsMargins(24, 22, 24, 22)
+
+        self.status_label = QLabel("Ready to run conversion.")
+        self.status_label.setObjectName("progressTitle")
+        self.status_label.setWordWrap(True)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("overlayProgressBar")
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+
+        self.log_area = QTextEdit()
+        self.log_area.setObjectName("progressLogArea")
+        self.log_area.setReadOnly(True)
+        self.log_area.setMinimumHeight(180)
+
+        progress_layout.addWidget(self.status_label)
+        progress_layout.addSpacing(14)
+        progress_layout.addWidget(self.progress_bar)
+        progress_layout.addSpacing(16)
+        progress_layout.addWidget(self.log_area)
+
+        layout.addWidget(progress_panel)
         layout.addStretch()
 
-        self.overlay = ProgressOverlay(self)
-        self.progress_bar = self.overlay.progress
-        self.log_area = self.overlay.log_area
-
     def log_callback(self, message: str, role: str = "info"):
-        """Append a message to the shared progress overlay log."""
-        self.overlay.add_log_message(message, role)
+        """Append a message to the inline conversion log."""
+        color = None
+        if role == "error":
+            color = self.log_colors.errorColor.name()
+        elif role == "warning":
+            color = self.log_colors.warningColor.name()
+        if color:
+            self.log_area.append(f'<font color="{color}">{message}</font>')
+        else:
+            self.log_area.append(message)
+        self.log_area.verticalScrollBar().setValue(self.log_area.verticalScrollBar().maximum())
 
     def set_progress(self, value: int):
-        """Set the shared progress overlay value."""
+        """Set the inline progress value."""
         self.progress_bar.setValue(value)
 
     def clear_logs(self):
-        """Clear the shared progress overlay log."""
+        """Clear the inline conversion log."""
         self.log_area.clear()
 
     def run_pipeline(self):
@@ -61,7 +120,8 @@ class ConverterRunExperimentWidget(QWidget):
         self.state["completion_status"] = "incompleted"
         self.changed.emit()
 
-        self.overlay.start_process("Running conversion...")
+        self.status_label.setText("Running conversion...")
+        self.clear_logs()
         self.log_callback("Starting conversion...")
         self.set_progress(0)
 
@@ -79,27 +139,6 @@ class ConverterRunExperimentWidget(QWidget):
         worker.signals.finished.connect(self._pipeline_finished)
         self.runner.start(worker)
 
-    # def _run_pipeline(self, progress_callback=None, log_callback=None) -> dict[str, Any]:
-    #     """
-    #     Worker entry point.
-    #
-    #     Worker injects progress_callback and log_callback as keyword arguments.
-    #     Replace this body with the real converter pipeline when it exists.
-    #     """
-    #     if progress_callback is not None:
-    #         progress_callback(0)
-    #     if log_callback is not None:
-    #         log_callback("Preparing converter pipeline...", "info")
-    #
-    #     for i in range(101):
-    #         time.sleep(0.03)
-    #         if progress_callback is not None:
-    #             progress_callback(i)
-    #         if log_callback is not None and i % 20 == 0:
-    #             log_callback(f"Conversion progress: {i}%", "info")
-    #
-    #     return {"valid": True}
-
     def _pipeline_completed(self, result: Any) -> None:
         if isinstance(result, dict) and result.get("valid") is False:
             errors = result.get("errors") or ["Conversion finished with errors."]
@@ -107,15 +146,16 @@ class ConverterRunExperimentWidget(QWidget):
             return
 
         self.state["completion_status"] = "completed"
-        self.overlay.finish_process()
+        self.status_label.setText("Conversion finished successfully.")
+        self.set_progress(100)
 
     def _pipeline_failed(self, error: str) -> None:
         self._mark_pipeline_failed(error)
 
     def _mark_pipeline_failed(self, error: str) -> None:
         self.state["completion_status"] = "incompleted"
-        self.overlay.add_log_message(error, "error")
-        self.overlay.finish_process("Conversion failed. Fix the issue and run again.")
+        self.log_callback(error, "error")
+        self.status_label.setText("Conversion failed. Fix the issue and run again.")
 
     def _pipeline_finished(self) -> None:
         self.pipeline_running = False

@@ -119,7 +119,6 @@ def create_experiment_page(definition: ExperimentDefinition) -> WorkflowShell:
         "experiment_title": definition.info.get("title", definition.id.upper()),
         "defaults": copy.deepcopy(definition.defaults),
         "loader_results": [],
-        "metadata_list": [],
         "input_data": [],
         "completion_status": "incompleted" if bool(definition.info.get("has_run_pipeline", False)) else "completed",
     }

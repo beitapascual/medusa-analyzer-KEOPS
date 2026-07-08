@@ -9,7 +9,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QLabel, QSizePolicy,
     QSpinBox, QVBoxLayout, QWidget)
 from scipy import signal
-from medusa_analyzer.frontend.models import Validation
+from medusa_analyzer.frontend.validation import Validation
 from medusa_analyzer.frontend.widgets.plots import LinePlot, PlotSeries
 
 """Script para crear parte de una interfaz gráfica para configurar filtros, calcular su respuesta en 

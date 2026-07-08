@@ -208,10 +208,67 @@ class EEGReportWidget(ReportWidget):
         # Rellena el hueco de ReportWidget para la sección Features
         return self._section("Features", self._feature_rows())
 
+    def _segmentation_section(self) -> QFrame | None:
+        segmentation = self.state.get("segmentation") or {}
+        if not segmentation:
+            return self._section("Segmentation", [("Status", "Not configured.")])
+
+        normalization = segmentation.get("normalization", {})
+        thresholding = segmentation.get("thresholding", {})
+        resampling = segmentation.get("resampling", {})
+        epoch = segmentation.get("epoch_window_ms", {})
+        baseline = normalization.get("baseline_window_ms", {})
+        normalization_text = "Disabled"
+        selection_mode = segmentation.get("selection_mode", "none")
+        if normalization.get("enabled"):
+            normalization_mode = "Mean + std" if normalization.get("mode") == "mean_std" else "Mean"
+            normalization_text = normalization_mode
+            if selection_mode != "duration":
+                normalization_text = f"{normalization_mode}, baseline {baseline.get('start')} to {baseline.get('end')} ms"
+        threshold_text = "Disabled"
+        if thresholding.get("enabled"):
+            threshold_text = (f"sigma={thresholding.get('sigma'):g}, samples={thresholding.get('samples')}, "
+                f"channels={thresholding.get('channels')}")
+        resampling_text = "Disabled"
+        if resampling.get("enabled"):
+            resampling_text = f"{resampling.get('target_sampling_frequency')} Hz"
+        selected_duration = segmentation.get("selected_duration_events") or []
+        selected_instant = segmentation.get("selected_instant_events") or []
+        if selection_mode == "instant_within_duration":
+            events_text = "; ".join(f"{event}: {', '.join(selected_instant) or 'None'}" for event in selected_duration)
+            events_text = events_text or "None"
+            mode_text = "Instant events inside duration events"
+            epoch_text = f"{epoch.get('start')} to {epoch.get('end')} ms"
+        elif selection_mode == "duration":
+            events_text = ", ".join(selected_duration) or "None"
+            mode_text = "Duration events"
+            epoch_text = f"{segmentation.get('duration_epoch_length_ms')} ms"
+        elif selection_mode == "instant":
+            events_text = ", ".join(selected_instant) or "None"
+            mode_text = "Instant events"
+            epoch_text = f"{epoch.get('start')} to {epoch.get('end')} ms"
+        else:
+            events_text = "None"
+            mode_text = "None"
+            epoch_text = "n/a"
+
+        return self._section("Segmentation", [
+            ("Mode", mode_text),
+            ("Events", events_text),
+            ("Epoch", epoch_text),
+            ("Stride", f"{segmentation.get('stride_percent')}%"),
+            ("Average epochs", "Yes" if segmentation.get("average_epochs") else "No"),
+            ("Normalization", normalization_text),
+            ("Thresholding", threshold_text),
+            ("Resampling", resampling_text),
+        ])
+
     def _additional_section_builders(self) -> list:
         builders = []
         if self.config.get("include_preprocessing_summary", True):
             builders.append(self._preprocessing_section)
+        if self.config.get("include_segmentation_summary", True):
+            builders.append(self._segmentation_section)
         if self.config.get("include_selected_features", True):
             builders.append(self._features_section)
         return builders

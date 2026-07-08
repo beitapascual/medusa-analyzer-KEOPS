@@ -5,7 +5,7 @@ from copy import deepcopy
 
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
-from medusa_analyzer.frontend.models import Validation
+from medusa_analyzer.frontend.validation import Validation
 from medusa_analyzer.frontend.widgets.table import EditableTable, TableColumn
 
 

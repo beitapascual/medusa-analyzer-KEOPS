@@ -25,7 +25,7 @@ class EEGPreprocessingWidget(QScrollArea):
         self.config = defaults.get("preprocessing", {})
         self.state = state
         self.state.setdefault("preprocessing", {})
-        self.fs = None
+        self.sampling_frequency = None
         self.minimum_band_frequency = defaults["preprocessing"]["initial_frequency_values"]["low_cut"]
         self.maximum_band_frequency =  defaults["preprocessing"]["initial_frequency_values"]["high_cut"]
         # A continuación, definimos una variable para guardar el rango efectivo que queda después de aplicar filtros
@@ -195,7 +195,7 @@ class EEGPreprocessingWidget(QScrollArea):
         """Función para sincronizar el estado interno, validar filtros, actualizar plots, recalcular límites de
         bandas y avisar al resto del workflow de que algo ha cambiado."""
 
-        if self.fs is None: # Caso en el que todavía no hay recordings cargados
+        if self.sampling_frequency is None: # Caso en el que todavía no hay recordings cargados
             self._set_preprocessing_enabled(False) # desactivamos todos los controles
             self._filters_are_valid = False
             self.state["preprocessing"]["selected_frequency_bands"] = [] # vaciamos bandas seleccionadas
@@ -205,12 +205,12 @@ class EEGPreprocessingWidget(QScrollArea):
             self.changed.emit()
             return
 
-        # Cuando fs existe, activamos los controles
+        # Cuando existe frecuencia de muestreo, activamos los controles
         self._set_preprocessing_enabled(True)
         self.minimum_band_frequency = float(self.state["broadband"]["low_cut"])
         self.maximum_band_frequency = float(self.state["broadband"]["high_cut"])
         for controls in self.filters.values():
-            controls.set_cut_frequency_bounds(self.minimum_band_frequency, self.fs / 2)
+            controls.set_cut_frequency_bounds(self.minimum_band_frequency, self.sampling_frequency / 2)
             # NOTA: ponemos de límite nyquist, aunque luego se valida con el máximo restringido
 
         # Copiamos el valor del checkbox CAR al estado
@@ -222,7 +222,7 @@ class EEGPreprocessingWidget(QScrollArea):
             filter_id = str(filter_definition["id"])
             # Guardamos la validez de cada uno de los filtros que tenemos definidos
             _, filter_validity[filter_id] = self._update_filter_feedback(self.filters[filter_id],
-                self.filter_plots[filter_id], self.state["preprocessing"]["filters"][filter_id], self.fs,
+                self.filter_plots[filter_id], self.state["preprocessing"]["filters"][filter_id], self.sampling_frequency,
                 str(filter_definition["mode"]))
 
         # Antes de calcular qué filtros limitan qué bandas, limpiamos el valor anterior para evitar arrastrar límites
@@ -288,11 +288,12 @@ class EEGPreprocessingWidget(QScrollArea):
 
     def on_step_activated(self) -> None:
         """WorkflowShell llama a este hook"""
-        self.fs = (self.state.get("metadata") or {}).get("fs")
+        metadata = self.state.get("metadata") or {}
+        self.sampling_frequency = metadata.get("sampling_frequency")
         self._sync()
 
     def can_continue(self) -> bool:
-        return self.fs is not None and self._filters_are_valid and self.bands.is_valid()
+        return self.sampling_frequency is not None and self._filters_are_valid and self.bands.is_valid()
 
 
 __all__ = ["EEGPreprocessingWidget"]

@@ -61,7 +61,7 @@ class ReportWidget(QScrollArea):
     def _section_builders(self) -> list:
         builders = []
         if self.config.get("include_metadata", True):
-            builders.append(lambda: self._metadata_section(self.state.get("metadata_list") or []))
+            builders.append(lambda: self._metadata_section(self.state.get("metadata") or {}))
         builders.extend(self._additional_section_builders())
         return builders
 
@@ -77,23 +77,18 @@ class ReportWidget(QScrollArea):
     def _features_section(self) -> QFrame | None:
         return None
 
-    def _metadata_section(self, metadata_list: list[dict[str, Any]]) -> QFrame:
-        if not metadata_list:
-            return self._section("Metadata", [("Status", "No EDF loaded yet.")])
+    def _metadata_section(self, metadata: dict[str, Any]) -> QFrame:
+        if not metadata:
+            return self._section("Metadata", [("Status", "No data loaded yet.")])
 
-        sampling_rates = {metadata.get("sampling_rate") for metadata in metadata_list
-            if metadata.get("sampling_rate") is not None}
-        sampling_rate = f"{next(iter(sampling_rates)):g} Hz" if len(sampling_rates) == 1 else "Mixed"
-        channels = list(dict.fromkeys(
-            channel for metadata in metadata_list for channel in (metadata.get("channels") or [])
-        ))
-        return self._section("Metadata",
-            [("Files", ", ".join(str(metadata.get("file_name", "")) for metadata in metadata_list)),
-                ("Paths", ", ".join(str(metadata.get("file_path", "")) for metadata in metadata_list)),
-                ("Channels", ", ".join(channels)),
-                ("Sampling rate", sampling_rate),
-                ("Total duration", f"{sum(metadata.get('duration_seconds') or 0 for metadata in metadata_list):g} s"),
-                ("Total samples", str(sum(metadata.get("n_samples") or 0 for metadata in metadata_list)))])
+        rows = []
+        for key, value in metadata.items():
+            if isinstance(value, (list, tuple, set)):
+                value = ", ".join(str(item) for item in value)
+            elif isinstance(value, float):
+                value = f"{value:g}"
+            rows.append((str(key).replace("_", " ").title(), str(value)))
+        return self._section("Metadata", rows)
 
     def _section(self, title: str, rows: list[tuple[str, str]]) -> QFrame:
         panel = QFrame()

@@ -7,7 +7,7 @@ from typing import Any
 from PySide6.QtWidgets import QCheckBox, QLabel, QVBoxLayout, QWidget
 
 from medusa_analyzer.frontend.experiments.eeg.widgets.frequency_bands_table import EEGFrequencyBandsTable
-from medusa_analyzer.frontend.models import Validation
+from medusa_analyzer.frontend.validation import Validation
 from medusa_analyzer.frontend.widgets import FeatureItem, FeaturesWidget
 
 
@@ -166,7 +166,7 @@ class EEGFeaturesWidget(FeaturesWidget):
 
     def _preprocessing_selected_frequency_state(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         # Si preprocessing ya ha calculado las bandas seleccionadas, las usamos.
-        # Si no, caemos a las bandas habilitadas o a una broadband derivada de fs.
+        # Si no, caemos a las bandas habilitadas o a la broadband de metadata.
         # TODO: REVISAR ESTA FUNCIÓN PARA QUE NO CRASHEE SI SKIPPEAMOS EL PREPROCESSING O NO
         # ELEGIMOS NINGUNA BANDA EN PREPROCESSING
         preprocessing_state = self.state.get("preprocessing") or {}
