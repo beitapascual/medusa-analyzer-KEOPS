@@ -163,7 +163,7 @@ class WorkflowShell(QWidget):
             if bool(getattr(current_widget, "pipeline_running", False)):
                 self.next_button.setText("Running...")
             elif self.state.get("completion_status") == "completed":
-                self.next_button.setText("Finish")
+                self.next_button.setText("Back to dashboard")
             else:
                 self.next_button.setText("Run")
         else:

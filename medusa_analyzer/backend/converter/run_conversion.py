@@ -254,6 +254,7 @@ def run_conversion(input_data: List[str], output_path: str, extensions: Tuple[st
 
     progress_callback(100)
     log_callback(rf"Inheritance-based file pruning successfully run","")
-    log_callback(rf"Conversion finished: {len(valid_files)} from a total number of {len(files)} files converted successfully","")
+    log_callback(rf"Conversion completed: {len(valid_files)} of {len(files)} files converted successfully","")
+
 
     return
