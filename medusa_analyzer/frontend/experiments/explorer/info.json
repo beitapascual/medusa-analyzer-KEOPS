@@ -1,7 +1,7 @@
 {
   "id": "explorer",
   "title": "Explorer",
-  "subtitle": "Explore and inspect your MEDUSA data.",
+  "subtitle": "Explore and inspect your MEDUSA files.",
   "description": "Browse the contents of your MEDUSA files, inspect metadata, review recordings, and quickly understand the structure of your dataset.",
   "status": "Ready",
   "accent": "burgundy",
@@ -20,12 +20,7 @@
     {
       "id": "load_data",
       "title": "Load data",
-      "widget": "converter_load_data_widget.ConverterLoadDataWidget"
-    },
-    {
-      "id": "run_experiment",
-      "title": "Run conversion",
-      "widget": "converter_run_experiment_widget.ConverterRunExperimentWidget"
+      "widget": "explorer_explore_file_widget.ExplorerExploreFileWidget"
     }
   ]
 }
