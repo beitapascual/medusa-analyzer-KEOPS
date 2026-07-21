@@ -1,11 +1,12 @@
 from typing import Optional
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
                                QFileDialog, QMessageBox, QSpacerItem, QSizePolicy)
 
 from medusa.core.data.recording import Recording
-from medusa.widgets import RecordingInspector
+from medusa.widgets import RecordingInspectorWindow
 
 
 # Deberás importar tu función real de carga de datos, por ejemplo:
@@ -32,7 +33,7 @@ class ExplorerExploreFileWidget(QWidget):
         vertical_spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.main_layout.addSpacerItem(vertical_spacer)
 
-        self.inspector_widget: Optional[RecordingInspector] = None
+        self.inspector_window: Optional[RecordingInspectorWindow] = None
 
     def _on_load_button_clicked(self) -> None:
         """Abre un diálogo para seleccionar el archivo y lo carga."""
@@ -62,23 +63,30 @@ class ExplorerExploreFileWidget(QWidget):
 
     def load_recording(self, recording: Recording) -> None:
         """Inicializa y emebe el inspector utilizando el objeto Recording."""
-        # Limpiar instancia anterior si se está cargando un archivo nuevo
-        if self.inspector_widget is not None:
-            self.main_layout.removeWidget(self.inspector_widget)
-            self.inspector_widget.deleteLater()
+        if self.inspector_window is not None:
+            self.main_layout.removeWidget(self.inspector_window)
+            self.inspector_window.deleteLater()
 
-        # Instanciar el inspector completo (incluye los menús de guardado y barras)
-        self.inspector_widget = RecordingInspector(recording)
-        self.main_layout.insertWidget(1, self.inspector_widget)
+        self.inspector_window = RecordingInspectorWindow(recording)
+        self.inspector_window.setWindowFlags(Qt.Widget)
+        self.inspector_window.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # Nota: Dependiendo de cómo esté implementado RecordingInspector,
-        # es posible que no exponga directamente las señales dirty, validated y applied.
-        # Si las siguientes líneas dan error de atributo, puedes eliminarlas,
-        # ya que RecordingInspector gestiona su propio guardado internamente.
-        if hasattr(self.inspector_widget, 'dirty'):
-            self.inspector_widget.dirty.connect(self._on_dirty_state_changed)
-            self.inspector_widget.validated.connect(self._on_validation_completed)
-            self.inspector_widget.applied.connect(self._on_changes_applied)
+        # Insertar el widget en el layout
+        self.main_layout.insertWidget(1, self.inspector_window)
+
+        # Asignar un factor de estiramiento alto (1) al índice donde se insertó el inspector
+        # Esto forzará al widget a expandirse y aplastará al espaciador vertical
+        self.main_layout.setStretch(1, 1)
+
+        if hasattr(self.inspector_window, 'widget'):
+            # Ocultar los botones inferiores sin eliminarlos de memoria
+            self.inspector_window.widget._apply_btn.hide()
+            self.inspector_window.widget._revert_btn.hide()
+
+            # Conexión de señales
+            self.inspector_window.widget.dirty.connect(self._on_dirty_state_changed)
+            self.inspector_window.widget.validated.connect(self._on_validation_completed)
+            self.inspector_window.widget.applied.connect(self._on_changes_applied)
 
     # --- Callbacks de señales ---
 
