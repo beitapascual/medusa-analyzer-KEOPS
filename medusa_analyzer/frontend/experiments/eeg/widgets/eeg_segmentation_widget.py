@@ -171,11 +171,11 @@ class EEGSegmentationWidget(QScrollArea):
         self.status_label.setWordWrap(True)
         root.addWidget(self.status_label)
 
-        summary_panel = self._panel("Segmentation summary")
+        self.summary_panel = self._panel("Segmentation summary")
         self.summary_layout = QVBoxLayout()
         self.summary_layout.setContentsMargins(0, 0, 0, 0)
-        summary_panel.layout().addLayout(self.summary_layout)
-        root.addWidget(summary_panel)
+        self.summary_panel.layout().addLayout(self.summary_layout)
+        root.addWidget(self.summary_panel)
 
         # ------------------------------------------------------------------
         # Epoch parameters
@@ -951,15 +951,72 @@ class EEGSegmentationWidget(QScrollArea):
     def _nested_groups(self) -> list[dict[str, Any]]:
         return self.state["segmentation"].setdefault("nested_groups", [])
 
-    def _add_base_events(self) -> None:
+    def _available_base_events(self) -> list[str]:
         duration_events, _ = self._event_names()
         existing_bases = {
             group.get("base_event")
             for group in self._nested_groups()
         }
-        available_events = [
+        return [
             event for event in duration_events if event not in existing_bases
         ]
+
+    def _nested_group_for(self, base_event: str) -> dict[str, Any] | None:
+        return next(
+            (
+                nested_group
+                for nested_group in self._nested_groups()
+                if nested_group.get("base_event") == base_event
+            ),
+            None,
+        )
+
+    def _available_nested_events(
+        self,
+        group: dict[str, Any],
+        kind: str,
+    ) -> list[str]:
+        duration_events, instant_events = self._event_names()
+        base_event = str(group.get("base_event", ""))
+        state_key = (
+            "nested_duration_events"
+            if kind == "duration"
+            else "nested_instant_events"
+        )
+        already_selected = set(group.get(state_key) or [])
+
+        if kind == "duration":
+            return [
+                event
+                for event in duration_events
+                if event != base_event and event not in already_selected
+            ]
+
+        return [
+            event
+            for event in instant_events
+            if event not in already_selected
+        ]
+
+    @staticmethod
+    def _set_add_button_state(
+        button: QPushButton,
+        available_events: list[str],
+        available_tooltip: str,
+        unavailable_tooltip: str,
+    ) -> None:
+        has_available_events = bool(available_events)
+        button.setEnabled(has_available_events)
+        button.setToolTip(
+            available_tooltip
+            if has_available_events
+            else unavailable_tooltip
+        )
+
+    def _add_base_events(self) -> None:
+        available_events = self._available_base_events()
+        if not available_events:
+            return
 
         selected_events = self._select_multiple_events(
             title="Add base duration events",
@@ -982,15 +1039,7 @@ class EEGSegmentationWidget(QScrollArea):
         self._sync()
 
     def _add_nested_events(self, base_event: str, kind: str) -> None:
-        duration_events, instant_events = self._event_names()
-        group = next(
-            (
-                nested_group
-                for nested_group in self._nested_groups()
-                if nested_group.get("base_event") == base_event
-            ),
-            None,
-        )
+        group = self._nested_group_for(base_event)
         if group is None:
             return
 
@@ -999,22 +1048,14 @@ class EEGSegmentationWidget(QScrollArea):
             if kind == "duration"
             else "nested_instant_events"
         )
-        already_selected = set(group.get(state_key) or [])
+        available_events = self._available_nested_events(group, kind)
+        if not available_events:
+            return
 
         if kind == "duration":
-            available_events = [
-                event
-                for event in duration_events
-                if event != base_event and event not in already_selected
-            ]
             description = f"Select duration events contained within {base_event}."
             title = "Add nested duration events"
         else:
-            available_events = [
-                event
-                for event in instant_events
-                if event not in already_selected
-            ]
             description = f"Select instant events contained within {base_event}."
             title = "Add nested instant events"
 
@@ -1104,6 +1145,13 @@ class EEGSegmentationWidget(QScrollArea):
 
     def _refresh_nested_groups_editor(self) -> None:
         self._clear_layout(self.nested_groups_layout)
+        available_base_events = self._available_base_events()
+        self._set_add_button_state(
+            self.add_base_event_button,
+            available_base_events,
+            "Add duration events as base events.",
+            "All available duration events are already configured as base events.",
+        )
         nested_groups = self._nested_groups()
 
         if not nested_groups:
@@ -1115,7 +1163,7 @@ class EEGSegmentationWidget(QScrollArea):
         for group in nested_groups:
             base_event = str(group.get("base_event", ""))
             card = QFrame()
-            card.setProperty("role", "surface-panel")
+            card.setProperty("role", "nested-base-event")
             card_layout = QVBoxLayout(card)
             card_layout.setContentsMargins(16, 14, 16, 14)
             card_layout.setSpacing(10)
@@ -1134,7 +1182,11 @@ class EEGSegmentationWidget(QScrollArea):
             header.addWidget(remove_base_button)
             card_layout.addLayout(header)
 
-            children_row = QHBoxLayout()
+            children_container = QFrame()
+            children_container.setProperty("role", "nested-contained-events")
+            children_row = QHBoxLayout(children_container)
+            children_row.setContentsMargins(10, 8, 10, 8)
+            children_row.setSpacing(6)
             nested_duration = list(group.get("nested_duration_events") or [])
             nested_instant = list(group.get("nested_instant_events") or [])
 
@@ -1149,6 +1201,7 @@ class EEGSegmentationWidget(QScrollArea):
                             event,
                             "duration",
                         ),
+                        compact=True,
                     )
                 )
 
@@ -1163,6 +1216,7 @@ class EEGSegmentationWidget(QScrollArea):
                             event,
                             "instant",
                         ),
+                        compact=True,
                     )
                 )
 
@@ -1172,7 +1226,7 @@ class EEGSegmentationWidget(QScrollArea):
                 children_row.addWidget(empty)
 
             children_row.addStretch()
-            card_layout.addLayout(children_row)
+            card_layout.addWidget(children_container)
 
             actions = QHBoxLayout()
             add_duration_button = QPushButton("+ Add duration event")
@@ -1180,6 +1234,20 @@ class EEGSegmentationWidget(QScrollArea):
             add_duration_button.setProperty("variant", "secondary")
             add_instant_button.setProperty("variant", "secondary")
             add_instant_button.setProperty("role", "segmentation-instant-action")
+            available_nested_duration = self._available_nested_events(group, "duration")
+            available_nested_instant = self._available_nested_events(group, "instant")
+            self._set_add_button_state(
+                add_duration_button,
+                available_nested_duration,
+                f"Add duration events contained within {base_event}.",
+                "No additional duration events are available for this base event.",
+            )
+            self._set_add_button_state(
+                add_instant_button,
+                available_nested_instant,
+                f"Add instant events contained within {base_event}.",
+                "No additional instant events are available for this base event.",
+            )
 
             add_duration_button.clicked.connect(
                 lambda _=False, base=base_event: self._add_nested_events(base, "duration")
@@ -1342,8 +1410,11 @@ class EEGSegmentationWidget(QScrollArea):
         removable: bool = False,
         on_remove: Any | None = None,
         base: bool = False,
+        compact: bool = False,
     ) -> QFrame:
         chip = QFrame()
+        if compact:
+            chip.setProperty("compact", "true")
         chip.setSizePolicy(
             QSizePolicy.Policy.Maximum,
             QSizePolicy.Policy.Preferred,
@@ -1357,8 +1428,12 @@ class EEGSegmentationWidget(QScrollArea):
             chip.setObjectName("summaryInstantChip")
 
         layout = QHBoxLayout(chip)
-        layout.setContentsMargins(10, 6, 8 if removable else 10, 6)
-        layout.setSpacing(5)
+        if compact:
+            layout.setContentsMargins(8, 3, 5 if removable else 8, 3)
+            layout.setSpacing(3)
+        else:
+            layout.setContentsMargins(10, 6, 8 if removable else 10, 6)
+            layout.setSpacing(5)
 
         label = QLabel(text)
         label.setWordWrap(True)
@@ -1366,7 +1441,7 @@ class EEGSegmentationWidget(QScrollArea):
 
         if removable and on_remove is not None:
             remove_button = QPushButton("x")
-            remove_button.setFixedWidth(22)
+            remove_button.setFixedWidth(18 if compact else 22)
             remove_button.setToolTip(f"Remove {text}")
             remove_button.clicked.connect(on_remove)
             layout.addWidget(remove_button)
@@ -1379,45 +1454,10 @@ class EEGSegmentationWidget(QScrollArea):
         duration_events: list[str],
         instant_events: list[str],
     ) -> None:
+        self.summary_panel.setVisible(mode != "nested")
         self._clear_layout(self.summary_layout)
 
         if mode == "nested":
-            nested_groups = self._nested_groups()
-            if not nested_groups:
-                empty = QLabel("No nested groups configured.")
-                empty.setObjectName("muted")
-                self.summary_layout.addWidget(empty)
-                return
-
-            for group in nested_groups:
-                base_event = str(group.get("base_event", ""))
-                card = QFrame()
-                card.setProperty("role", "surface-panel")
-                card_layout = QVBoxLayout(card)
-                card_layout.setContentsMargins(14, 12, 14, 12)
-
-                card_layout.addWidget(
-                    self._summary_chip(base_event, "duration", base=True)
-                )
-
-                children = QHBoxLayout()
-                nested_duration = list(group.get("nested_duration_events") or [])
-                nested_instant = list(group.get("nested_instant_events") or [])
-
-                for event_name in nested_duration:
-                    children.addWidget(self._summary_chip(event_name, "duration"))
-
-                for event_name in nested_instant:
-                    children.addWidget(self._summary_chip(event_name, "instant"))
-
-                if not nested_duration and not nested_instant:
-                    empty = QLabel("No nested events selected.")
-                    empty.setObjectName("muted")
-                    children.addWidget(empty)
-
-                children.addStretch()
-                card_layout.addLayout(children)
-                self.summary_layout.addWidget(card)
             return
 
         if not (duration_events or instant_events):

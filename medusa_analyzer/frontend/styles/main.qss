@@ -482,6 +482,22 @@ QLabel#segmentationTargetLabel {
     font-weight: 650;
 }
 
+QFrame[role="nested-base-event"] {
+    background: rgba(227, 90, 130, 24);
+    border: 1px solid rgba(227, 90, 130, 88);
+    border-radius: 11px;
+}
+
+QFrame[role="nested-base-event"] QLabel {
+    background: transparent;
+}
+
+QFrame[role="nested-contained-events"] {
+    background: rgba(18, 13, 16, 86);
+    border: 1px solid rgba(227, 90, 130, 54);
+    border-radius: 8px;
+}
+
 QLineEdit,
 QDoubleSpinBox,
 QSpinBox,
@@ -659,6 +675,19 @@ QFrame#summaryDurationChip QPushButton {
     font-weight: 650;
 }
 
+QFrame#summaryDurationChip[compact="true"] {
+    background: rgba(227, 90, 130, 20);
+    border: 1px solid rgba(227, 90, 130, 70);
+    border-radius: 7px;
+}
+
+QFrame#summaryDurationChip[compact="true"] QLabel,
+QFrame#summaryDurationChip[compact="true"] QPushButton {
+    color: #FFD6E1;
+    font-size: 12px;
+    font-weight: 600;
+}
+
 QFrame#summaryBaseDurationChip {
     background: rgba(227, 90, 130, 42);
     border: 1px solid rgba(227, 90, 130, 118);
@@ -684,6 +713,19 @@ QFrame#summaryInstantChip QPushButton {
     background: transparent;
     border: none;
     color: #9BE7E8;
+    font-weight: 600;
+}
+
+QFrame#summaryInstantChip[compact="true"] {
+    background: rgba(14, 124, 134, 18);
+    border: 1px solid rgba(94, 205, 214, 66);
+    border-radius: 7px;
+}
+
+QFrame#summaryInstantChip[compact="true"] QLabel,
+QFrame#summaryInstantChip[compact="true"] QPushButton {
+    color: #9BE7E8;
+    font-size: 12px;
     font-weight: 600;
 }
 
