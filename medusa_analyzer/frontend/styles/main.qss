@@ -448,6 +448,23 @@ QPushButton[role="segmentation-target-button"]:disabled {
     border-color: #332A2E;
 }
 
+QPushButton[role="segmentation-duration-action"] {
+    color: #FFB0C4;
+    background: #321B24;
+    border: 1px solid #734052;
+    border-radius: 8px;
+}
+
+QPushButton[role="segmentation-duration-action"]:hover {
+    color: #FFD6E1;
+    background: #432330;
+    border-color: #A94D68;
+}
+
+QPushButton[role="segmentation-duration-action"]:pressed {
+    background: #2A1720;
+}
+
 QPushButton[role="segmentation-instant-action"] {
     color: #9BE7E8;
     background: #173A3F;
@@ -465,10 +482,11 @@ QPushButton[role="segmentation-instant-action"]:pressed {
     background: #12373C;
 }
 
+QPushButton[role="segmentation-duration-action"]:disabled,
 QPushButton[role="segmentation-instant-action"]:disabled {
-    color: #6E9498;
-    background: #233235;
-    border-color: #33474A;
+    color: #756B70;
+    background: #2A2528;
+    border-color: #332A2E;
 }
 
 QFrame[role="segmentation-target-panel"] {
@@ -482,9 +500,15 @@ QLabel#segmentationTargetLabel {
     font-weight: 650;
 }
 
+QWidget[role="nested-group-editor"],
+QFrame[role="nested-group-editor"] {
+    background: transparent;
+    border: none;
+}
+
 QFrame[role="nested-base-event"] {
-    background: rgba(227, 90, 130, 24);
-    border: 1px solid rgba(227, 90, 130, 88);
+    background: rgba(227, 90, 130, 38);
+    border: 1px solid rgba(227, 90, 130, 124);
     border-radius: 11px;
 }
 
@@ -492,10 +516,14 @@ QFrame[role="nested-base-event"] QLabel {
     background: transparent;
 }
 
+QLabel#nestedBaseEventTitle {
+    color: #FFD6E1;
+    font-weight: 700;
+}
+
 QFrame[role="nested-contained-events"] {
-    background: rgba(18, 13, 16, 86);
-    border: 1px solid rgba(227, 90, 130, 54);
-    border-radius: 8px;
+    background: transparent;
+    border: none;
 }
 
 QLineEdit,

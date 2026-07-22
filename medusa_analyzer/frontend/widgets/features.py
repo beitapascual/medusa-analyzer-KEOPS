@@ -73,6 +73,7 @@ class FeaturesWidget(QScrollArea):
             self.category_tabs.addTab(panel, tab_title) # el titulo de la pestana sale del JSON
 
         root.addWidget(categories_container)
+        root.addStretch() # consume la altura sobrante para mantener las tabs ancladas arriba
 
         self.setWidget(content)
         self._sync()

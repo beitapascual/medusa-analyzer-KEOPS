@@ -1,30 +1,10 @@
 from __future__ import annotations
-
 from copy import deepcopy
 from typing import Any
-
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QButtonGroup,
-    QCheckBox,
-    QComboBox,
-    QDialog,
-    QDialogButtonBox,
-    QDoubleSpinBox,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+    QDoubleSpinBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QPushButton, QScrollArea, QSizePolicy,
+    QSpinBox, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.validation import Validation
 
 
@@ -33,10 +13,7 @@ class EEGSegmentationWidget(QScrollArea):
 
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__()
-        step_config = next(
-            (step for step in experiment_info.get("workflow", []) if step.get("id") == "segmentation"),
-            {},
-        )
+        step_config = next((step for step in experiment_info.get("workflow", []) if step.get("id") == "segmentation"), {})
         self.config = defaults.get("segmentation", {})
         self.state = state
         self.validation = Validation()
@@ -49,10 +26,7 @@ class EEGSegmentationWidget(QScrollArea):
         self._normalization_target = "instant"
         self._last_event_signature: tuple[tuple[str, ...], tuple[str, ...]] | None = None
 
-        self.state["segmentation"] = {
-            **deepcopy(self.config),
-            **(self.state.get("segmentation") or {}),
-        }
+        self.state["segmentation"] = {**deepcopy(self.config), **(self.state.get("segmentation") or {})}
         self._ensure_parameter_state()
 
         self.setWidgetResizable(True)
@@ -142,19 +116,14 @@ class EEGSegmentationWidget(QScrollArea):
         nested_layout.setContentsMargins(0, 8, 0, 0)
         nested_layout.setSpacing(12)
 
-        nested_note = QLabel(
-            "Add a duration event as the base and then assign duration or instant events contained within it."
-        )
+        nested_note = QLabel("Add a duration event as the base and then assign duration or instant events contained within it.")
         nested_note.setObjectName("muted")
         nested_note.setWordWrap(True)
         nested_layout.addWidget(nested_note)
 
         self.add_base_event_button = QPushButton("+ Add base duration event")
         self.add_base_event_button.setProperty("variant", "secondary")
-        self.add_base_event_button.setSizePolicy(
-            QSizePolicy.Policy.Maximum,
-            QSizePolicy.Policy.Fixed,
-        )
+        self.add_base_event_button.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         nested_layout.addWidget(self.add_base_event_button)
 
         self.nested_groups_layout = QVBoxLayout()
@@ -181,11 +150,7 @@ class EEGSegmentationWidget(QScrollArea):
         # Epoch parameters
         # ------------------------------------------------------------------
         epoch_panel = self._panel("Epoch parameters")
-        (
-            self.epoch_target_panel,
-            self.epoch_duration_target_button,
-            self.epoch_instant_target_button,
-        ) = self._target_selector("Edit epoch parameters for")
+        (self.epoch_target_panel, self.epoch_duration_target_button, self.epoch_instant_target_button) = self._target_selector("Edit epoch parameters for")
         epoch_panel.layout().addWidget(self.epoch_target_panel)
         epoch_grid = QGridLayout()
         epoch_panel.layout().addLayout(epoch_grid)
@@ -198,17 +163,8 @@ class EEGSegmentationWidget(QScrollArea):
 
         self.epoch_start = self._spin(-60000, 60000, int(epoch_config.get("start", -300)))
         self.epoch_end = self._spin(-60000, 60000, int(epoch_config.get("end", 700)))
-        self.duration_epoch_length = self._spin(
-            1,
-            60000,
-            int(self.config.get("duration_epoch_length_ms", 1000)),
-        )
-        self.stride = self._spin(
-            0,
-            100,
-            int(self.config.get("stride_percent", 0)),
-            suffix=" %",
-        )
+        self.duration_epoch_length = self._spin(1, 60000, int(self.config.get("duration_epoch_length_ms", 1000)))
+        self.stride = self._spin(0, 100, int(self.config.get("stride_percent", 0)), suffix=" %")
         self.average_epochs = QCheckBox("Average epochs before feature extraction")
 
         epoch_grid.addWidget(self.epoch_start_label, 0, 0)
@@ -226,11 +182,8 @@ class EEGSegmentationWidget(QScrollArea):
         # Normalization
         # ------------------------------------------------------------------
         normalization_panel = self._panel("Normalization")
-        (
-            self.normalization_target_panel,
-            self.normalization_duration_target_button,
-            self.normalization_instant_target_button,
-        ) = self._target_selector("Edit normalization for")
+        (self.normalization_target_panel, self.normalization_duration_target_button,
+            self.normalization_instant_target_button) = self._target_selector("Edit normalization for")
         normalization_panel.layout().addWidget(self.normalization_target_panel)
         normalization_grid = QGridLayout()
         normalization_panel.layout().addLayout(normalization_grid)
@@ -245,16 +198,8 @@ class EEGSegmentationWidget(QScrollArea):
 
         self.baseline_start_label = QLabel("Baseline start")
         self.baseline_end_label = QLabel("Baseline end")
-        self.baseline_start = self._spin(
-            -60000,
-            60000,
-            int(baseline_config.get("start", -100)),
-        )
-        self.baseline_end = self._spin(
-            -60000,
-            60000,
-            int(baseline_config.get("end", 0)),
-        )
+        self.baseline_start = self._spin(-60000, 60000, int(baseline_config.get("start", -100)))
+        self.baseline_end = self._spin(-60000, 60000, int(baseline_config.get("end", 0)))
 
         normalization_grid.addWidget(self.normalization_enabled, 0, 0, 1, 2)
         normalization_grid.addWidget(QLabel("Mode"), 1, 0)
@@ -273,9 +218,7 @@ class EEGSegmentationWidget(QScrollArea):
         threshold_panel.layout().addLayout(threshold_grid)
 
         self.threshold_enabled = QCheckBox("Discard epochs exceeding threshold")
-        threshold_note = QLabel(
-            "Reject epochs when enough samples/channels exceed the sigma threshold."
-        )
+        threshold_note = QLabel("Reject epochs when enough samples/channels exceed the sigma threshold.")
         threshold_note.setObjectName("muted")
         threshold_note.setWordWrap(True)
 
@@ -284,16 +227,8 @@ class EEGSegmentationWidget(QScrollArea):
         self.threshold_sigma.setDecimals(2)
         self.threshold_sigma.setSingleStep(0.1)
 
-        self.threshold_samples = self._spin(
-            1,
-            100000,
-            int(self.config["thresholding"]["samples"]),
-        )
-        self.threshold_channels = self._spin(
-            1,
-            100000,
-            int(self.config["thresholding"]["channels"]),
-        )
+        self.threshold_samples = self._spin(1, 100000, int(self.config["thresholding"]["samples"]))
+        self.threshold_channels = self._spin(1, 100000, int(self.config["thresholding"]["channels"]))
 
         threshold_grid.addWidget(self.threshold_enabled, 0, 0, 1, 2)
         threshold_grid.addWidget(threshold_note, 1, 0, 1, 2)
@@ -313,73 +248,36 @@ class EEGSegmentationWidget(QScrollArea):
         resampling_panel.layout().addLayout(resampling_grid)
 
         self.resampling_enabled = QCheckBox("Resample epochs")
-        self.target_sampling_frequency = self._spin(
-            250,
-            100000,
-            int(self.config["resampling"]["target_sampling_frequency"]),
-            suffix=" Hz",
-        )
-
+        self.target_sampling_frequency = self._spin(250, 100000,
+            int(self.config["resampling"]["target_sampling_frequency"]), suffix=" Hz")
         nyquist_label = QLabel("Minimum 250 Hz (Nyquist).")
         nyquist_label.setObjectName("muted")
-
         resampling_grid.addWidget(self.resampling_enabled, 0, 0, 1, 2)
         resampling_grid.addWidget(QLabel("Target sample frequency"), 1, 0)
         resampling_grid.addWidget(self.target_sampling_frequency, 1, 1)
         resampling_grid.addWidget(nyquist_label, 2, 0, 1, 2)
         root.addWidget(resampling_panel)
-
         root.addStretch()
         self.setWidget(content)
 
         self._load_state()
 
-        for widget in [
-            self.epoch_start,
-            self.epoch_end,
-            self.duration_epoch_length,
-            self.stride,
-            self.average_epochs,
-            self.normalization_enabled,
-            self.normalization_mode,
-            self.baseline_start,
-            self.baseline_end,
-            self.threshold_enabled,
-            self.threshold_sigma,
-            self.threshold_samples,
-            self.threshold_channels,
-            self.resampling_enabled,
-            self.target_sampling_frequency,
-        ]:
-            signal = (
-                widget.currentIndexChanged
-                if isinstance(widget, QComboBox)
-                else widget.toggled
-                if isinstance(widget, QCheckBox)
-                else widget.valueChanged
-            )
+        for widget in [self.epoch_start, self.epoch_end, self.duration_epoch_length, self.stride, self.average_epochs,
+            self.normalization_enabled, self.normalization_mode, self.baseline_start, self.baseline_end,
+            self.threshold_enabled, self.threshold_sigma, self.threshold_samples, self.threshold_channels,
+            self.resampling_enabled, self.target_sampling_frequency]:
+            signal = (widget.currentIndexChanged if isinstance(widget, QComboBox) else widget.toggled
+                if isinstance(widget, QCheckBox) else widget.valueChanged)
             signal.connect(self._sync)
 
         self.independent_mode_button.toggled.connect(self._segmentation_mode_changed)
         self.nested_mode_button.toggled.connect(self._segmentation_mode_changed)
-        self.epoch_duration_target_button.toggled.connect(
-            lambda checked: self._epoch_target_changed("duration") if checked else None
-        )
-        self.epoch_instant_target_button.toggled.connect(
-            lambda checked: self._epoch_target_changed("instant") if checked else None
-        )
-        self.normalization_duration_target_button.toggled.connect(
-            lambda checked: self._normalization_target_changed("duration") if checked else None
-        )
-        self.normalization_instant_target_button.toggled.connect(
-            lambda checked: self._normalization_target_changed("instant") if checked else None
-        )
-        self.duration_events_list.itemSelectionChanged.connect(
-            lambda group="duration": self._independent_event_changed(group)
-        )
-        self.instant_events_list.itemSelectionChanged.connect(
-            lambda group="instant": self._independent_event_changed(group)
-        )
+        self.epoch_duration_target_button.toggled.connect(lambda checked: self._epoch_target_changed("duration") if checked else None)
+        self.epoch_instant_target_button.toggled.connect(lambda checked: self._epoch_target_changed("instant") if checked else None)
+        self.normalization_duration_target_button.toggled.connect(lambda checked: self._normalization_target_changed("duration") if checked else None)
+        self.normalization_instant_target_button.toggled.connect(lambda checked: self._normalization_target_changed("instant") if checked else None)
+        self.duration_events_list.itemSelectionChanged.connect(lambda group="duration": self._independent_event_changed(group))
+        self.instant_events_list.itemSelectionChanged.connect(lambda group="instant": self._independent_event_changed(group))
         self.add_base_event_button.clicked.connect(self._add_base_events)
 
         self.on_step_activated()
@@ -395,12 +293,7 @@ class EEGSegmentationWidget(QScrollArea):
         return panel
 
     @staticmethod
-    def _spin(
-        minimum: int,
-        maximum: int,
-        value: int,
-        suffix: str = " ms",
-    ) -> QSpinBox:
+    def _spin(minimum: int, maximum: int, value: int, suffix: str = " ms") -> QSpinBox:
         spin = QSpinBox()
         spin.setRange(minimum, maximum)
         spin.setValue(value)
@@ -446,40 +339,28 @@ class EEGSegmentationWidget(QScrollArea):
 
     def _default_epoch_window(self) -> dict[str, int]:
         epoch = self.config.get("epoch_window_ms", {})
-        return {
-            "start": int(epoch.get("start", -300)),
-            "end": int(epoch.get("end", 700)),
-        }
+        return {"start": int(epoch.get("start", -300)), "end": int(epoch.get("end", 700))}
 
     def _normalized_epoch_window(self, value: Any | None = None) -> dict[str, int]:
         default = self._default_epoch_window()
         if isinstance(value, dict):
-            default.update({
-                "start": int(value.get("start", default["start"])),
-                "end": int(value.get("end", default["end"])),
-            })
+            default.update({"start": int(value.get("start", default["start"])),
+                "end": int(value.get("end", default["end"]))})
         return default
 
     def _normalized_baseline_window(self, value: Any | None = None) -> dict[str, int]:
         default = self._default_normalization()["baseline_window_ms"]
         if isinstance(value, dict):
-            default.update({
-                "start": int(value.get("start", default["start"])),
-                "end": int(value.get("end", default["end"])),
-            })
+            default.update({"start": int(value.get("start", default["start"])),
+                "end": int(value.get("end", default["end"]))})
         return default
 
     def _default_normalization(self) -> dict[str, Any]:
         normalization = self.config.get("normalization", {})
         baseline = normalization.get("baseline_window_ms", {})
-        return {
-            "enabled": bool(normalization.get("enabled", False)),
+        return {"enabled": bool(normalization.get("enabled", False)),
             "mode": str(normalization.get("mode", "mean_std")),
-            "baseline_window_ms": {
-                "start": int(baseline.get("start", -100)),
-                "end": int(baseline.get("end", 0)),
-            },
-        }
+            "baseline_window_ms": {"start": int(baseline.get("start", -100)), "end": int(baseline.get("end", 0))}}
 
     def _normalized_normalization(self, value: Any | None = None) -> dict[str, Any]:
         default = self._default_normalization()
@@ -496,9 +377,7 @@ class EEGSegmentationWidget(QScrollArea):
         base_normalization = self._normalized_normalization(segmentation.get("normalization"))
         base_stride = int(segmentation.get("stride_percent", self.config.get("stride_percent", 0)))
         base_average = bool(segmentation.get("average_epochs", self.config.get("average_epochs", False)))
-        base_duration_length = int(
-            segmentation.get("duration_epoch_length_ms", self.config.get("duration_epoch_length_ms", 1000))
-        )
+        base_duration_length = int(segmentation.get("duration_epoch_length_ms", self.config.get("duration_epoch_length_ms", 1000)))
 
         nested_epoch = segmentation.setdefault("nested_epoch", {})
         duration_epoch = nested_epoch.setdefault("duration", {})
@@ -507,9 +386,7 @@ class EEGSegmentationWidget(QScrollArea):
         duration_epoch.setdefault("average_epochs", base_average)
 
         instant_epoch = nested_epoch.setdefault("instant", {})
-        instant_epoch["epoch_window_ms"] = self._normalized_epoch_window(
-            instant_epoch.get("epoch_window_ms", base_epoch_window)
-        )
+        instant_epoch["epoch_window_ms"] = self._normalized_epoch_window(instant_epoch.get("epoch_window_ms", base_epoch_window))
         instant_epoch.setdefault("stride_percent", base_stride)
         instant_epoch.setdefault("average_epochs", base_average)
 
@@ -520,19 +397,12 @@ class EEGSegmentationWidget(QScrollArea):
 
         instant_normalization = nested_normalization.setdefault("instant", {})
         instant_normalization["baseline_window_ms"] = self._normalized_baseline_window(
-            instant_normalization.get("baseline_window_ms", base_normalization["baseline_window_ms"])
-        )
+            instant_normalization.get("baseline_window_ms", base_normalization["baseline_window_ms"]))
         instant_normalization.setdefault("enabled", base_normalization["enabled"])
         instant_normalization.setdefault("mode", base_normalization["mode"])
 
-        segmentation["active_epoch_target"] = self._target_or_default(
-            segmentation.get("active_epoch_target"),
-            "instant",
-        )
-        segmentation["active_normalization_target"] = self._target_or_default(
-            segmentation.get("active_normalization_target"),
-            "instant",
-        )
+        segmentation["active_epoch_target"] = self._target_or_default(segmentation.get("active_epoch_target"),"instant")
+        segmentation["active_normalization_target"] = self._target_or_default(segmentation.get("active_normalization_target"),"instant")
 
     def _epoch_state(self, target: str) -> dict[str, Any]:
         self._ensure_parameter_state()
@@ -547,14 +417,8 @@ class EEGSegmentationWidget(QScrollArea):
         self._set_button_checked(self.epoch_instant_target_button, self._epoch_target == "instant")
 
     def _set_normalization_target_buttons(self) -> None:
-        self._set_button_checked(
-            self.normalization_duration_target_button,
-            self._normalization_target == "duration",
-        )
-        self._set_button_checked(
-            self.normalization_instant_target_button,
-            self._normalization_target == "instant",
-        )
+        self._set_button_checked(self.normalization_duration_target_button, self._normalization_target == "duration")
+        self._set_button_checked(self.normalization_instant_target_button, self._normalization_target == "instant")
 
     def _set_epoch_controls_from_state(self, target: str) -> None:
         state = self._epoch_state(target)
@@ -563,16 +427,14 @@ class EEGSegmentationWidget(QScrollArea):
         try:
             if target == "duration":
                 self.duration_epoch_length.setValue(
-                    int(state.get("duration_epoch_length_ms", self.config.get("duration_epoch_length_ms", 1000)))
-                )
+                    int(state.get("duration_epoch_length_ms", self.config.get("duration_epoch_length_ms", 1000))))
             else:
                 epoch = self._normalized_epoch_window(state.get("epoch_window_ms"))
                 self.epoch_start.setValue(epoch["start"])
                 self.epoch_end.setValue(epoch["end"])
             self.stride.setValue(int(state.get("stride_percent", self.config.get("stride_percent", 0))))
             self.average_epochs.setChecked(
-                bool(state.get("average_epochs", self.config.get("average_epochs", False)))
-            )
+                bool(state.get("average_epochs", self.config.get("average_epochs", False))))
         finally:
             self._syncing_parameter_controls = previous
 
@@ -583,10 +445,7 @@ class EEGSegmentationWidget(QScrollArea):
         if target == "duration":
             state["duration_epoch_length_ms"] = self.duration_epoch_length.value()
         else:
-            state["epoch_window_ms"] = {
-                "start": self.epoch_start.value(),
-                "end": self.epoch_end.value(),
-            }
+            state["epoch_window_ms"] = {"start": self.epoch_start.value(), "end": self.epoch_end.value()}
         state["stride_percent"] = self.stride.value()
         state["average_epochs"] = self.average_epochs.isChecked()
 
@@ -595,12 +454,8 @@ class EEGSegmentationWidget(QScrollArea):
         previous = self._syncing_parameter_controls
         self._syncing_parameter_controls = True
         try:
-            self.normalization_enabled.setChecked(
-                bool(state.get("enabled", self.config["normalization"]["enabled"]))
-            )
-            index = self.normalization_mode.findData(
-                state.get("mode", self.config["normalization"]["mode"])
-            )
+            self.normalization_enabled.setChecked(bool(state.get("enabled", self.config["normalization"]["enabled"])))
+            index = self.normalization_mode.findData(state.get("mode", self.config["normalization"]["mode"]))
             self.normalization_mode.setCurrentIndex(max(0, index))
             if target == "instant":
                 baseline = self._normalized_baseline_window(state.get("baseline_window_ms"))
@@ -616,17 +471,9 @@ class EEGSegmentationWidget(QScrollArea):
         state["enabled"] = self.normalization_enabled.isChecked()
         state["mode"] = self.normalization_mode.currentData()
         if target == "instant":
-            state["baseline_window_ms"] = {
-                "start": self.baseline_start.value(),
-                "end": self.baseline_end.value(),
-            }
+            state["baseline_window_ms"] = {"start": self.baseline_start.value(), "end": self.baseline_end.value()}
 
-    def _selection_mode_for_state(
-        self,
-        mode: str,
-        selected_duration_events: list[str],
-        selected_instant_events: list[str],
-    ) -> str:
+    def _selection_mode_for_state(self, mode: str, selected_duration_events: list[str], selected_instant_events: list[str]) -> str:
         if mode == "nested":
             return "nested"
         if selected_duration_events:
@@ -637,6 +484,11 @@ class EEGSegmentationWidget(QScrollArea):
 
     def _target_for_mode(self, mode: str, selection_mode: str, current_target: str) -> str:
         if mode == "nested":
+            has_duration, has_instant = self._nested_event_types()
+            if has_duration and not has_instant:
+                return "duration"
+            if has_instant and not has_duration:
+                return "instant"
             return self._target_or_default(current_target)
         if selection_mode == "duration":
             return "duration"
@@ -682,62 +534,20 @@ class EEGSegmentationWidget(QScrollArea):
         resampling = segmentation.get("resampling", {})
         baseline = normalization.get("baseline_window_ms", {})
 
-        self.epoch_start.setValue(
-            int(epoch.get("start", self.config.get("epoch_window_ms", {}).get("start", -300)))
-        )
-        self.epoch_end.setValue(
-            int(epoch.get("end", self.config.get("epoch_window_ms", {}).get("end", 700)))
-        )
-        self.duration_epoch_length.setValue(
-            int(
-                segmentation.get(
-                    "duration_epoch_length_ms",
-                    self.config.get("duration_epoch_length_ms", 1000),
-                )
-            )
-        )
-        self.stride.setValue(
-            int(segmentation.get("stride_percent", self.config.get("stride_percent", 0)))
-        )
-        self.average_epochs.setChecked(
-            bool(segmentation.get("average_epochs", self.config.get("average_epochs", False)))
-        )
-        self.normalization_enabled.setChecked(
-            bool(normalization.get("enabled", self.config["normalization"]["enabled"]))
-        )
-        self.normalization_mode.setCurrentIndex(
-            max(
-                0,
-                self.normalization_mode.findData(
-                    normalization.get("mode", self.config["normalization"]["mode"])
-                ),
-            )
-        )
-        self.baseline_start.setValue(
-            int(
-                baseline.get(
-                    "start",
-                    self.config["normalization"]["baseline_window_ms"]["start"],
-                )
-            )
-        )
-        self.baseline_end.setValue(
-            int(
-                baseline.get(
-                    "end",
-                    self.config["normalization"]["baseline_window_ms"]["end"],
-                )
-            )
-        )
-        self.threshold_enabled.setChecked(
-            bool(thresholding.get("enabled", self.config["thresholding"]["enabled"]))
-        )
-        self.threshold_sigma.setValue(
-            float(thresholding.get("sigma", self.config["thresholding"]["sigma"]))
-        )
-        self.threshold_samples.setValue(
-            int(thresholding.get("samples", self.config["thresholding"]["samples"]))
-        )
+        self.epoch_start.setValue(int(epoch.get("start", self.config.get("epoch_window_ms", {}).get("start", -300))))
+        self.epoch_end.setValue(int(epoch.get("end", self.config.get("epoch_window_ms", {}).get("end", 700))))
+        self.duration_epoch_length.setValue(int(segmentation.get("duration_epoch_length_ms",
+                    self.config.get("duration_epoch_length_ms", 1000))))
+        self.stride.setValue(int(segmentation.get("stride_percent", self.config.get("stride_percent", 0))))
+        self.average_epochs.setChecked(bool(segmentation.get("average_epochs", self.config.get("average_epochs", False))))
+        self.normalization_enabled.setChecked(bool(normalization.get("enabled", self.config["normalization"]["enabled"])))
+        self.normalization_mode.setCurrentIndex(max(0,
+                self.normalization_mode.findData(normalization.get("mode", self.config["normalization"]["mode"]))))
+        self.baseline_start.setValue(int(baseline.get("start",self.config["normalization"]["baseline_window_ms"]["start"])))
+        self.baseline_end.setValue(int(baseline.get("end", self.config["normalization"]["baseline_window_ms"]["end"])))
+        self.threshold_enabled.setChecked(bool(thresholding.get("enabled", self.config["thresholding"]["enabled"])))
+        self.threshold_sigma.setValue(float(thresholding.get("sigma", self.config["thresholding"]["sigma"])))
+        self.threshold_samples.setValue(int(thresholding.get("samples", self.config["thresholding"]["samples"])))
         self.threshold_channels.setValue(
             int(thresholding.get("channels", self.config["thresholding"]["channels"]))
         )
@@ -1162,19 +972,28 @@ class EEGSegmentationWidget(QScrollArea):
 
         for group in nested_groups:
             base_event = str(group.get("base_event", ""))
+            group_container = QFrame()
+            group_container.setProperty("role", "nested-group-editor")
+            group_layout = QVBoxLayout(group_container)
+            group_layout.setContentsMargins(0, 0, 0, 0)
+            group_layout.setSpacing(8)
+
             card = QFrame()
             card.setProperty("role", "nested-base-event")
             card_layout = QVBoxLayout(card)
             card_layout.setContentsMargins(16, 14, 16, 14)
-            card_layout.setSpacing(10)
+            card_layout.setSpacing(8)
 
             header = QHBoxLayout()
-            header.addWidget(
-                self._summary_chip(base_event, "duration", removable=False, base=True)
-            )
+            header.setContentsMargins(0, 0, 0, 0)
+            header.setSpacing(8)
+            base_title = QLabel(base_event)
+            base_title.setObjectName("nestedBaseEventTitle")
+            base_title.setWordWrap(True)
+            header.addWidget(base_title)
             header.addStretch()
 
-            remove_base_button = QPushButton("Remove base")
+            remove_base_button = QPushButton("Remove")
             remove_base_button.setProperty("variant", "ghost")
             remove_base_button.clicked.connect(
                 lambda _=False, event=base_event: self._remove_base_event(event)
@@ -1227,11 +1046,15 @@ class EEGSegmentationWidget(QScrollArea):
 
             children_row.addStretch()
             card_layout.addWidget(children_container)
+            group_layout.addWidget(card)
 
             actions = QHBoxLayout()
+            actions.setContentsMargins(0, 0, 0, 0)
+            actions.setSpacing(8)
             add_duration_button = QPushButton("+ Add duration event")
             add_instant_button = QPushButton("+ Add instant event")
             add_duration_button.setProperty("variant", "secondary")
+            add_duration_button.setProperty("role", "segmentation-duration-action")
             add_instant_button.setProperty("variant", "secondary")
             add_instant_button.setProperty("role", "segmentation-instant-action")
             available_nested_duration = self._available_nested_events(group, "duration")
@@ -1259,13 +1082,16 @@ class EEGSegmentationWidget(QScrollArea):
             actions.addWidget(add_duration_button)
             actions.addWidget(add_instant_button)
             actions.addStretch()
-            card_layout.addLayout(actions)
+            group_layout.addLayout(actions)
 
-            self.nested_groups_layout.addWidget(card)
+            self.nested_groups_layout.addWidget(group_container)
 
     def _nested_event_types(self) -> tuple[bool, bool]:
         nested_groups = self._nested_groups()
-        has_duration = bool(nested_groups) or any(group.get("nested_duration_events") for group in nested_groups)
+        has_duration = any(
+            group.get("nested_duration_events")
+            for group in nested_groups
+        )
         has_instant = any(
             group.get("nested_instant_events")
             for group in nested_groups
@@ -1283,8 +1109,6 @@ class EEGSegmentationWidget(QScrollArea):
 
         self.independent_panel.setVisible(independent)
         self.nested_panel.setVisible(nested)
-        self.epoch_target_panel.setVisible(nested)
-        self.normalization_target_panel.setVisible(nested)
 
         if independent:
             duration_events, instant_events = self._current_event_selection()
@@ -1292,18 +1116,18 @@ class EEGSegmentationWidget(QScrollArea):
             has_instant_epochs = bool(instant_events)
         else:
             has_duration_epochs, has_instant_epochs = self._nested_event_types()
-            # Before the first nested child is added, keep both parameter groups visible.
-            if not has_duration_epochs and not has_instant_epochs:
-                has_duration_epochs = True
-                has_instant_epochs = True
+
+        show_target_selector = nested and has_duration_epochs and has_instant_epochs
+        self.epoch_target_panel.setVisible(show_target_selector)
+        self.normalization_target_panel.setVisible(show_target_selector)
 
         normalization = self.normalization_enabled.isChecked()
         thresholding = self.threshold_enabled.isChecked()
         resampling = self.resampling_enabled.isChecked()
         epoch_target = self._target_or_default(self._epoch_target)
         normalization_target = self._target_or_default(self._normalization_target)
-        show_epoch_instant = (nested or has_instant_epochs) and epoch_target == "instant"
-        show_epoch_duration = (nested or has_duration_epochs) and epoch_target == "duration"
+        show_epoch_instant = has_instant_epochs and epoch_target == "instant"
+        show_epoch_duration = has_duration_epochs and epoch_target == "duration"
         show_any_epoch_controls = show_epoch_instant or show_epoch_duration
 
         self._set_visible(
@@ -1326,7 +1150,7 @@ class EEGSegmentationWidget(QScrollArea):
         )
         self.average_epochs.setVisible(show_any_epoch_controls)
 
-        baseline_visible = normalization and (nested or has_instant_epochs) and normalization_target == "instant"
+        baseline_visible = normalization and has_instant_epochs and normalization_target == "instant"
         self._set_visible(
             [
                 self.baseline_start_label,
