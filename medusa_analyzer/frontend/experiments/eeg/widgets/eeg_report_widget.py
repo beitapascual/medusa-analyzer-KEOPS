@@ -220,22 +220,10 @@ class EEGReportWidget(ReportWidget):
         baseline = normalization.get("baseline_window_ms", {})
         normalization_text = "Disabled"
         selection_mode = segmentation.get("selection_mode", "none")
-        nested_groups = segmentation.get("nested_groups") or []
-        nested_duration_count = sum(
-            len(group.get("nested_duration_events") or [])
-            for group in nested_groups
-        )
-        nested_instant_count = sum(
-            len(group.get("nested_instant_events") or [])
-            for group in nested_groups
-        )
-        has_instant_epochs = selection_mode in {"instant", "instant_within_duration"} or (
-            selection_mode == "nested" and nested_instant_count > 0
-        )
         if normalization.get("enabled"):
             normalization_mode = "Mean + std" if normalization.get("mode") == "mean_std" else "Mean"
             normalization_text = normalization_mode
-            if has_instant_epochs:
+            if selection_mode != "duration":
                 normalization_text = f"{normalization_mode}, baseline {baseline.get('start')} to {baseline.get('end')} ms"
         threshold_text = "Disabled"
         if thresholding.get("enabled"):
@@ -259,37 +247,6 @@ class EEGReportWidget(ReportWidget):
             events_text = ", ".join(selected_instant) or "None"
             mode_text = "Instant events"
             epoch_text = f"{epoch.get('start')} to {epoch.get('end')} ms"
-        elif selection_mode == "nested":
-            nested_rows = []
-            for group in nested_groups:
-                children = [
-                    f"{event} (duration)"
-                    for event in group.get("nested_duration_events") or []
-                ]
-                children.extend(
-                    f"{event} (instant)"
-                    for event in group.get("nested_instant_events") or []
-                )
-                nested_rows.append(
-                    f"{group.get('base_event')}: {', '.join(children) or 'None'}"
-                )
-
-            events_text = "; ".join(nested_rows) or "None"
-            if nested_duration_count and nested_instant_count:
-                mode_text = "Nested events (mixed)"
-                epoch_text = (
-                    f"Instant {epoch.get('start')} to {epoch.get('end')} ms; "
-                    f"duration {segmentation.get('duration_epoch_length_ms')} ms"
-                )
-            elif nested_duration_count:
-                mode_text = "Nested duration events"
-                epoch_text = f"{segmentation.get('duration_epoch_length_ms')} ms"
-            elif nested_instant_count:
-                mode_text = "Nested instant events"
-                epoch_text = f"{epoch.get('start')} to {epoch.get('end')} ms"
-            else:
-                mode_text = "Nested events"
-                epoch_text = "n/a"
         else:
             events_text = "None"
             mode_text = "None"
