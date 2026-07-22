@@ -806,9 +806,12 @@ class EEGSegmentationWidget(QScrollArea):
         return "nested" if self.nested_mode_button.isChecked() else "independent"
 
     def _nested_mode_available(self) -> bool:
-        duration_events, _ = self._event_names()
-        # The only duration event is the automatically-added full-signal event.
-        return len(duration_events) > 1
+        duration_events, instant_events = self._event_names()
+        if not duration_events and not instant_events:
+            return False
+        # Nested mode only has no meaningful relationship when there is a
+        # single duration event and no instant event to place inside it.
+        return not (len(duration_events) == 1 and not instant_events)
 
     def _clear_layout(self, layout: QVBoxLayout | QHBoxLayout | QGridLayout) -> None:
         while layout.count():
@@ -908,7 +911,7 @@ class EEGSegmentationWidget(QScrollArea):
             )
         else:
             self.nested_mode_button.setToolTip(
-                "Nested mode requires at least one duration event in addition to the full-signal event."
+                "Nested mode requires either an instant event or at least two duration events."
             )
 
         if not available and self.nested_mode_button.isChecked():
@@ -1511,7 +1514,7 @@ class EEGSegmentationWidget(QScrollArea):
         if mode == "nested":
             if not self._nested_mode_available():
                 errors.append(
-                    "Nested mode requires at least one duration event in addition to the full-signal event."
+                    "Nested mode requires either an instant event or at least two duration events."
                 )
             else:
                 nested_groups = segmentation.get("nested_groups") or []
