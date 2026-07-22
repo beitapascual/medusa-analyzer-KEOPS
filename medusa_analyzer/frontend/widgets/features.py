@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout, QLabel,
-    QLineEdit, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QFrame, QLabel,
+    QLineEdit, QScrollArea, QSizePolicy, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
 @dataclass(frozen=True, slots=True)
 class FeatureItem:
@@ -19,8 +19,7 @@ class FeatureItem:
 
 class FeaturesWidget(QScrollArea):
     changed = Signal() # seÃ±al que se emite cuando cambia la selección
-    _column_count = 2
-    _panel_height = 360
+    _tab_min_height = 420
 
     # El constructor recibe la definición de categorías y features (config), el estado compartido donde se guarda lo
     # seleccionado, el título grande de la página  y el subtítulo descriptivo.
@@ -58,57 +57,40 @@ class FeaturesWidget(QScrollArea):
         root.addWidget(subtitle)
 
         categories_container = QWidget() # contenedor de las categorÃ­as
-        self.category_grid = QGridLayout(categories_container)
-        self.category_grid.setContentsMargins(0, 0, 0, 0)
-        self.category_grid.setHorizontalSpacing(16)
-        self.category_grid.setVerticalSpacing(16)
-        self.category_grid.setColumnStretch(0, 1)
-        self.category_grid.setColumnStretch(1, 1)
+        categories_layout = QVBoxLayout(categories_container)
+        categories_layout.setContentsMargins(0, 0, 0, 0)
+        self.category_tabs = QTabWidget() # cada categoria del JSON se renderiza como una pestana
+        self.category_tabs.setProperty("role", "features-tabs")
+        self.category_tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        categories_layout.addWidget(self.category_tabs)
 
         categories = self.config.get("categories", [])
         # Bucle recorriendo las categorÃ­as
-        for index, category in enumerate(categories):
-            panel = self._build_group_panel(category, heading_object_name="groupTitle")
+        for category in categories:
+            panel = self._build_group_panel(category)
             self.category_panels.append(panel) # Creamos un panel para esa categorÃ­a
-            row = index // self._column_count
-            column = index % self._column_count
-            is_last_odd_panel = len(categories) % self._column_count == 1 and index == len(categories) - 1
-            self.category_grid.addWidget(panel, row, column, 1, self._column_count if is_last_odd_panel else 1)
+            tab_title = str(category.get("title") or category.get("id") or "Category")
+            self.category_tabs.addTab(panel, tab_title) # el titulo de la pestana sale del JSON
 
         root.addWidget(categories_container)
 
         self.setWidget(content)
         self._sync()
 
-    def _build_group_panel(self, group: dict[str, Any], heading_object_name: str) -> QFrame:
-        # FunciÃ³n que crea el panel visual de una categorÃ­a top-level, le pone tÃ­tulo, le mete un QScrollArea interno
+    def _build_group_panel(self, group: dict[str, Any]) -> QFrame:
+        # Funcion que crea el panel visual de una categoria top-level para una pestana.
+        # En la version con tabs el titulo top-level vive en la pestana, no dentro del panel.
         panel = QFrame()
-        panel.setProperty("role", "feature-group")
-        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        panel.setFixedHeight(self._panel_height)
+        panel.setProperty("role", "feature-tab-page")
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        panel.setMinimumHeight(self._tab_min_height)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(10)
 
-        group_title = QLabel(str(group.get("title", ""))) # TÃ­tulo de la categorÃ­a
-        group_title.setObjectName(heading_object_name)
-        layout.addWidget(group_title)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(10)
-        self._populate_group(content_layout, group)
-        content_layout.addStretch()
-
-        scroll.setWidget(content)
-        layout.addWidget(scroll, 1)
+        # Rellenamos la pestana con las features, grupos anidados y subcategorias definidos en configuracion.
+        self._populate_group(layout, group)
+        layout.addStretch()
         return panel
 
     def _populate_group(self, layout: QVBoxLayout, group: dict[str, Any]) -> None:

@@ -217,14 +217,17 @@ class EEGReportWidget(ReportWidget):
         thresholding = segmentation.get("thresholding", {})
         resampling = segmentation.get("resampling", {})
         epoch = segmentation.get("epoch_window_ms", {})
-        baseline = normalization.get("baseline_window_ms", {})
-        normalization_text = "Disabled"
         selection_mode = segmentation.get("selection_mode", "none")
-        if normalization.get("enabled"):
-            normalization_mode = "Mean + std" if normalization.get("mode") == "mean_std" else "Mean"
-            normalization_text = normalization_mode
-            if selection_mode != "duration":
-                normalization_text = f"{normalization_mode}, baseline {baseline.get('start')} to {baseline.get('end')} ms"
+
+        def _normalization_text(config: dict[str, Any], include_baseline: bool) -> str:
+            if not config.get("enabled"):
+                return "Disabled"
+            text = "Mean + std" if config.get("mode") == "mean_std" else "Mean"
+            baseline = config.get("baseline_window_ms", {})
+            if include_baseline:
+                text = f"{text}, baseline {baseline.get('start')} to {baseline.get('end')} ms"
+            return text
+
         threshold_text = "Disabled"
         if thresholding.get("enabled"):
             threshold_text = (f"sigma={thresholding.get('sigma'):g}, samples={thresholding.get('samples')}, "
@@ -234,6 +237,44 @@ class EEGReportWidget(ReportWidget):
             resampling_text = f"{resampling.get('target_sampling_frequency')} Hz"
         selected_duration = segmentation.get("selected_duration_events") or []
         selected_instant = segmentation.get("selected_instant_events") or []
+
+        if selection_mode == "nested":
+            nested_epoch = segmentation.get("nested_epoch") or {}
+            nested_normalization = segmentation.get("nested_normalization") or {}
+            duration_epoch = nested_epoch.get("duration") or {}
+            instant_epoch = nested_epoch.get("instant") or {}
+            instant_window = instant_epoch.get("epoch_window_ms") or epoch
+            duration_normalization = nested_normalization.get("duration") or {}
+            instant_normalization = nested_normalization.get("instant") or normalization
+            nested_groups = segmentation.get("nested_groups") or []
+            events_text = "; ".join(
+                f"{group.get('base_event')}: "
+                f"{', '.join((group.get('nested_duration_events') or []) + (group.get('nested_instant_events') or [])) or 'None'}"
+                for group in nested_groups
+            ) or "None"
+            mode_text = "Nested events"
+            duration_epoch_text = (
+                f"Duration {duration_epoch.get('duration_epoch_length_ms')} ms, "
+                f"stride {duration_epoch.get('stride_percent')}%, "
+                f"average {'Yes' if duration_epoch.get('average_epochs') else 'No'}"
+            )
+            instant_epoch_text = (
+                f"Instant {instant_window.get('start')} to {instant_window.get('end')} ms, "
+                f"stride {instant_epoch.get('stride_percent')}%, "
+                f"average {'Yes' if instant_epoch.get('average_epochs') else 'No'}"
+            )
+            return self._section("Segmentation", [
+                ("Mode", mode_text),
+                ("Events", events_text),
+                ("Epoch", f"{duration_epoch_text}; {instant_epoch_text}"),
+                ("Normalization",
+                    f"Duration: {_normalization_text(duration_normalization, False)}; "
+                    f"Instant: {_normalization_text(instant_normalization, True)}"),
+                ("Thresholding", threshold_text),
+                ("Resampling", resampling_text),
+            ])
+
+        normalization_text = _normalization_text(normalization, selection_mode != "duration")
         if selection_mode == "instant_within_duration":
             events_text = "; ".join(f"{event}: {', '.join(selected_instant) or 'None'}" for event in selected_duration)
             events_text = events_text or "None"

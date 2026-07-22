@@ -105,6 +105,22 @@
     "duration_epoch_length_ms": 1000,
     "stride_percent": 0,
     "average_epochs": false,
+    "nested_epoch": {
+      "duration": {
+        "duration_epoch_length_ms": 1000,
+        "stride_percent": 0,
+        "average_epochs": false
+      },
+      "instant": {
+        "epoch_window_ms": {
+          "start": -300,
+          "end": 700
+        },
+        "stride_percent": 0,
+        "average_epochs": false
+      }
+    },
+    "active_epoch_target": "instant",
     "normalization": {
       "enabled": false,
       "mode": "mean_std",
@@ -113,6 +129,21 @@
         "end": 0
       }
     },
+    "nested_normalization": {
+      "duration": {
+        "enabled": false,
+        "mode": "mean_std"
+      },
+      "instant": {
+        "enabled": false,
+        "mode": "mean_std",
+        "baseline_window_ms": {
+          "start": -100,
+          "end": 0
+        }
+      }
+    },
+    "active_normalization_target": "instant",
     "thresholding": {
       "enabled": false,
       "sigma": 2.0,

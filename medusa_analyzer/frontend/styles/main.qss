@@ -83,6 +83,47 @@ QFrame[role="feature-group"] {
     border-radius: 12px;
 }
 
+QTabWidget[role="features-tabs"] {
+    background: transparent;
+    border: none;
+}
+
+QTabWidget[role="features-tabs"]::pane {
+    background: #22181D;
+    border: 1px solid #3A2931;
+    border-radius: 12px;
+    top: -1px;
+}
+
+QTabWidget[role="features-tabs"] QTabBar::tab {
+    color: #CDBCC4;
+    background: #1F171B;
+    border: 1px solid #3A2931;
+    border-bottom: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    min-height: 32px;
+    padding: 8px 14px;
+    margin-right: 4px;
+}
+
+QTabWidget[role="features-tabs"] QTabBar::tab:hover {
+    color: #FFD6E1;
+    background: #2A1D23;
+    border-color: #7A4055;
+}
+
+QTabWidget[role="features-tabs"] QTabBar::tab:selected {
+    color: #FFF7FA;
+    background: #A61E4D;
+    border-color: #E35A82;
+}
+
+QFrame[role="feature-tab-page"] {
+    background: transparent;
+    border: none;
+}
+
 QFrame[role="editable-table"],
 QFrame[role="table-header"] {
     background: transparent;
@@ -372,6 +413,75 @@ QPushButton:disabled {
     border-color: #2A2528;
 }
 
+QPushButton[role="segmentation-mode-button"],
+QPushButton[role="segmentation-target-button"] {
+    color: #D7C8CF;
+    background: #241A1F;
+    border: 1px solid #4A3A42;
+    border-radius: 8px;
+}
+
+QPushButton[role="segmentation-mode-button"]:hover,
+QPushButton[role="segmentation-target-button"]:hover {
+    color: #FFD6E1;
+    background: #321B24;
+    border-color: #A94D68;
+}
+
+QPushButton[role="segmentation-mode-button"]:checked,
+QPushButton[role="segmentation-target-button"]:checked {
+    color: #FFF7FA;
+    background: #A61E4D;
+    border: 1px solid #E35A82;
+}
+
+QPushButton[role="segmentation-mode-button"]:checked:hover,
+QPushButton[role="segmentation-target-button"]:checked:hover {
+    background: #C0275B;
+    border-color: #FF8FAE;
+}
+
+QPushButton[role="segmentation-mode-button"]:disabled,
+QPushButton[role="segmentation-target-button"]:disabled {
+    color: #756B70;
+    background: #2A2528;
+    border-color: #332A2E;
+}
+
+QPushButton[role="segmentation-instant-action"] {
+    color: #9BE7E8;
+    background: #173A3F;
+    border: 1px solid #2E747A;
+    border-radius: 8px;
+}
+
+QPushButton[role="segmentation-instant-action"]:hover {
+    color: #D7FDFF;
+    background: #1D4A50;
+    border-color: #5ECDD6;
+}
+
+QPushButton[role="segmentation-instant-action"]:pressed {
+    background: #12373C;
+}
+
+QPushButton[role="segmentation-instant-action"]:disabled {
+    color: #6E9498;
+    background: #233235;
+    border-color: #33474A;
+}
+
+QFrame[role="segmentation-target-panel"] {
+    background: #1F171B;
+    border: 1px solid #4A3A42;
+    border-radius: 9px;
+}
+
+QLabel#segmentationTargetLabel {
+    color: #D7C8CF;
+    font-weight: 650;
+}
+
 QLineEdit,
 QDoubleSpinBox,
 QSpinBox,
@@ -521,6 +631,60 @@ QListWidget::item {
 QListWidget::item:selected {
     color: #FFD6E1;
     background: #4A2030;
+}
+
+QListWidget#durationEventsList::item:selected {
+    color: #FFD6E1;
+    background: rgba(227, 90, 130, 28);
+    border: 1px solid rgba(227, 90, 130, 92);
+}
+
+QListWidget#instantEventsList::item:selected {
+    color: #9BE7E8;
+    background: rgba(14, 124, 134, 24);
+    border: 1px solid rgba(94, 205, 214, 78);
+}
+
+QFrame#summaryDurationChip {
+    background: rgba(227, 90, 130, 28);
+    border: 1px solid rgba(227, 90, 130, 92);
+    border-radius: 9px;
+}
+
+QFrame#summaryDurationChip QLabel,
+QFrame#summaryDurationChip QPushButton {
+    background: transparent;
+    border: none;
+    color: #FFD6E1;
+    font-weight: 650;
+}
+
+QFrame#summaryBaseDurationChip {
+    background: rgba(227, 90, 130, 42);
+    border: 1px solid rgba(227, 90, 130, 118);
+    border-radius: 9px;
+}
+
+QFrame#summaryBaseDurationChip QLabel,
+QFrame#summaryBaseDurationChip QPushButton {
+    background: transparent;
+    border: none;
+    color: #FFD6E1;
+    font-weight: 700;
+}
+
+QFrame#summaryInstantChip {
+    background: rgba(14, 124, 134, 24);
+    border: 1px solid rgba(94, 205, 214, 78);
+    border-radius: 9px;
+}
+
+QFrame#summaryInstantChip QLabel,
+QFrame#summaryInstantChip QPushButton {
+    background: transparent;
+    border: none;
+    color: #9BE7E8;
+    font-weight: 600;
 }
 
 QFrame[role="band-chip"] {

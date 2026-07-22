@@ -28,7 +28,6 @@ class EEGLoadDataWidget(LoadDataWidget):
         del experiment_info
         config = defaults.get("load_data", {})
         self._configuration_groups: list[dict[str, Any]] = []
-        self._choosing_group = False
         super().__init__(
             config=config,
             state=state,
@@ -95,7 +94,6 @@ class EEGLoadDataWidget(LoadDataWidget):
             self.group_combo.hide()
             self._apply_group(groups[0])
         elif groups:
-            self._choosing_group = True
             self.group_combo.show()
             self.status_label.setText(f"{len(groups)} recording configuration(s) found. Select one to continue.")
             self.status_label.setProperty("status", "idle")
@@ -104,11 +102,21 @@ class EEGLoadDataWidget(LoadDataWidget):
 
     def _configuration_selected(self, _: int) -> None:
         group_id = self.group_combo.currentData()
-        if not self._choosing_group or not group_id:
+        if not group_id:
+            self.state.pop("metadata", None)
+            self.state.pop("selected_bids_group", None)
+            self.state.pop("selected_recordings", None)
+            self.state.pop("broadband", None)
+            self.files.clear()
+            self.metadata_panel.hide()
+            self.status_label.setText(f"{len(self._configuration_groups)} recording configuration(s) found. Select one to continue.")
+            self.status_label.setProperty("status", "idle")
+            self._refresh_status_style()
+            self.changed.emit()
             return
+
         group = next((item for item in self._configuration_groups if item.get("id") == group_id), None)
         if group is not None:
-            self._choosing_group = False
             self._apply_group(group)
 
     def _apply_group(self, group: dict[str, Any]) -> None:
@@ -143,7 +151,6 @@ class EEGLoadDataWidget(LoadDataWidget):
         for key in ("bids_root", "bids_groups", "selected_bids_group", "selected_recordings"):
             self.state.pop(key, None)
         self._configuration_groups = []
-        self._choosing_group = False
         if hasattr(self, "group_combo"):
             self.group_combo.clear()
             self.group_combo.hide()
