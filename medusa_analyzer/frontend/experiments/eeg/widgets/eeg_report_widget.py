@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pathlib import Path
 from typing import Any
 from PySide6.QtWidgets import QFrame
 from medusa_analyzer.frontend.widgets import ReportWidget
@@ -16,7 +17,6 @@ class EEGReportWidget(ReportWidget):
         self._features_config = defaults.get("features", {})
         # Construimos un diccionario para localizar rápido cada feature por id en vez de estar recorriendo el JSON completo
         self._feature_definitions = self._resolve_feature_definitions(self._features_config)
-
         # Llamamos al constructor de la clase base
         super().__init__(config=defaults.get("report", {}), state=state, title="Final report",
             description="Review the metadata, pre-processing selections and chosen features before handing this experiment to the future processing pipeline.")
@@ -213,11 +213,35 @@ class EEGReportWidget(ReportWidget):
         if not segmentation:
             return self._section("Segmentation", [("Status", "Not configured.")])
 
-        normalization = segmentation.get("normalization", {})
+        mode = segmentation.get("segmentation_mode", "independent")
+        epoch_parameters = segmentation.get("epoch_parameters") or {}
+        normalization_parameters = segmentation.get("normalization") or {}
+        duration_normalization = normalization_parameters.get("duration") or {}
+        instant_normalization = normalization_parameters.get("instant") or {}
+
         thresholding = segmentation.get("thresholding", {})
         resampling = segmentation.get("resampling", {})
-        epoch = segmentation.get("epoch_window_ms", {})
-        selection_mode = segmentation.get("selection_mode", "none")
+        event_groups = segmentation.get("event_groups") or []
+        selected_duration = [
+            event
+            for group in event_groups
+            if not group.get("base_event")
+            for event in (group.get("duration_events") or [])
+        ]
+        selected_instant = [
+            event
+            for group in event_groups
+            if not group.get("base_event")
+            for event in (group.get("instant_events") or [])
+        ]
+        if mode == "nested":
+            selection_mode = "nested"
+        elif selected_duration:
+            selection_mode = "duration"
+        elif selected_instant:
+            selection_mode = "instant"
+        else:
+            selection_mode = "none"
 
         def _normalization_text(config: dict[str, Any], include_baseline: bool) -> str:
             if not config.get("enabled"):
@@ -235,74 +259,90 @@ class EEGReportWidget(ReportWidget):
         resampling_text = "Disabled"
         if resampling.get("enabled"):
             resampling_text = f"{resampling.get('target_sampling_frequency')} Hz"
-        selected_duration = segmentation.get("selected_duration_events") or []
-        selected_instant = segmentation.get("selected_instant_events") or []
+
+        def _duration_epoch_text(config: dict[str, Any]) -> str:
+            return (
+                f"{config.get('duration_epoch_length_ms')} ms, "
+                f"stride {config.get('stride_percent')}%, "
+                f"average {'Yes' if config.get('average_epochs') else 'No'}"
+            )
+
+        def _instant_epoch_text(config: dict[str, Any]) -> str:
+            window = config.get("epoch_window_ms") or {}
+            return (
+                f"{window.get('start')} to {window.get('end')} ms, "
+                f"stride {config.get('stride_percent')}%, "
+                f"average {'Yes' if config.get('average_epochs') else 'No'}"
+            )
 
         if selection_mode == "nested":
-            nested_epoch = segmentation.get("nested_epoch") or {}
-            nested_normalization = segmentation.get("nested_normalization") or {}
-            duration_epoch = nested_epoch.get("duration") or {}
-            instant_epoch = nested_epoch.get("instant") or {}
-            instant_window = instant_epoch.get("epoch_window_ms") or epoch
-            duration_normalization = nested_normalization.get("duration") or {}
-            instant_normalization = nested_normalization.get("instant") or normalization
-            nested_groups = segmentation.get("nested_groups") or []
+            duration_epoch = epoch_parameters.get("duration") or {}
+            instant_epoch = epoch_parameters.get("instant") or {}
+            nested_groups = [group for group in event_groups if group.get("base_event")]
+            has_duration = any(group.get("duration_events") for group in nested_groups)
+            has_instant = any(group.get("instant_events") for group in nested_groups)
             events_text = "; ".join(
                 f"{group.get('base_event')}: "
-                f"{', '.join((group.get('nested_duration_events') or []) + (group.get('nested_instant_events') or [])) or 'None'}"
+                f"{', '.join((group.get('duration_events') or []) + (group.get('instant_events') or [])) or 'None'}"
                 for group in nested_groups
             ) or "None"
             mode_text = "Nested events"
-            duration_epoch_text = (
-                f"Duration {duration_epoch.get('duration_epoch_length_ms')} ms, "
-                f"stride {duration_epoch.get('stride_percent')}%, "
-                f"average {'Yes' if duration_epoch.get('average_epochs') else 'No'}"
-            )
-            instant_epoch_text = (
-                f"Instant {instant_window.get('start')} to {instant_window.get('end')} ms, "
-                f"stride {instant_epoch.get('stride_percent')}%, "
-                f"average {'Yes' if instant_epoch.get('average_epochs') else 'No'}"
-            )
+            epoch_parts = []
+            normalization_parts = []
+            if has_duration:
+                epoch_parts.append(f"Duration {_duration_epoch_text(duration_epoch)}")
+                normalization_parts.append(
+                    f"Duration: {_normalization_text(duration_normalization, False)}"
+                )
+            if has_instant:
+                epoch_parts.append(f"Instant {_instant_epoch_text(instant_epoch)}")
+                normalization_parts.append(
+                    f"Instant: {_normalization_text(instant_normalization, True)}"
+                )
             return self._section("Segmentation", [
                 ("Mode", mode_text),
                 ("Events", events_text),
-                ("Epoch", f"{duration_epoch_text}; {instant_epoch_text}"),
-                ("Normalization",
-                    f"Duration: {_normalization_text(duration_normalization, False)}; "
-                    f"Instant: {_normalization_text(instant_normalization, True)}"),
+                ("Epoch", "; ".join(epoch_parts) or "n/a"),
+                ("Normalization", "; ".join(normalization_parts) or "n/a"),
                 ("Thresholding", threshold_text),
                 ("Resampling", resampling_text),
             ])
 
-        normalization_text = _normalization_text(normalization, selection_mode != "duration")
-        if selection_mode == "instant_within_duration":
-            events_text = "; ".join(f"{event}: {', '.join(selected_instant) or 'None'}" for event in selected_duration)
-            events_text = events_text or "None"
-            mode_text = "Instant events inside duration events"
-            epoch_text = f"{epoch.get('start')} to {epoch.get('end')} ms"
-        elif selection_mode == "duration":
+        if selection_mode == "duration":
             events_text = ", ".join(selected_duration) or "None"
             mode_text = "Duration events"
-            epoch_text = f"{segmentation.get('duration_epoch_length_ms')} ms"
+            duration_epoch = epoch_parameters.get("duration") or {}
+            epoch_text = _duration_epoch_text(duration_epoch)
+            normalization_text = _normalization_text(duration_normalization, False)
         elif selection_mode == "instant":
             events_text = ", ".join(selected_instant) or "None"
             mode_text = "Instant events"
-            epoch_text = f"{epoch.get('start')} to {epoch.get('end')} ms"
+            instant_epoch = epoch_parameters.get("instant") or {}
+            epoch_text = _instant_epoch_text(instant_epoch)
+            normalization_text = _normalization_text(instant_normalization, True)
         else:
             events_text = "None"
             mode_text = "None"
             epoch_text = "n/a"
+            normalization_text = "n/a"
 
         return self._section("Segmentation", [
             ("Mode", mode_text),
             ("Events", events_text),
             ("Epoch", epoch_text),
-            ("Stride", f"{segmentation.get('stride_percent')}%"),
-            ("Average epochs", "Yes" if segmentation.get("average_epochs") else "No"),
             ("Normalization", normalization_text),
             ("Thresholding", threshold_text),
             ("Resampling", resampling_text),
         ])
+
+    def _default_output_root(self) -> Path | None:
+        bids_root = self.state.get("bids_root")
+        if bids_root:
+            return Path(str(bids_root))
+        return super()._default_output_root()
+
+    def _output_path_state_key(self) -> str:
+        return "output_derivatives_path"
 
     def _additional_section_builders(self) -> list:
         builders = []

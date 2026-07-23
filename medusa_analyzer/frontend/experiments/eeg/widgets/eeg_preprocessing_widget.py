@@ -40,10 +40,29 @@ class EEGPreprocessingWidget(QScrollArea):
 
         # Calculamos los valores por defecto
         default_state = self._build_default_state()
-        self.default_frequency_bands = [deepcopy(band) for band in default_state["frequency_bands"]]
-        # Si state ya tiene preprocessing lo reutilizamos. Si no, creamos el estado inicial con los valores por defecto.
-        if not self.state["preprocessing"]:
-            self.state["preprocessing"] = default_state # creamos el estado inicial con parámetros por defecto
+        default_frequency_bands = [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])]
+        preprocessing_state = self.state["preprocessing"]
+        saved_selected_frequency_bands = preprocessing_state.get("selected_frequency_bands")
+        if isinstance(saved_selected_frequency_bands, list):
+            frequency_band_rows = [
+                deepcopy(band)
+                for band in saved_selected_frequency_bands
+                if str(band.get("id", "")) != "broadband"
+            ]
+        else:
+            frequency_band_rows = [deepcopy(band) for band in default_frequency_bands]
+        self.default_frequency_bands = [deepcopy(band) for band in default_frequency_bands]
+        merged_state = {
+            "car_checked": bool(preprocessing_state.get("car_checked", default_state["car_checked"])),
+            "filters": {
+                **default_state["filters"],
+                **(preprocessing_state.get("filters") or {}),
+            },
+            "selected_frequency_bands": [
+                deepcopy(band) for band in (saved_selected_frequency_bands or [])
+            ],
+        }
+        self.state["preprocessing"] = merged_state
         self._filters_are_valid = False
 
         # Parte visual
@@ -108,11 +127,7 @@ class EEGPreprocessingWidget(QScrollArea):
         bands_title = QLabel("Frequency bands")
         bands_title.setObjectName("panelTitle")
         bands_layout.addWidget(bands_title)
-        # La tabla recibe las bandas actuales y los defaults.
-        # TODO: igual que con los filtros, parece que la tabla trabaja directamente sobre la lista de diccs de
-        # self.state["preprocessing"]. Esto es eficiente pero puede ser menos robusto si quieres control estricto de
-        # cuando se muta el estado.
-        self.bands = EEGFrequencyBandsTable(self.state["preprocessing"]["frequency_bands"],
+        self.bands = EEGFrequencyBandsTable(frequency_band_rows,
             default_rows=self.default_frequency_bands, minimum_frequency=self.minimum_band_frequency)
         bands_layout.addWidget(self.bands)
         root.addWidget(bands_panel)
@@ -131,7 +146,6 @@ class EEGPreprocessingWidget(QScrollArea):
         return {"car_checked": bool(self.config.get("car", {}).get("checked_by_default", False)),
             "filters": {str(filter_config["id"]): build_filter_defaults(filter_config) for filter_config in
                         self.filter_definitions},
-            "frequency_bands": [deepcopy(band) for band in self.config.get("bands", {}).get("available", [])],
             "selected_frequency_bands": []}
 
     def _build_filter_plot_panel(self, title: str) -> tuple[QFrame, FilterPreviewPlot]:
@@ -185,8 +199,7 @@ class EEGPreprocessingWidget(QScrollArea):
         """Función para crear la lista final de bandas. Incluye todas las bandas marcadas como enabled
         y la banda broadband.
         NOTA: la broadband se añade SIEMPRE. Esto está pensado asi de cara al run_pipeline."""
-        selected_bands = [deepcopy(row) for row in self.state["preprocessing"]["frequency_bands"] if row.get(
-            "enabled", False)]
+        selected_bands = [deepcopy(row) for row in self.bands.rows if row.get("enabled", False)]
         if self.state.get("broadband") is not None:
             selected_bands.append(deepcopy(self.state.get("broadband")))
         return selected_bands
@@ -270,9 +283,11 @@ class EEGPreprocessingWidget(QScrollArea):
                 self.filters[filter_id].enabled.setChecked(False) # desactivamos el filtro
                 self.filters[filter_id].blockSignals(False)
                 # Mostramos warnings
-                self.filters[filter_id].set_message(str(filter_definition.get("out_of_range_warning") or
+                warning = str(filter_definition.get("out_of_range_warning") or
                     "Filter is outside the active range and will have no practical effect.").format(
-                    low=reference_low_cut, high=reference_high_cut), role="warning")
+                    low=reference_low_cut, high=reference_high_cut)
+                self.filters[filter_id].set_message(warning, role="warning")
+                self.filter_plots[filter_id].set_response(None, warning)
 
         self._filters_are_valid = all(filter_validity.values()) # validez global de los filtros para continuar
 

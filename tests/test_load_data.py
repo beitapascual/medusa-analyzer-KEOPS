@@ -55,7 +55,7 @@ class LoadDataTests(unittest.TestCase):
         widget._loaded([_fake_result("first.edf"), _fake_result("second.edf")])
 
         self.assertEqual(state["input_data"], ["first.edf", "second.edf"])
-        self.assertEqual(len(state["loader_results"]), 2)
+        self.assertNotIn("loader_results", state)
         self.assertEqual(state["metadata"], {"recordings": 2, "sampling_frequency": 1000.0})
         self.assertTrue(widget.can_continue())
 
@@ -87,7 +87,7 @@ class LoadDataTests(unittest.TestCase):
 
         self.assertFalse(widget.can_continue())
         self.assertEqual(state["input_data"], [])
-        self.assertEqual(state["loader_results"], [])
+        self.assertNotIn("loader_results", state)
         self.assertNotIn("metadata", state)
         self.assertNotIn("broadband", state)
 

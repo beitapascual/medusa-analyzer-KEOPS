@@ -94,18 +94,9 @@
     }
   },
   "segmentation": {
-    "selection_mode": "none",
-    "instant_events_inside_duration_events": false,
-    "selected_duration_events": [],
-    "selected_instant_events": [],
-    "epoch_window_ms": {
-      "start": -300,
-      "end": 700
-    },
-    "duration_epoch_length_ms": 1000,
-    "stride_percent": 0,
-    "average_epochs": false,
-    "nested_epoch": {
+    "segmentation_mode": "independent",
+    "event_groups": [],
+    "epoch_parameters": {
       "duration": {
         "duration_epoch_length_ms": 1000,
         "stride_percent": 0,
@@ -120,16 +111,7 @@
         "average_epochs": false
       }
     },
-    "active_epoch_target": "instant",
     "normalization": {
-      "enabled": false,
-      "mode": "mean_std",
-      "baseline_window_ms": {
-        "start": -100,
-        "end": 0
-      }
-    },
-    "nested_normalization": {
       "duration": {
         "enabled": false,
         "mode": "mean_std"
@@ -143,7 +125,6 @@
         }
       }
     },
-    "active_normalization_target": "instant",
     "thresholding": {
       "enabled": false,
       "sigma": 2.0,
@@ -236,17 +217,7 @@
             "id": "absolute_band_power",
             "title": "Absolute band power",
             "subtitle": "Absolute power computed in the frequency bands selected during preprocessing.",
-            "checked_by_default": true,
-            "params": [
-              {
-                "id": "selected_frequency_bands",
-                "title": "bands",
-                "type": "derived",
-                "source": "feature_params.absolute_band_power.selected_frequency_bands",
-                "format": "bands",
-                "default": []
-              }
-            ]
+            "checked_by_default": true
           },
           {
             "id": "relative_band_power",
@@ -267,13 +238,13 @@
           {
             "id": "median_frequency",
             "title": "Median frequency",
-            "subtitle": "Frequency that divides the power spectrum into two regions with equal total power.",
+            "subtitle": "Frequency that divides the power spectrum into two regions with equal total power, computed in the frequency bands selected during preprocessing.",
             "checked_by_default": false
           },
           {
             "id": "spectral_entropy",
             "title": "Spectral Entropy",
-            "subtitle": "Measure of how uniformly signal power is distributed across frequencies.",
+            "subtitle": "Measure of how uniformly signal power is distributed across frequencies, computed in the frequency bands selected during preprocessing.",
             "checked_by_default": false
           }
         ]

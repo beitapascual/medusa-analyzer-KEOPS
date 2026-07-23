@@ -27,13 +27,14 @@ class EEGFeaturesWidget(FeaturesWidget):
         self._feature_definitions = self._resolve_feature_definitions(defaults.get("features", {}))
         self._spectral_feature_ids = self._resolve_spectral_feature_ids(defaults.get("features", {}))
 
-        self._eeg_feature_state = state.setdefault("eeg_feature_state", {})
-        self._eeg_feature_state.setdefault("relative_band_power_frequency_bands",
-            self._copy_available_frequency_bands(defaults))
-        self._relative_band_power_rows = self._eeg_feature_state["relative_band_power_frequency_bands"]
+        feature_params = state.setdefault("feature_params", {})
+        relative_band_power_params = feature_params.setdefault(self._relative_band_power_feature_id, {})
+        saved_relative_bands = relative_band_power_params.get("selected_frequency_bands")
+        relative_band_power_params["selected_frequency_bands"] = (
+            self._copy_rows(saved_relative_bands)
+            or self._copy_available_frequency_bands(defaults)
+        )
 
-        self._absolute_band_power_container: QWidget | None = None
-        self._absolute_band_power_message: QLabel | None = None
         self._relative_band_power_container: QWidget | None = None
         self._relative_band_power_message: QLabel | None = None
         self._relative_band_power_table: EEGFrequencyBandsTable | None = None
@@ -122,18 +123,12 @@ class EEGFeaturesWidget(FeaturesWidget):
     def _after_feature_controls_added(self, layout: QVBoxLayout, item: FeatureItem, checkbox: QCheckBox) -> None:
         _ = checkbox
 
-        if item.id == self._absolute_band_power_feature_id:
-            container, message = self._build_band_message_container()
-            self._absolute_band_power_container = container
-            self._absolute_band_power_message = message
-            layout.addWidget(container)
-            return
-
         if item.id != self._relative_band_power_feature_id:
             return
 
         container, message = self._build_band_message_container()
-        table = EEGFrequencyBandsTable(self._relative_band_power_rows,
+        rows = self.state["feature_params"][self._relative_band_power_feature_id]["selected_frequency_bands"]
+        table = EEGFrequencyBandsTable(rows,
             default_rows=self._copy_available_frequency_bands(self.defaults))
         table.changed.connect(self._sync)
         container.layout().addWidget(table)
@@ -166,23 +161,16 @@ class EEGFeaturesWidget(FeaturesWidget):
 
     def _preprocessing_selected_frequency_state(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         # Si preprocessing ya ha calculado las bandas seleccionadas, las usamos.
-        # Si no, caemos a las bandas habilitadas o a la broadband de metadata.
-        # TODO: REVISAR ESTA FUNCIÓN PARA QUE NO CRASHEE SI SKIPPEAMOS EL PREPROCESSING O NO
-        # ELEGIMOS NINGUNA BANDA EN PREPROCESSING
+        # Si no, solo tenemos la broadband de metadata y relative_band_power muestra su tabla propia.
         preprocessing_state = self.state.get("preprocessing") or {}
         broadband = self._effective_broadband()
         selected_frequency_bands = self._copy_rows(preprocessing_state.get("selected_frequency_bands"))
         if selected_frequency_bands:
             return selected_frequency_bands, broadband
 
-        enabled_bands = [deepcopy(row) for row in preprocessing_state.get("frequency_bands", [])
-            if row.get("enabled", False)]
         if broadband is not None:
-            if enabled_bands:
-                enabled_bands.append(deepcopy(broadband))
-                return enabled_bands, broadband
             return [deepcopy(broadband)], broadband
-        return enabled_bands, broadband
+        return [], broadband
 
     def _refresh_relative_band_power_defaults(self) -> None:
         if self._relative_band_power_table is None:
@@ -211,36 +199,32 @@ class EEGFeaturesWidget(FeaturesWidget):
         return f"Bandas: {', '.join(cls._describe_band(band) for band in bands)}."
 
     def _selected_relative_band_power_bands(self) -> list[dict[str, Any]]:
-        return [deepcopy(row) for row in self._relative_band_power_rows if row.get("enabled", False)]
+        if self._relative_band_power_table is None:
+            return []
+        return [deepcopy(row) for row in self._relative_band_power_table.rows if row.get("enabled", False)]
 
-    @staticmethod
-    def _set_band_feature_params(feature_params: dict[str, dict[str, Any]], feature_id: str, *, bands_source: str,
-        frequency_bands: list[dict[str, Any]], selected_frequency_bands: list[dict[str, Any]],
-        broadband: dict[str, Any] | None) -> None:
-        feature_params[feature_id] = {
-            "bands_source": bands_source,
-            "frequency_bands": frequency_bands,
-            "selected_frequency_bands": selected_frequency_bands,
-            "broadband": deepcopy(broadband),
+    def _set_relative_band_power_params(
+        self,
+        feature_params: dict[str, dict[str, Any]],
+        selected_frequency_bands: list[dict[str, Any]],
+    ) -> None:
+        feature_params[self._relative_band_power_feature_id] = {
+            "selected_frequency_bands": self._copy_rows(selected_frequency_bands),
+        }
+
+    def _set_relative_band_power_table_params(self, feature_params: dict[str, dict[str, Any]]) -> None:
+        feature_params[self._relative_band_power_feature_id] = {
+            "selected_frequency_bands": self._selected_relative_band_power_bands(),
         }
 
     def _sync_absolute_band_power(self, selected_features: list[str], feature_params: dict[str, dict[str, Any]]) -> None:
-        if self._absolute_band_power_container is None or self._absolute_band_power_message is None:
-            return
-
         is_selected = self._absolute_band_power_feature_id in selected_features
-        self._absolute_band_power_container.setVisible(is_selected)
         if not is_selected:
             return
 
-        selected_frequency_bands, broadband = self._preprocessing_selected_frequency_state()
-        self._set_band_feature_params(feature_params, self._absolute_band_power_feature_id,
-        bands_source=("preprocessing" if (self.state.get("preprocessing") or {}).get("selected_frequency_bands")
-                                          else "metadata"),
-            frequency_bands=self._copy_rows((self.state.get("preprocessing") or {}).get("frequency_bands")),
-            selected_frequency_bands=self._copy_rows(selected_frequency_bands),
-            broadband=broadband)
-        self._absolute_band_power_message.setText(self._band_summary_message(selected_frequency_bands))
+        selected_frequency_bands, _ = self._preprocessing_selected_frequency_state()
+        if selected_frequency_bands:
+            feature_params.pop(self._absolute_band_power_feature_id, None)
 
     def _sync_relative_band_power(self, selected_features: list[str], feature_params: dict[str, dict[str, Any]]) -> None:
         if (self._relative_band_power_container is None or self._relative_band_power_message is None
@@ -265,21 +249,13 @@ class EEGFeaturesWidget(FeaturesWidget):
         if preprocessing_named_bands:
             self._relative_band_power_message.setText(self._band_summary_message(preprocessing_named_bands))
             self._relative_band_power_table.setVisible(False)
-            self._set_band_feature_params(feature_params, self._relative_band_power_feature_id,
-                bands_source="preprocessing",
-                frequency_bands=self._copy_rows((self.state.get("preprocessing") or {}).get("frequency_bands")),
-                selected_frequency_bands=self._copy_rows(preprocessing_named_bands),
-                broadband=broadband)
+            self._set_relative_band_power_params(feature_params, preprocessing_named_bands)
             return
 
         selected_relative_bands = self._selected_relative_band_power_bands()
         self._relative_band_power_message.setText(self._band_summary_message(selected_relative_bands))
         self._relative_band_power_table.setVisible(True)
-        self._set_band_feature_params(feature_params, self._relative_band_power_feature_id,
-            bands_source="custom",
-            frequency_bands=self._copy_rows(self._relative_band_power_rows),
-            selected_frequency_bands=selected_relative_bands,
-            broadband=broadband)
+        self._set_relative_band_power_table_params(feature_params)
 
     def _feature_title(self, feature_id: str) -> str:
         feature_definition = self._feature_definitions.get(feature_id, {})

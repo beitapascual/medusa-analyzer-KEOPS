@@ -208,7 +208,7 @@ class LoadDataWidget(QScrollArea):
         """Eliminar del estado lo relativo a los metadatos."""
         self._selected_source = None
         self.state["input_data"] = []
-        self.state["loader_results"] = []
+        self.state.pop("loader_results", None)
         self.state.pop("broadband", None)
         self.state.pop("metadata", None)
 
@@ -228,11 +228,10 @@ class LoadDataWidget(QScrollArea):
         else:
             selected_paths = [str(self._selected_source)]
 
-        loader_results = [] if isinstance(results, dict) else list(results)
         metadata = dict(self.metadata_builder(results, self._selected_source) or {})
 
         self.state["input_data"] = selected_paths
-        self.state["loader_results"] = loader_results
+        self.state.pop("loader_results", None)
         self.state["metadata"] = metadata
 
         self.status_label.setText("Data loaded successfully.")

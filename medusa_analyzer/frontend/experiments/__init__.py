@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import importlib
 import json
 import logging
@@ -117,8 +116,6 @@ def create_experiment_page(definition: ExperimentDefinition) -> WorkflowShell:
     state: dict[str, Any] = {
         "experiment_id": definition.id,
         "experiment_title": definition.info.get("title", definition.id.upper()),
-        "defaults": copy.deepcopy(definition.defaults),
-        "loader_results": [],
         "input_data": [],
         "completion_status": "incompleted" if bool(definition.info.get("has_run_pipeline", False)) else "completed",
     }

@@ -26,7 +26,7 @@ class EEGSegmentationWidget(QScrollArea):
         self._normalization_target = "instant"
         self._last_event_signature: tuple[tuple[str, ...], tuple[str, ...]] | None = None
 
-        self.state["segmentation"] = {**deepcopy(self.config), **(self.state.get("segmentation") or {})}
+        self.state["segmentation"] = self._initial_segmentation_state(self.state.get("segmentation") or {})
         self._ensure_parameter_state()
 
         self.setWidgetResizable(True)
@@ -155,16 +155,17 @@ class EEGSegmentationWidget(QScrollArea):
         epoch_grid = QGridLayout()
         epoch_panel.layout().addLayout(epoch_grid)
 
-        epoch_config = self.config.get("epoch_window_ms", {})
+        instant_epoch_config = self._default_epoch_state("instant")
+        duration_epoch_config = self._default_epoch_state("duration")
         self.epoch_start_label = QLabel("Epoch start")
         self.epoch_end_label = QLabel("Epoch end")
         self.duration_epoch_length_label = QLabel("Epoch length")
         self.stride_label = QLabel("Stride")
 
-        self.epoch_start = self._spin(-60000, 60000, int(epoch_config.get("start", -300)))
-        self.epoch_end = self._spin(-60000, 60000, int(epoch_config.get("end", 700)))
-        self.duration_epoch_length = self._spin(1, 60000, int(self.config.get("duration_epoch_length_ms", 1000)))
-        self.stride = self._spin(0, 100, int(self.config.get("stride_percent", 0)), suffix=" %")
+        self.epoch_start = self._spin(-60000, 60000, int(instant_epoch_config["epoch_window_ms"]["start"]))
+        self.epoch_end = self._spin(-60000, 60000, int(instant_epoch_config["epoch_window_ms"]["end"]))
+        self.duration_epoch_length = self._spin(1, 60000, int(duration_epoch_config["duration_epoch_length_ms"]))
+        self.stride = self._spin(0, 100, int(instant_epoch_config["stride_percent"]), suffix=" %")
         self.average_epochs = QCheckBox("Average epochs before feature extraction")
 
         epoch_grid.addWidget(self.epoch_start_label, 0, 0)
@@ -337,8 +338,60 @@ class EEGSegmentationWidget(QScrollArea):
         layout.addWidget(instant_button)
         return panel, duration_button, instant_button
 
+    def _initial_segmentation_state(self, current: dict[str, Any]) -> dict[str, Any]:
+        mode = current.get("segmentation_mode", self.config.get("segmentation_mode", "independent"))
+        if mode not in {"independent", "nested"}:
+            mode = "independent"
+
+        epoch_parameters = current.get("epoch_parameters")
+        if not isinstance(epoch_parameters, dict):
+            epoch_parameters = {}
+        normalization = current.get("normalization")
+        if not isinstance(normalization, dict) or not (
+            "duration" in normalization or "instant" in normalization
+        ):
+            normalization = {}
+
+        return {
+            "segmentation_mode": mode,
+            "event_groups": self._initial_event_groups(current, mode),
+            "epoch_parameters": {
+                "duration": deepcopy(epoch_parameters.get("duration") or {}),
+                "instant": deepcopy(epoch_parameters.get("instant") or {}),
+            },
+            "normalization": {
+                "duration": deepcopy(normalization.get("duration") or {}),
+                "instant": deepcopy(normalization.get("instant") or {}),
+            },
+            "thresholding": {
+                **deepcopy(self.config.get("thresholding", {})),
+                **deepcopy(current.get("thresholding") or {}),
+            },
+            "resampling": {
+                **deepcopy(self.config.get("resampling", {})),
+                **deepcopy(current.get("resampling") or {}),
+            },
+        }
+
+    @staticmethod
+    def _event_group(base_event: Any | None, duration_events: list[Any] | None,
+        instant_events: list[Any] | None) -> dict[str, Any]:
+        return {
+            "base_event": str(base_event) if base_event else None,
+            "duration_events": [str(event) for event in (duration_events or [])],
+            "instant_events": [str(event) for event in (instant_events or [])],
+        }
+
+    def _initial_event_groups(self, current: dict[str, Any], mode: str) -> list[dict[str, Any]]:
+        del mode
+        event_groups = current.get("event_groups")
+        if isinstance(event_groups, list):
+            return [self._event_group(group.get("base_event"), group.get("duration_events"),
+                group.get("instant_events")) for group in event_groups if isinstance(group, dict)]
+        return []
+
     def _default_epoch_window(self) -> dict[str, int]:
-        epoch = self.config.get("epoch_window_ms", {})
+        epoch = ((self.config.get("epoch_parameters") or {}).get("instant") or {}).get("epoch_window_ms", {})
         return {"start": int(epoch.get("start", -300)), "end": int(epoch.get("end", 700))}
 
     def _normalized_epoch_window(self, value: Any | None = None) -> dict[str, int]:
@@ -349,68 +402,106 @@ class EEGSegmentationWidget(QScrollArea):
         return default
 
     def _normalized_baseline_window(self, value: Any | None = None) -> dict[str, int]:
-        default = self._default_normalization()["baseline_window_ms"]
+        default = self._default_normalization_state("instant")["baseline_window_ms"]
         if isinstance(value, dict):
             default.update({"start": int(value.get("start", default["start"])),
                 "end": int(value.get("end", default["end"]))})
         return default
 
-    def _default_normalization(self) -> dict[str, Any]:
-        normalization = self.config.get("normalization", {})
-        baseline = normalization.get("baseline_window_ms", {})
-        return {"enabled": bool(normalization.get("enabled", False)),
-            "mode": str(normalization.get("mode", "mean_std")),
-            "baseline_window_ms": {"start": int(baseline.get("start", -100)), "end": int(baseline.get("end", 0))}}
+    def _default_epoch_state(self, target: str) -> dict[str, Any]:
+        target = self._target_or_default(target)
+        defaults = ((self.config.get("epoch_parameters") or {}).get(target) or {})
+        if target == "duration":
+            return {
+                "duration_epoch_length_ms": int(defaults.get("duration_epoch_length_ms", 1000)),
+                "stride_percent": int(defaults.get("stride_percent", 0)),
+                "average_epochs": bool(defaults.get("average_epochs", False)),
+            }
+        return {
+            "epoch_window_ms": self._normalized_epoch_window(defaults.get("epoch_window_ms")),
+            "stride_percent": int(defaults.get("stride_percent", 0)),
+            "average_epochs": bool(defaults.get("average_epochs", False)),
+        }
 
-    def _normalized_normalization(self, value: Any | None = None) -> dict[str, Any]:
-        default = self._default_normalization()
+    def _normalized_epoch_state(self, target: str, value: Any | None = None) -> dict[str, Any]:
+        target = self._target_or_default(target)
+        state = self._default_epoch_state(target)
         if not isinstance(value, dict):
-            return default
-        default["baseline_window_ms"] = self._normalized_baseline_window(value.get("baseline_window_ms"))
-        default["enabled"] = bool(value.get("enabled", default["enabled"]))
-        default["mode"] = str(value.get("mode", default["mode"]))
-        return default
+            return state
+        if target == "duration":
+            state["duration_epoch_length_ms"] = int(value.get("duration_epoch_length_ms", state["duration_epoch_length_ms"]))
+        else:
+            state["epoch_window_ms"] = self._normalized_epoch_window(value.get("epoch_window_ms"))
+        state["stride_percent"] = int(value.get("stride_percent", state["stride_percent"]))
+        state["average_epochs"] = bool(value.get("average_epochs", state["average_epochs"]))
+        return state
 
-    def _ensure_parameter_state(self) -> None:
+    def _default_normalization_state(self, target: str) -> dict[str, Any]:
+        target = self._target_or_default(target)
+        defaults = ((self.config.get("normalization") or {}).get(target) or {})
+        state = {
+            "enabled": bool(defaults.get("enabled", False)),
+            "mode": str(defaults.get("mode", "mean_std")),
+        }
+        if target == "instant":
+            baseline = defaults.get("baseline_window_ms", {})
+            state["baseline_window_ms"] = {
+                "start": int(baseline.get("start", -100)),
+                "end": int(baseline.get("end", 0)),
+            }
+        return state
+
+    def _normalized_normalization_state(self, target: str, value: Any | None = None) -> dict[str, Any]:
+        target = self._target_or_default(target)
+        state = self._default_normalization_state(target)
+        if not isinstance(value, dict):
+            return state
+        state["enabled"] = bool(value.get("enabled", state["enabled"]))
+        state["mode"] = str(value.get("mode", state["mode"]))
+        if target == "instant":
+            state["baseline_window_ms"] = self._normalized_baseline_window(value.get("baseline_window_ms"))
+        return state
+
+    def _active_event_types_from_state(self) -> tuple[bool, bool]:
         segmentation = self.state["segmentation"]
-        base_epoch_window = self._normalized_epoch_window(segmentation.get("epoch_window_ms"))
-        base_normalization = self._normalized_normalization(segmentation.get("normalization"))
-        base_stride = int(segmentation.get("stride_percent", self.config.get("stride_percent", 0)))
-        base_average = bool(segmentation.get("average_epochs", self.config.get("average_epochs", False)))
-        base_duration_length = int(segmentation.get("duration_epoch_length_ms", self.config.get("duration_epoch_length_ms", 1000)))
+        if segmentation.get("segmentation_mode") == "nested":
+            return self._nested_event_types()
+        duration_events, instant_events = self._independent_events_from_state()
+        return bool(duration_events), bool(instant_events)
 
-        nested_epoch = segmentation.setdefault("nested_epoch", {})
-        duration_epoch = nested_epoch.setdefault("duration", {})
-        duration_epoch.setdefault("duration_epoch_length_ms", base_duration_length)
-        duration_epoch.setdefault("stride_percent", base_stride)
-        duration_epoch.setdefault("average_epochs", base_average)
+    def _ensure_parameter_state(self, has_duration: bool | None = None, has_instant: bool | None = None) -> None:
+        if has_duration is None or has_instant is None:
+            has_duration, has_instant = self._active_event_types_from_state()
 
-        instant_epoch = nested_epoch.setdefault("instant", {})
-        instant_epoch["epoch_window_ms"] = self._normalized_epoch_window(instant_epoch.get("epoch_window_ms", base_epoch_window))
-        instant_epoch.setdefault("stride_percent", base_stride)
-        instant_epoch.setdefault("average_epochs", base_average)
+        segmentation = self.state["segmentation"]
+        epoch_parameters = segmentation.get("epoch_parameters") if isinstance(segmentation.get("epoch_parameters"), dict) else {}
+        normalization = segmentation.get("normalization") if isinstance(segmentation.get("normalization"), dict) else {}
+        segmentation["epoch_parameters"] = {
+            "duration": self._normalized_epoch_state("duration", epoch_parameters.get("duration")) if has_duration else {},
+            "instant": self._normalized_epoch_state("instant", epoch_parameters.get("instant")) if has_instant else {},
+        }
+        segmentation["normalization"] = {
+            "duration": self._normalized_normalization_state("duration", normalization.get("duration")) if has_duration else {},
+            "instant": self._normalized_normalization_state("instant", normalization.get("instant")) if has_instant else {},
+        }
 
-        nested_normalization = segmentation.setdefault("nested_normalization", {})
-        duration_normalization = nested_normalization.setdefault("duration", {})
-        duration_normalization.setdefault("enabled", base_normalization["enabled"])
-        duration_normalization.setdefault("mode", base_normalization["mode"])
+    def _epoch_state(self, target: str, create: bool = True) -> dict[str, Any]:
+        target = self._target_or_default(target)
+        epoch_parameters = self.state["segmentation"].setdefault("epoch_parameters", {"duration": {}, "instant": {}})
+        current = epoch_parameters.get(target)
+        if create:
+            current = self._normalized_epoch_state(target, current)
+            epoch_parameters[target] = current
+        return current if isinstance(current, dict) and current else self._default_epoch_state(target)
 
-        instant_normalization = nested_normalization.setdefault("instant", {})
-        instant_normalization["baseline_window_ms"] = self._normalized_baseline_window(
-            instant_normalization.get("baseline_window_ms", base_normalization["baseline_window_ms"]))
-        instant_normalization.setdefault("enabled", base_normalization["enabled"])
-        instant_normalization.setdefault("mode", base_normalization["mode"])
-
-        segmentation["active_epoch_target"] = self._target_or_default(segmentation.get("active_epoch_target"),"instant")
-        segmentation["active_normalization_target"] = self._target_or_default(segmentation.get("active_normalization_target"),"instant")
-
-    def _epoch_state(self, target: str) -> dict[str, Any]:
-        self._ensure_parameter_state()
-        return self.state["segmentation"]["nested_epoch"][self._target_or_default(target)]
-
-    def _normalization_state(self, target: str) -> dict[str, Any]:
-        self._ensure_parameter_state()
-        return self.state["segmentation"]["nested_normalization"][self._target_or_default(target)]
+    def _normalization_state(self, target: str, create: bool = True) -> dict[str, Any]:
+        target = self._target_or_default(target)
+        normalization = self.state["segmentation"].setdefault("normalization", {"duration": {}, "instant": {}})
+        current = normalization.get(target)
+        if create:
+            current = self._normalized_normalization_state(target, current)
+            normalization[target] = current
+        return current if isinstance(current, dict) and current else self._default_normalization_state(target)
 
     def _set_epoch_target_buttons(self) -> None:
         self._set_button_checked(self.epoch_duration_target_button, self._epoch_target == "duration")
@@ -421,20 +512,20 @@ class EEGSegmentationWidget(QScrollArea):
         self._set_button_checked(self.normalization_instant_target_button, self._normalization_target == "instant")
 
     def _set_epoch_controls_from_state(self, target: str) -> None:
-        state = self._epoch_state(target)
+        state = self._epoch_state(target, create=False)
         previous = self._syncing_parameter_controls
         self._syncing_parameter_controls = True
         try:
             if target == "duration":
                 self.duration_epoch_length.setValue(
-                    int(state.get("duration_epoch_length_ms", self.config.get("duration_epoch_length_ms", 1000))))
+                    int(state.get("duration_epoch_length_ms", self._default_epoch_state("duration")["duration_epoch_length_ms"])))
             else:
                 epoch = self._normalized_epoch_window(state.get("epoch_window_ms"))
                 self.epoch_start.setValue(epoch["start"])
                 self.epoch_end.setValue(epoch["end"])
-            self.stride.setValue(int(state.get("stride_percent", self.config.get("stride_percent", 0))))
+            self.stride.setValue(int(state.get("stride_percent", self._default_epoch_state(target)["stride_percent"])))
             self.average_epochs.setChecked(
-                bool(state.get("average_epochs", self.config.get("average_epochs", False))))
+                bool(state.get("average_epochs", self._default_epoch_state(target)["average_epochs"])))
         finally:
             self._syncing_parameter_controls = previous
 
@@ -450,12 +541,13 @@ class EEGSegmentationWidget(QScrollArea):
         state["average_epochs"] = self.average_epochs.isChecked()
 
     def _set_normalization_controls_from_state(self, target: str) -> None:
-        state = self._normalization_state(target)
+        state = self._normalization_state(target, create=False)
+        default = self._default_normalization_state(target)
         previous = self._syncing_parameter_controls
         self._syncing_parameter_controls = True
         try:
-            self.normalization_enabled.setChecked(bool(state.get("enabled", self.config["normalization"]["enabled"])))
-            index = self.normalization_mode.findData(state.get("mode", self.config["normalization"]["mode"]))
+            self.normalization_enabled.setChecked(bool(state.get("enabled", default["enabled"])))
+            index = self.normalization_mode.findData(state.get("mode", default["mode"]))
             self.normalization_mode.setCurrentIndex(max(0, index))
             if target == "instant":
                 baseline = self._normalized_baseline_window(state.get("baseline_window_ms"))
@@ -528,89 +620,42 @@ class EEGSegmentationWidget(QScrollArea):
 
     def _load_state(self) -> None:
         segmentation = self.state["segmentation"]
-        epoch = segmentation.get("epoch_window_ms", {})
-        normalization = segmentation.get("normalization", {})
         thresholding = segmentation.get("thresholding", {})
         resampling = segmentation.get("resampling", {})
-        baseline = normalization.get("baseline_window_ms", {})
 
-        self.epoch_start.setValue(int(epoch.get("start", self.config.get("epoch_window_ms", {}).get("start", -300))))
-        self.epoch_end.setValue(int(epoch.get("end", self.config.get("epoch_window_ms", {}).get("end", 700))))
-        self.duration_epoch_length.setValue(int(segmentation.get("duration_epoch_length_ms",
-                    self.config.get("duration_epoch_length_ms", 1000))))
-        self.stride.setValue(int(segmentation.get("stride_percent", self.config.get("stride_percent", 0))))
-        self.average_epochs.setChecked(bool(segmentation.get("average_epochs", self.config.get("average_epochs", False))))
-        self.normalization_enabled.setChecked(bool(normalization.get("enabled", self.config["normalization"]["enabled"])))
-        self.normalization_mode.setCurrentIndex(max(0,
-                self.normalization_mode.findData(normalization.get("mode", self.config["normalization"]["mode"]))))
-        self.baseline_start.setValue(int(baseline.get("start",self.config["normalization"]["baseline_window_ms"]["start"])))
-        self.baseline_end.setValue(int(baseline.get("end", self.config["normalization"]["baseline_window_ms"]["end"])))
         self.threshold_enabled.setChecked(bool(thresholding.get("enabled", self.config["thresholding"]["enabled"])))
         self.threshold_sigma.setValue(float(thresholding.get("sigma", self.config["thresholding"]["sigma"])))
         self.threshold_samples.setValue(int(thresholding.get("samples", self.config["thresholding"]["samples"])))
-        self.threshold_channels.setValue(
-            int(thresholding.get("channels", self.config["thresholding"]["channels"]))
-        )
-        self.resampling_enabled.setChecked(
-            bool(resampling.get("enabled", self.config["resampling"]["enabled"]))
-        )
-        self.target_sampling_frequency.setValue(
-            int(
-                resampling.get(
-                    "target_sampling_frequency",
-                    self.config["resampling"]["target_sampling_frequency"],
-                )
-            )
-        )
-
-        # Backward-compatible migration from the old checkbox-based nested mode.
-        nested_groups = deepcopy(segmentation.get("nested_groups") or [])
-        old_nested = bool(segmentation.get("instant_events_inside_duration_events", False))
-        if not nested_groups and old_nested:
-            old_duration = list(segmentation.get("selected_duration_events") or [])
-            old_instant = list(segmentation.get("selected_instant_events") or [])
-            nested_groups = [
-                {
-                    "base_event": base_event,
-                    "nested_duration_events": [],
-                    "nested_instant_events": list(old_instant),
-                }
-                for base_event in old_duration
-            ]
-        segmentation["nested_groups"] = nested_groups
+        self.threshold_channels.setValue(int(thresholding.get("channels", self.config["thresholding"]["channels"])))
+        self.resampling_enabled.setChecked(bool(resampling.get("enabled", self.config["resampling"]["enabled"])))
+        self.target_sampling_frequency.setValue(int(resampling.get("target_sampling_frequency",
+                    self.config["resampling"]["target_sampling_frequency"])))
 
         requested_mode = segmentation.get("segmentation_mode")
         if requested_mode not in {"independent", "nested"}:
-            requested_mode = "nested" if nested_groups else "independent"
+            requested_mode = "nested" if any(group.get("base_event") for group in segmentation.get("event_groups", [])) else "independent"
 
         self._updating_mode = True
         self.independent_mode_button.setChecked(requested_mode == "independent")
         self.nested_mode_button.setChecked(requested_mode == "nested")
         self._updating_mode = False
 
-        self._epoch_target = self._target_or_default(
-            segmentation.get("active_epoch_target"),
-            "duration" if segmentation.get("selection_mode") == "duration" else "instant",
-        )
-        self._normalization_target = self._target_or_default(
-            segmentation.get("active_normalization_target"),
-            "duration" if segmentation.get("selection_mode") == "duration" else "instant",
-        )
+        has_duration, has_instant = self._active_event_types_from_state()
+        default_target = "duration" if has_duration and not has_instant else "instant"
+        self._epoch_target = default_target
+        self._normalization_target = default_target
+        self._ensure_parameter_state(has_duration, has_instant)
         self._set_epoch_target_buttons()
         self._set_normalization_target_buttons()
         self._set_epoch_controls_from_state(self._epoch_target)
         self._set_normalization_controls_from_state(self._normalization_target)
 
     def _event_names(self) -> tuple[list[str], list[str]]:
-        group_id = self.state.get("selected_bids_group")
-        for group in self.state.get("bids_groups", []):
-            if group.get("id") == group_id:
-                duration_events = list(group.get("duration_events") or [])
-                instant_events = list(group.get("instant_events") or [])
-                if not duration_events and not instant_events:
-                    instant_events = list(group.get("event_types") or [])
-                return duration_events, instant_events
-        return [], []
+        duration_events = list(self.state.get("duration_events") or [])
+        instant_events = list(self.state.get("instant_events") or [])
+        if not duration_events and not instant_events:
+            instant_events = list(self.state.get("event_types") or [])
+        return duration_events, instant_events
 
     def _current_segmentation_mode(self) -> str:
         return "nested" if self.nested_mode_button.isChecked() else "independent"
@@ -632,20 +677,29 @@ class EEGSegmentationWidget(QScrollArea):
                 self._clear_layout(item.layout())
 
     def _clear_event_group(self, group: str) -> None:
-        list_widget = (
-            self.instant_events_list if group == "instant" else self.duration_events_list
-        )
+        list_widget = (self.instant_events_list if group == "instant" else self.duration_events_list)
         list_widget.blockSignals(True)
         list_widget.clearSelection()
         list_widget.blockSignals(False)
+
+    def _independent_events_from_state(self) -> tuple[list[str], list[str]]:
+        duration_events: list[str] = []
+        instant_events: list[str] = []
+        for group in self.state["segmentation"].get("event_groups") or []:
+            if group.get("base_event"):
+                continue
+            duration_events.extend(str(event) for event in group.get("duration_events") or [])
+            instant_events.extend(str(event) for event in group.get("instant_events") or [])
+        return list(dict.fromkeys(duration_events)), list(dict.fromkeys(instant_events))
 
     def _refresh_events(self) -> None:
         duration_events, instant_events = self._event_names()
         signature = (tuple(duration_events), tuple(instant_events))
         segmentation = self.state["segmentation"]
 
-        saved_duration = set(segmentation.get("selected_duration_events") or [])
-        saved_instant = set(segmentation.get("selected_instant_events") or [])
+        saved_duration, saved_instant = self._independent_events_from_state()
+        saved_duration = set(saved_duration)
+        saved_instant = set(saved_instant)
 
         if signature != self._last_event_signature:
             saved_duration &= set(duration_events)
@@ -654,32 +708,23 @@ class EEGSegmentationWidget(QScrollArea):
             if saved_duration and saved_instant:
                 saved_instant.clear()
 
-            valid_nested_groups = []
-            for group in segmentation.get("nested_groups") or []:
+            valid_event_groups = []
+            for group in segmentation.get("event_groups") or []:
                 base_event = group.get("base_event")
+                if not base_event:
+                    if saved_duration or saved_instant:
+                        valid_event_groups.append(self._event_group(None, list(saved_duration), list(saved_instant)))
+                    continue
                 if base_event not in duration_events:
                     continue
 
-                nested_duration = [
-                    event
-                    for event in group.get("nested_duration_events") or []
-                    if event in duration_events and event != base_event
-                ]
-                nested_instant = [
-                    event
-                    for event in group.get("nested_instant_events") or []
-                    if event in instant_events
-                ]
-
-                valid_nested_groups.append(
-                    {
-                        "base_event": base_event,
-                        "nested_duration_events": list(dict.fromkeys(nested_duration)),
-                        "nested_instant_events": list(dict.fromkeys(nested_instant)),
-                    }
-                )
-
-            segmentation["nested_groups"] = valid_nested_groups
+                nested_duration = [event for event in group.get("duration_events") or []
+                    if event in duration_events and event != base_event]
+                nested_instant = [event for event in group.get("instant_events") or []
+                    if event in instant_events]
+                valid_event_groups.append(self._event_group(base_event, list(dict.fromkeys(nested_duration)),
+                    list(dict.fromkeys(nested_instant))))
+            segmentation["event_groups"] = valid_event_groups
 
         self._updating_events = True
         self.duration_events_list.blockSignals(True)
@@ -692,15 +737,11 @@ class EEGSegmentationWidget(QScrollArea):
 
         for event_name in duration_events:
             self.duration_events_list.addItem(str(event_name))
-            self.duration_events_list.item(
-                self.duration_events_list.count() - 1
-            ).setSelected(event_name in saved_duration)
+            self.duration_events_list.item(self.duration_events_list.count() - 1).setSelected(event_name in saved_duration)
 
         for event_name in instant_events:
             self.instant_events_list.addItem(str(event_name))
-            self.instant_events_list.item(
-                self.instant_events_list.count() - 1
-            ).setSelected(event_name in saved_instant)
+            self.instant_events_list.item(self.instant_events_list.count() - 1).setSelected(event_name in saved_instant)
 
         self.duration_events_list.blockSignals(False)
         self.instant_events_list.blockSignals(False)
@@ -716,19 +757,15 @@ class EEGSegmentationWidget(QScrollArea):
         self.nested_mode_button.setEnabled(available)
 
         if available:
-            self.nested_mode_button.setToolTip(
-                "Create relationships between a base duration event and nested duration or instant events."
-            )
+            self.nested_mode_button.setToolTip("Create relationships between a base duration event and nested duration or instant events.")
         else:
-            self.nested_mode_button.setToolTip(
-                "Nested mode requires either an instant event or at least two duration events."
-            )
+            self.nested_mode_button.setToolTip("Nested mode requires either an instant event or at least two duration events.")
 
         if not available and self.nested_mode_button.isChecked():
             self._updating_mode = True
             self.independent_mode_button.setChecked(True)
             self._updating_mode = False
-            self.state["segmentation"]["nested_groups"] = []
+            self.state["segmentation"]["event_groups"] = []
 
     def _current_event_selection(self) -> tuple[list[str], list[str]]:
         duration = [item.text() for item in self.duration_events_list.selectedItems()]
@@ -758,94 +795,52 @@ class EEGSegmentationWidget(QScrollArea):
 
         self._sync()
 
+    def _event_groups(self) -> list[dict[str, Any]]:
+        return self.state["segmentation"].setdefault("event_groups", [])
+
     def _nested_groups(self) -> list[dict[str, Any]]:
-        return self.state["segmentation"].setdefault("nested_groups", [])
+        event_groups = self._event_groups()
+        event_groups[:] = [group for group in event_groups if group.get("base_event")]
+        return event_groups
 
     def _available_base_events(self) -> list[str]:
         duration_events, _ = self._event_names()
-        existing_bases = {
-            group.get("base_event")
-            for group in self._nested_groups()
-        }
-        return [
-            event for event in duration_events if event not in existing_bases
-        ]
+        existing_bases = {group.get("base_event") for group in self._nested_groups()}
+        return [event for event in duration_events if event not in existing_bases]
 
     def _nested_group_for(self, base_event: str) -> dict[str, Any] | None:
-        return next(
-            (
-                nested_group
-                for nested_group in self._nested_groups()
-                if nested_group.get("base_event") == base_event
-            ),
-            None,
-        )
+        return next((nested_group for nested_group in self._nested_groups() if nested_group.get("base_event") == base_event), None)
 
-    def _available_nested_events(
-        self,
-        group: dict[str, Any],
-        kind: str,
-    ) -> list[str]:
+    def _available_nested_events(self, group: dict[str, Any], kind: str) -> list[str]:
         duration_events, instant_events = self._event_names()
         base_event = str(group.get("base_event", ""))
-        state_key = (
-            "nested_duration_events"
-            if kind == "duration"
-            else "nested_instant_events"
-        )
+        state_key = ("duration_events" if kind == "duration" else "instant_events")
         already_selected = set(group.get(state_key) or [])
 
         if kind == "duration":
-            return [
-                event
-                for event in duration_events
-                if event != base_event and event not in already_selected
-            ]
+            return [event for event in duration_events if event != base_event and event not in already_selected]
 
-        return [
-            event
-            for event in instant_events
-            if event not in already_selected
-        ]
+        return [event for event in instant_events if event not in already_selected]
 
     @staticmethod
-    def _set_add_button_state(
-        button: QPushButton,
-        available_events: list[str],
-        available_tooltip: str,
-        unavailable_tooltip: str,
-    ) -> None:
+    def _set_add_button_state(button: QPushButton, available_events: list[str], available_tooltip: str,
+        unavailable_tooltip: str) -> None:
         has_available_events = bool(available_events)
         button.setEnabled(has_available_events)
-        button.setToolTip(
-            available_tooltip
-            if has_available_events
-            else unavailable_tooltip
-        )
+        button.setToolTip(available_tooltip if has_available_events else unavailable_tooltip)
 
     def _add_base_events(self) -> None:
         available_events = self._available_base_events()
         if not available_events:
             return
 
-        selected_events = self._select_multiple_events(
-            title="Add base duration events",
-            description="Select one or more duration events to use as bases.",
-            events=available_events,
-            kind="duration",
-        )
+        selected_events = self._select_multiple_events(title="Add base duration events",
+            description="Select one or more duration events to use as bases.", events=available_events, kind="duration")
         if not selected_events:
             return
 
         for event_name in selected_events:
-            self._nested_groups().append(
-                {
-                    "base_event": event_name,
-                    "nested_duration_events": [],
-                    "nested_instant_events": [],
-                }
-            )
-
+            self._nested_groups().append(self._event_group(event_name, [], []))
         self._sync()
 
     def _add_nested_events(self, base_event: str, kind: str) -> None:
@@ -853,11 +848,7 @@ class EEGSegmentationWidget(QScrollArea):
         if group is None:
             return
 
-        state_key = (
-            "nested_duration_events"
-            if kind == "duration"
-            else "nested_instant_events"
-        )
+        state_key = ("duration_events" if kind == "duration" else "instant_events")
         available_events = self._available_nested_events(group, kind)
         if not available_events:
             return
@@ -869,57 +860,26 @@ class EEGSegmentationWidget(QScrollArea):
             description = f"Select instant events contained within {base_event}."
             title = "Add nested instant events"
 
-        selected_events = self._select_multiple_events(
-            title=title,
-            description=description,
-            events=available_events,
-            kind=kind,
-        )
+        selected_events = self._select_multiple_events(title=title, description=description, events=available_events,
+            kind=kind)
         if not selected_events:
             return
-
-        group[state_key] = list(dict.fromkeys([
-            *(group.get(state_key) or []),
-            *selected_events,
-        ]))
+        group[state_key] = list(dict.fromkeys([*(group.get(state_key) or []), *selected_events]))
         self._sync()
 
     def _remove_base_event(self, base_event: str) -> None:
-        self.state["segmentation"]["nested_groups"] = [
-            group
-            for group in self._nested_groups()
-            if group.get("base_event") != base_event
-        ]
+        self.state["segmentation"]["event_groups"] = [group for group in self._nested_groups() if group.get("base_event") != base_event]
         self._sync()
 
-    def _remove_nested_event(
-        self,
-        base_event: str,
-        event_name: str,
-        kind: str,
-    ) -> None:
-        state_key = (
-            "nested_duration_events"
-            if kind == "duration"
-            else "nested_instant_events"
-        )
+    def _remove_nested_event(self, base_event: str, event_name: str, kind: str) -> None:
+        state_key = ("duration_events" if kind == "duration" else "instant_events")
         for group in self._nested_groups():
             if group.get("base_event") == base_event:
-                group[state_key] = [
-                    event
-                    for event in group.get(state_key) or []
-                    if event != event_name
-                ]
+                group[state_key] = [event for event in group.get(state_key) or [] if event != event_name]
                 break
         self._sync()
 
-    def _select_multiple_events(
-        self,
-        title: str,
-        description: str,
-        events: list[str],
-        kind: str,
-    ) -> list[str]:
+    def _select_multiple_events(self, title: str, description: str, events: list[str], kind: str) -> list[str]:
         if not events:
             return []
 
@@ -940,10 +900,7 @@ class EEGSegmentationWidget(QScrollArea):
         event_list.addItems(events)
         layout.addWidget(event_list)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Cancel
-            | QDialogButtonBox.StandardButton.Ok
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
@@ -955,13 +912,11 @@ class EEGSegmentationWidget(QScrollArea):
 
     def _refresh_nested_groups_editor(self) -> None:
         self._clear_layout(self.nested_groups_layout)
+        if self._current_segmentation_mode() != "nested":
+            return
         available_base_events = self._available_base_events()
-        self._set_add_button_state(
-            self.add_base_event_button,
-            available_base_events,
-            "Add duration events as base events.",
-            "All available duration events are already configured as base events.",
-        )
+        self._set_add_button_state(self.add_base_event_button, available_base_events,"Add duration events as base events.",
+            "All available duration events are already configured as base events.")
         nested_groups = self._nested_groups()
 
         if not nested_groups:
@@ -995,9 +950,7 @@ class EEGSegmentationWidget(QScrollArea):
 
             remove_base_button = QPushButton("Remove")
             remove_base_button.setProperty("variant", "ghost")
-            remove_base_button.clicked.connect(
-                lambda _=False, event=base_event: self._remove_base_event(event)
-            )
+            remove_base_button.clicked.connect(lambda _=False, event=base_event: self._remove_base_event(event))
             header.addWidget(remove_base_button)
             card_layout.addLayout(header)
 
@@ -1006,38 +959,16 @@ class EEGSegmentationWidget(QScrollArea):
             children_row = QHBoxLayout(children_container)
             children_row.setContentsMargins(10, 8, 10, 8)
             children_row.setSpacing(6)
-            nested_duration = list(group.get("nested_duration_events") or [])
-            nested_instant = list(group.get("nested_instant_events") or [])
+            nested_duration = list(group.get("duration_events") or [])
+            nested_instant = list(group.get("instant_events") or [])
 
             for event_name in nested_duration:
-                children_row.addWidget(
-                    self._summary_chip(
-                        event_name,
-                        "duration",
-                        removable=True,
-                        on_remove=lambda event=event_name, base=base_event: self._remove_nested_event(
-                            base,
-                            event,
-                            "duration",
-                        ),
-                        compact=True,
-                    )
-                )
+                children_row.addWidget(self._summary_chip(event_name, "duration", removable=True,
+                    on_remove=lambda event=event_name, base=base_event: self._remove_nested_event(base, event, "duration"), compact=True))
 
             for event_name in nested_instant:
-                children_row.addWidget(
-                    self._summary_chip(
-                        event_name,
-                        "instant",
-                        removable=True,
-                        on_remove=lambda event=event_name, base=base_event: self._remove_nested_event(
-                            base,
-                            event,
-                            "instant",
-                        ),
-                        compact=True,
-                    )
-                )
+                children_row.addWidget(self._summary_chip(event_name, "instant", removable=True,
+                    on_remove=lambda event=event_name, base=base_event: self._remove_nested_event(base, event,"instant"), compact=True))
 
             if not nested_duration and not nested_instant:
                 empty = QLabel("No nested events selected.")
@@ -1059,25 +990,15 @@ class EEGSegmentationWidget(QScrollArea):
             add_instant_button.setProperty("role", "segmentation-instant-action")
             available_nested_duration = self._available_nested_events(group, "duration")
             available_nested_instant = self._available_nested_events(group, "instant")
-            self._set_add_button_state(
-                add_duration_button,
-                available_nested_duration,
+            self._set_add_button_state(add_duration_button, available_nested_duration,
                 f"Add duration events contained within {base_event}.",
-                "No additional duration events are available for this base event.",
-            )
-            self._set_add_button_state(
-                add_instant_button,
-                available_nested_instant,
+                "No additional duration events are available for this base event.")
+            self._set_add_button_state(add_instant_button, available_nested_instant,
                 f"Add instant events contained within {base_event}.",
-                "No additional instant events are available for this base event.",
-            )
+                "No additional instant events are available for this base event.")
 
-            add_duration_button.clicked.connect(
-                lambda _=False, base=base_event: self._add_nested_events(base, "duration")
-            )
-            add_instant_button.clicked.connect(
-                lambda _=False, base=base_event: self._add_nested_events(base, "instant")
-            )
+            add_duration_button.clicked.connect(lambda _=False, base=base_event: self._add_nested_events(base, "duration"))
+            add_instant_button.clicked.connect(lambda _=False, base=base_event: self._add_nested_events(base, "instant"))
 
             actions.addWidget(add_duration_button)
             actions.addWidget(add_instant_button)
@@ -1088,14 +1009,8 @@ class EEGSegmentationWidget(QScrollArea):
 
     def _nested_event_types(self) -> tuple[bool, bool]:
         nested_groups = self._nested_groups()
-        has_duration = any(
-            group.get("nested_duration_events")
-            for group in nested_groups
-        )
-        has_instant = any(
-            group.get("nested_instant_events")
-            for group in nested_groups
-        )
+        has_duration = any(group.get("duration_events") for group in nested_groups)
+        has_instant = any(group.get("instant_events") for group in nested_groups)
         return has_duration, has_instant
 
     @staticmethod
@@ -1130,69 +1045,35 @@ class EEGSegmentationWidget(QScrollArea):
         show_epoch_duration = has_duration_epochs and epoch_target == "duration"
         show_any_epoch_controls = show_epoch_instant or show_epoch_duration
 
-        self._set_visible(
-            [
-                self.epoch_start_label,
-                self.epoch_start,
-                self.epoch_end_label,
-                self.epoch_end,
-            ],
-            show_epoch_instant,
-        )
-        self._set_visible(
-            [
-                self.duration_epoch_length_label,
-                self.duration_epoch_length,
-                self.stride_label,
-                self.stride,
-            ],
-            show_epoch_duration,
-        )
+        self._set_visible([self.epoch_start_label, self.epoch_start, self.epoch_end_label, self.epoch_end],
+            show_epoch_instant)
+        self._set_visible([self.duration_epoch_length_label, self.duration_epoch_length, self.stride_label,
+                self.stride], show_epoch_duration)
         self.average_epochs.setVisible(show_any_epoch_controls)
 
         baseline_visible = normalization and has_instant_epochs and normalization_target == "instant"
-        self._set_visible(
-            [
-                self.baseline_start_label,
-                self.baseline_start,
-                self.baseline_end_label,
-                self.baseline_end,
-            ],
-            baseline_visible,
-        )
+        self._set_visible([self.baseline_start_label, self.baseline_start, self.baseline_end_label,
+                self.baseline_end], baseline_visible)
 
         self.normalization_mode.setEnabled(normalization)
         self.baseline_start.setEnabled(baseline_visible)
         self.baseline_end.setEnabled(baseline_visible)
 
-        for widget in (
-            self.threshold_sigma,
-            self.threshold_samples,
-            self.threshold_channels,
-        ):
+        for widget in (self.threshold_sigma, self.threshold_samples, self.threshold_channels):
             widget.setEnabled(thresholding)
 
         self.target_sampling_frequency.setEnabled(resampling)
 
         if independent:
-            self.mode_help.setText(
-                "Select either duration events or instant events. The two lists are mutually exclusive."
-            )
+            self.mode_help.setText("Select either duration events or instant events. The two lists are mutually exclusive.")
         else:
-            self.mode_help.setText(
-                "Create explicit parent-child relationships between base duration events and nested events."
-            )
+            self.mode_help.setText("Create explicit parent-child relationships between base duration events and nested events.")
 
     def _refresh_status_style(self) -> None:
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
-    def _update_status_label(
-        self,
-        mode: str,
-        duration_events: list[str],
-        instant_events: list[str],
-    ) -> None:
+    def _update_status_label(self, mode: str, duration_events: list[str], instant_events: list[str]) -> None:
         available_duration_events, available_instant_events = self._event_names()
 
         if not available_duration_events and not available_instant_events:
@@ -1203,15 +1084,9 @@ class EEGSegmentationWidget(QScrollArea):
             status = "idle"
         elif mode == "nested":
             nested_groups = self._nested_groups()
-            relation_count = sum(
-                len(group.get("nested_duration_events") or [])
-                + len(group.get("nested_instant_events") or [])
-                for group in nested_groups
-            )
-            text = (
-                f"{len(nested_groups)} nested group(s) with "
-                f"{relation_count} relationship(s) configured."
-            )
+            relation_count = sum(len(group.get("duration_events") or []) + len(group.get("instant_events") or [])
+                for group in nested_groups)
+            text = (f"{len(nested_groups)} nested group(s) with " f"{relation_count} relationship(s) configured.")
             status = "ready"
         elif duration_events:
             text = f"{len(duration_events)} duration event(s) selected."
@@ -1227,22 +1102,12 @@ class EEGSegmentationWidget(QScrollArea):
         self.status_label.setProperty("status", status)
         self._refresh_status_style()
 
-    def _summary_chip(
-        self,
-        text: str,
-        kind: str,
-        removable: bool = False,
-        on_remove: Any | None = None,
-        base: bool = False,
-        compact: bool = False,
-    ) -> QFrame:
+    def _summary_chip(self, text: str, kind: str, removable: bool = False, on_remove: Any | None = None,
+        base: bool = False, compact: bool = False) -> QFrame:
         chip = QFrame()
         if compact:
             chip.setProperty("compact", "true")
-        chip.setSizePolicy(
-            QSizePolicy.Policy.Maximum,
-            QSizePolicy.Policy.Preferred,
-        )
+        chip.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
 
         if base and kind == "duration":
             chip.setObjectName("summaryBaseDurationChip")
@@ -1272,12 +1137,7 @@ class EEGSegmentationWidget(QScrollArea):
 
         return chip
 
-    def _refresh_summary(
-        self,
-        mode: str,
-        duration_events: list[str],
-        instant_events: list[str],
-    ) -> None:
+    def _refresh_summary(self, mode: str, duration_events: list[str], instant_events: list[str]) -> None:
         self.summary_panel.setVisible(mode != "nested")
         self._clear_layout(self.summary_layout)
 
@@ -1297,70 +1157,66 @@ class EEGSegmentationWidget(QScrollArea):
         row.addStretch()
         self.summary_layout.addLayout(row)
 
+    def _active_event_types(self, mode: str, selection_mode: str) -> tuple[bool, bool]:
+        if mode == "nested":
+            return self._nested_event_types()
+        return selection_mode == "duration", selection_mode == "instant"
+
     def _sync(self, *_: Any) -> None:
         if self._syncing_parameter_controls:
             return
 
-        self._ensure_parameter_state()
         mode = self._current_segmentation_mode()
         duration_events, instant_events = self._current_event_selection()
 
         if mode == "nested":
             selected_duration_events: list[str] = []
             selected_instant_events: list[str] = []
+            event_groups = deepcopy(self._nested_groups())
         else:
             selected_duration_events = duration_events
             selected_instant_events = instant_events
+            event_groups = ([self._event_group(None, selected_duration_events, selected_instant_events)]
+                if selected_duration_events or selected_instant_events else [])
 
-        selection_mode = self._selection_mode_for_state(
-            mode,
-            selected_duration_events,
-            selected_instant_events,
-        )
-        nested_groups = deepcopy(self._nested_groups())
-
-        self._store_epoch_controls(self._epoch_target)
-        self._store_normalization_controls(self._normalization_target)
-        self._align_parameter_targets(mode, selection_mode)
-        self._store_epoch_controls(self._epoch_target)
-        self._store_normalization_controls(self._normalization_target)
-
-        nested_epoch = deepcopy(self.state["segmentation"]["nested_epoch"])
-        nested_normalization = deepcopy(self.state["segmentation"]["nested_normalization"])
-        duration_epoch = nested_epoch["duration"]
-        instant_epoch = nested_epoch["instant"]
-        active_epoch = nested_epoch[self._target_for_mode(mode, selection_mode, self._epoch_target)]
-        active_normalization = nested_normalization[
-            self._target_for_mode(mode, selection_mode, self._normalization_target)
-        ]
+        selection_mode = self._selection_mode_for_state(mode, selected_duration_events, selected_instant_events)
+        has_duration_epochs, has_instant_epochs = self._active_event_types(mode, selection_mode)
+        previous_segmentation = self.state["segmentation"]
+        previous_epoch_parameters = deepcopy(previous_segmentation.get("epoch_parameters") or {})
+        previous_normalization = deepcopy(previous_segmentation.get("normalization") or {})
 
         self.state["segmentation"] = {
             "segmentation_mode": mode,
-            "selection_mode": selection_mode,
-            "instant_events_inside_duration_events": mode == "nested",
-            "selected_duration_events": selected_duration_events,
-            "selected_instant_events": selected_instant_events,
-            "nested_groups": nested_groups,
-            "epoch_window_ms": deepcopy(instant_epoch["epoch_window_ms"]),
-            "duration_epoch_length_ms": duration_epoch["duration_epoch_length_ms"],
-            "stride_percent": active_epoch["stride_percent"],
-            "average_epochs": active_epoch["average_epochs"],
-            "normalization": deepcopy(active_normalization),
-            "nested_epoch": nested_epoch,
-            "nested_normalization": nested_normalization,
-            "active_epoch_target": self._epoch_target,
-            "active_normalization_target": self._normalization_target,
-            "thresholding": {
-                "enabled": self.threshold_enabled.isChecked(),
+            "event_groups": event_groups,
+            "epoch_parameters": {
+                "duration": deepcopy(previous_epoch_parameters.get("duration") or {}),
+                "instant": deepcopy(previous_epoch_parameters.get("instant") or {}),
+            },
+            "normalization": {
+                "duration": deepcopy(previous_normalization.get("duration") or {}),
+                "instant": deepcopy(previous_normalization.get("instant") or {}),
+            },
+            "thresholding": {"enabled": self.threshold_enabled.isChecked(),
                 "sigma": self.threshold_sigma.value(),
                 "samples": self.threshold_samples.value(),
-                "channels": self.threshold_channels.value(),
-            },
+                "channels": self.threshold_channels.value()},
             "resampling": {
                 "enabled": self.resampling_enabled.isChecked(),
-                "target_sampling_frequency": self.target_sampling_frequency.value(),
-            },
-        }
+                "target_sampling_frequency": self.target_sampling_frequency.value()}}
+
+        if self._epoch_target == "duration" and has_duration_epochs:
+            self._store_epoch_controls("duration")
+        elif self._epoch_target == "instant" and has_instant_epochs:
+            self._store_epoch_controls("instant")
+
+        if self._normalization_target == "duration" and has_duration_epochs:
+            self._store_normalization_controls("duration")
+        elif self._normalization_target == "instant" and has_instant_epochs:
+            self._store_normalization_controls("instant")
+
+        self._ensure_parameter_state(has_duration_epochs, has_instant_epochs)
+        self._align_parameter_targets(mode, selection_mode)
+        self._ensure_parameter_state(has_duration_epochs, has_instant_epochs)
 
         self._set_dependent_enabled(mode)
         self._refresh_nested_groups_editor()
@@ -1372,32 +1228,19 @@ class EEGSegmentationWidget(QScrollArea):
     def _validate(self) -> list[str]:
         segmentation = self.state["segmentation"]
         mode = segmentation["segmentation_mode"]
-        selection_mode = segmentation["selection_mode"]
+        independent_duration_events, independent_instant_events = self._independent_events_from_state()
+        selection_mode = self._selection_mode_for_state(mode,
+            independent_duration_events,
+            independent_instant_events)
         errors: list[str] = []
 
         if mode == "nested":
             if not self._nested_mode_available():
-                errors.append(
-                    "Nested mode requires either an instant event or at least two duration events."
-                )
+                errors.append("Nested mode requires either an instant event or at least two duration events.")
             else:
-                nested_groups = segmentation.get("nested_groups") or []
-                errors.extend(
-                    self.validation.validate_many(
-                        nested_groups,
-                        [
-                            (
-                                "minimum_length",
-                                {
-                                    "minimum": 1,
-                                    "item_name": "base duration event",
-                                    "action": "add",
-                                },
-                            )
-                        ],
-                        label="Nested groups",
-                    )
-                )
+                nested_groups = self._nested_groups()
+                errors.extend(self.validation.validate_many(nested_groups, [("minimum_length", {"minimum": 1,
+                                    "item_name": "base duration event", "action": "add"})], label="Event groups"))
 
                 seen_bases: set[str] = set()
                 for group in nested_groups:
@@ -1406,151 +1249,67 @@ class EEGSegmentationWidget(QScrollArea):
                         errors.append("Nested group: base duration event is missing.")
                         continue
                     if base_event in seen_bases:
-                        errors.append(
-                            f"Nested groups: base event '{base_event}' is duplicated."
-                        )
+                        errors.append(f"Nested groups: base event '{base_event}' is duplicated.")
                     seen_bases.add(base_event)
-
-                    nested_duration = list(
-                        group.get("nested_duration_events") or []
-                    )
-                    nested_instant = list(
-                        group.get("nested_instant_events") or []
-                    )
+                    nested_duration = list(group.get("duration_events") or [])
+                    nested_instant = list(group.get("instant_events") or [])
 
                     if base_event in nested_duration:
-                        errors.append(
-                            f"{base_event}: a base event cannot contain itself."
-                        )
+                        errors.append(f"{base_event}: a base event cannot contain itself.")
                     if not nested_duration and not nested_instant:
-                        errors.append(
-                            f"{base_event}: select at least one nested event."
-                        )
+                        errors.append(f"{base_event}: select at least one nested event.")
 
         elif selection_mode == "duration":
             errors.extend(
-                self.validation.validate_many(
-                    segmentation["selected_duration_events"],
-                    [
-                        (
-                            "minimum_length",
-                            {
-                                "minimum": 1,
-                                "item_name": "duration event",
-                                "action": "select",
-                            },
-                        )
-                    ],
-                    label="Duration events",
-                )
-            )
+                self.validation.validate_many(independent_duration_events,[("minimum_length",
+                            {"minimum": 1, "item_name": "duration event", "action": "select"})], label="Duration events"))
         elif selection_mode == "instant":
-            errors.extend(
-                self.validation.validate_many(
-                    segmentation["selected_instant_events"],
-                    [
-                        (
-                            "minimum_length",
-                            {
-                                "minimum": 1,
-                                "item_name": "instant event",
-                                "action": "select",
-                            },
-                        )
-                    ],
-                    label="Instant events",
-                )
-            )
+            errors.extend(self.validation.validate_many(independent_instant_events,
+                    [("minimum_length", {"minimum": 1, "item_name": "instant event", "action": "select"})], label="Instant events"))
         else:
             errors.append("Signal events: select at least one event.")
 
         self._ensure_parameter_state()
-        duration_epoch = segmentation["nested_epoch"]["duration"]
-        instant_epoch = segmentation["nested_epoch"]["instant"]
-        duration_normalization = segmentation["nested_normalization"]["duration"]
-        instant_normalization = segmentation["nested_normalization"]["instant"]
+        duration_epoch = self._epoch_state("duration", create=False)
+        instant_epoch = self._epoch_state("instant", create=False)
+        duration_normalization = self._normalization_state("duration", create=False)
+        instant_normalization = self._normalization_state("instant", create=False)
 
-        if mode == "nested":
-            has_duration_epochs, has_instant_epochs = self._nested_event_types()
-        else:
-            has_duration_epochs = selection_mode == "duration"
-            has_instant_epochs = selection_mode == "instant"
+        has_duration_epochs, has_instant_epochs = self._active_event_types(mode, selection_mode)
 
         def validate_stride(value: Any, label: str) -> None:
-            errors.extend(
-                self.validation.validate_many(
-                    value,
-                    [
-                        "integer",
-                        ("greater_or_equal", {"minimum": 0, "suffix": " %"}),
-                        ("less_or_equal", {"maximum": 100, "suffix": " %"}),
-                    ],
-                    label=label,
-                    stop_on_first_error=False,
-                )
-            )
+            errors.extend(self.validation.validate_many(value,["integer", ("greater_or_equal", {"minimum": 0, "suffix": " %"}),
+                    ("less_or_equal", {"maximum": 100, "suffix": " %"})], label=label, stop_on_first_error=False))
 
         def validate_duration_epoch() -> int:
-            errors.extend(
-                self.validation.validate_many(
-                    duration_epoch["duration_epoch_length_ms"],
+            errors.extend(self.validation.validate_many(duration_epoch["duration_epoch_length_ms"],
                     ["integer", ("greater_than", {"minimum": 0, "suffix": " ms"})],
                     label="Duration epoch length" if mode == "nested" else "Epoch length",
-                    stop_on_first_error=False,
-                )
-            )
-            validate_stride(
-                duration_epoch["stride_percent"],
-                "Duration stride" if mode == "nested" else "Stride",
-            )
+                    stop_on_first_error=False))
+            validate_stride(duration_epoch["stride_percent"], "Duration stride" if mode == "nested" else "Stride")
             return int(duration_epoch["duration_epoch_length_ms"])
 
         def validate_instant_epoch() -> int:
             epoch = instant_epoch["epoch_window_ms"]
             start = epoch["start"]
             end = epoch["end"]
-            errors.extend(
-                self.validation.validate_many(
-                    start,
-                    ["integer"],
-                    label="Instant epoch start" if mode == "nested" else "Epoch start",
-                )
-            )
-            errors.extend(
-                self.validation.validate_many(
-                    end,
-                    ["integer"],
-                    label="Instant epoch end" if mode == "nested" else "Epoch end",
-                )
-            )
+            errors.extend(self.validation.validate_many(start, ["integer"],
+                            label="Instant epoch start" if mode == "nested" else "Epoch start"))
+            errors.extend(self.validation.validate_many(end, ["integer"],
+                                    label="Instant epoch end" if mode == "nested" else "Epoch end"))
             if end <= start:
-                errors.append(
-                    "Instant epoch window: end must be greater than start."
-                    if mode == "nested"
-                    else "Epoch window: end must be greater than start."
-                )
+                errors.append("Instant epoch window: end must be greater than start." if mode == "nested"
+                    else "Epoch window: end must be greater than start.")
                 return 0
-            validate_stride(
-                instant_epoch["stride_percent"],
-                "Instant stride" if mode == "nested" else "Stride",
-            )
+            validate_stride(instant_epoch["stride_percent"], "Instant stride" if mode == "nested" else "Stride")
             return int(end - start)
 
-        def validate_normalization(
-            normalization: dict[str, Any],
-            target: str,
-            epoch_window: dict[str, int] | None,
-        ) -> None:
+        def validate_normalization(normalization: dict[str, Any], target: str, epoch_window: dict[str, int] | None) -> None:
             if not normalization.get("enabled", False):
                 return
             prefix = f"{target.title()} normalization" if mode == "nested" else "Normalization"
-            errors.extend(
-                self.validation.validate_many(
-                    normalization.get("mode"),
-                    [("one_of", {"options": ["mean", "mean_std"]})],
-                    label=f"{prefix} mode",
-                )
-            )
+            errors.extend(self.validation.validate_many(normalization.get("mode"),
+                    [("one_of", {"options": ["mean", "mean_std"]})], label=f"{prefix} mode"))
             if target != "instant" or epoch_window is None:
                 return
             baseline = normalization.get("baseline_window_ms", {})
@@ -1576,103 +1335,40 @@ class EEGSegmentationWidget(QScrollArea):
             if has_duration_epochs:
                 validate_normalization(duration_normalization, "duration", None)
             if has_instant_epochs:
-                validate_normalization(
-                    instant_normalization,
-                    "instant",
-                    instant_epoch["epoch_window_ms"],
-                )
+                validate_normalization(instant_normalization, "instant", instant_epoch["epoch_window_ms"])
         else:
             if selection_mode == "duration":
                 validate_normalization(duration_normalization, "duration", None)
             elif selection_mode == "instant":
-                validate_normalization(
-                    instant_normalization,
-                    "instant",
-                    instant_epoch["epoch_window_ms"],
-                )
+                validate_normalization(instant_normalization, "instant", instant_epoch["epoch_window_ms"])
 
         smallest_epoch_ms = min(epoch_lengths_ms) if epoch_lengths_ms else 0
-        epoch_samples = (
-            int(
-                smallest_epoch_ms
-                * float(self.source_sampling_frequency or 0)
-                / 1000
-            )
-            if smallest_epoch_ms > 0
-            else 0
-        )
-
-        n_channels = int(
-            (self.state.get("metadata") or {}).get("n_channels") or 0
-        )
+        epoch_samples = (int(smallest_epoch_ms * float(self.source_sampling_frequency or 0)/ 1000) if smallest_epoch_ms > 0
+            else 0)
+        n_channels = int((self.state.get("metadata") or {}).get("n_channels") or 0)
         thresholding = segmentation["thresholding"]
 
         if thresholding["enabled"]:
-            errors.extend(
-                self.validation.validate_many(
-                    thresholding["sigma"],
-                    ["finite_number", ("greater_than", {"minimum": 0})],
-                    label="Threshold sigma",
-                    stop_on_first_error=False,
-                )
-            )
-            errors.extend(
-                self.validation.validate_many(
-                    thresholding["samples"],
-                    ["integer", ("greater_or_equal", {"minimum": 1})],
-                    label="Threshold samples",
-                    stop_on_first_error=False,
-                )
-            )
-            errors.extend(
-                self.validation.validate_many(
-                    thresholding["channels"],
-                    ["integer", ("greater_or_equal", {"minimum": 1})],
-                    label="Threshold channels",
-                    stop_on_first_error=False,
-                )
-            )
-
+            errors.extend(self.validation.validate_many(thresholding["sigma"], ["finite_number", ("greater_than", {"minimum": 0})],
+                    label="Threshold sigma", stop_on_first_error=False))
+            errors.extend(self.validation.validate_many(thresholding["samples"], ["integer", ("greater_or_equal", {"minimum": 1})],
+                    label="Threshold samples", stop_on_first_error=False))
+            errors.extend(self.validation.validate_many(thresholding["channels"], ["integer", ("greater_or_equal", {"minimum": 1})],
+                    label="Threshold channels", stop_on_first_error=False))
             if epoch_samples and thresholding["samples"] > epoch_samples:
-                errors.append(
-                    "Threshold samples cannot exceed the smallest configured epoch sample count."
-                )
+                errors.append("Threshold samples cannot exceed the smallest configured epoch sample count.")
             if n_channels and thresholding["channels"] > n_channels:
-                errors.append(
-                    "Threshold channels cannot exceed the loaded channel count."
-                )
+                errors.append("Threshold channels cannot exceed the loaded channel count.")
 
         resampling = segmentation["resampling"]
         if resampling["enabled"]:
             target = resampling["target_sampling_frequency"]
-            errors.extend(
-                self.validation.validate_many(
-                    target,
-                    [
-                        "integer",
-                        ("greater_or_equal", {"minimum": 250, "suffix": " Hz"}),
-                    ],
-                    label="Target sample frequency",
-                    stop_on_first_error=False,
-                )
-            )
+            errors.extend(self.validation.validate_many(target,["integer", ("greater_or_equal", {"minimum": 250, "suffix": " Hz"})],
+                    label="Target sample frequency", stop_on_first_error=False))
 
             if self.source_sampling_frequency is not None:
-                errors.extend(
-                    self.validation.validate_many(
-                        target,
-                        [
-                            (
-                                "less_or_equal",
-                                {
-                                    "maximum": self.source_sampling_frequency,
-                                    "suffix": " Hz",
-                                },
-                            )
-                        ],
-                        label="Target sample frequency",
-                    )
-                )
+                errors.extend(self.validation.validate_many(target,[("less_or_equal", {"maximum":
+                            self.source_sampling_frequency, "suffix": " Hz",})], label="Target sample frequency",))
 
         return errors
 
@@ -1681,15 +1377,12 @@ class EEGSegmentationWidget(QScrollArea):
         self.source_sampling_frequency = metadata.get("sampling_frequency")
 
         if self.source_sampling_frequency is not None:
-            self.target_sampling_frequency.setMaximum(
-                max(250, int(self.source_sampling_frequency))
-            )
+            self.target_sampling_frequency.setMaximum(max(250, int(self.source_sampling_frequency)))
 
         self._refresh_events()
         self._sync()
 
     def can_continue(self) -> bool:
         return not self.validation_errors
-
 
 __all__ = ["EEGSegmentationWidget"]

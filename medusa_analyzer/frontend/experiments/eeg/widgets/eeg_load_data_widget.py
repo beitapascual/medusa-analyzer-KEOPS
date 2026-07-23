@@ -10,6 +10,9 @@ from medusa_analyzer.frontend.widgets import LoadDataAction, LoadDataWidget, Wor
 from .experiment_bids_validation import load_eeg_bids_dataset
 
 
+_RECORDING_STATE_KEYS = ("path", "relative_path", "subject", "session", "run", "datatype", "extension")
+
+
 def _metadata_from_group(group: dict[str, Any]) -> dict[str, Any]:
     return {
         "n_recordings": group["n_recordings"],
@@ -72,13 +75,10 @@ class EEGLoadDataWidget(LoadDataWidget):
 
         groups = list(results.get("groups") or [])
         self.state["input_data"] = selected_paths
-        self.state["loader_results"] = []
         self.state["bids_root"] = results.get("root")
-        self.state["bids_groups"] = groups
-        self.state.pop("metadata", None)
-        self.state.pop("selected_bids_group", None)
-        self.state.pop("selected_recordings", None)
-        self.state.pop("broadband", None)
+        self.state.pop("loader_results", None)
+        self.state.pop("bids_groups", None)
+        self._clear_selected_configuration_state()
         self.metadata_panel.hide()
         self.files.clear()
 
@@ -103,10 +103,7 @@ class EEGLoadDataWidget(LoadDataWidget):
     def _configuration_selected(self, _: int) -> None:
         group_id = self.group_combo.currentData()
         if not group_id:
-            self.state.pop("metadata", None)
-            self.state.pop("selected_bids_group", None)
-            self.state.pop("selected_recordings", None)
-            self.state.pop("broadband", None)
+            self._clear_selected_configuration_state()
             self.files.clear()
             self.metadata_panel.hide()
             self.status_label.setText(f"{len(self._configuration_groups)} recording configuration(s) found. Select one to continue.")
@@ -121,9 +118,17 @@ class EEGLoadDataWidget(LoadDataWidget):
 
     def _apply_group(self, group: dict[str, Any]) -> None:
         metadata = _metadata_from_group(group)
+        selected_recordings = [self._recording_state(recording) for recording in group["recordings"]]
+        duration_events = list(group.get("duration_events") or [])
+        instant_events = list(group.get("instant_events") or [])
+        if not duration_events and not instant_events:
+            instant_events = list(group.get("event_types") or [])
+
         self.state["metadata"] = metadata
         self.state["selected_bids_group"] = group["id"]
-        self.state["selected_recordings"] = group["recordings"]
+        self.state["selected_recordings"] = selected_recordings
+        self.state["duration_events"] = duration_events
+        self.state["instant_events"] = instant_events
 
         nyquist = float(metadata["sampling_frequency"]) / 2
         self.state["broadband"] = {"id": "broadband", "title": "Broadband", "enabled": True,
@@ -131,7 +136,7 @@ class EEGLoadDataWidget(LoadDataWidget):
         self.status_label.setText(f"{metadata['n_recordings']} recording(s) selected.")
         self.status_label.setProperty("status", "ready")
         self._refresh_status_style()
-        self._show_recordings(group["recordings"])
+        self._show_recordings(selected_recordings)
         self._show_metadata(metadata)
         self.changed.emit()
 
@@ -146,9 +151,19 @@ class EEGLoadDataWidget(LoadDataWidget):
         return (f"{group['id']} | {group['n_recordings']} rec | {group['sampling_frequency']:g} Hz | "
             f"{group['reference']} | task {group['task']} | ses {sessions}")
 
+    @staticmethod
+    def _recording_state(recording: dict[str, Any]) -> dict[str, Any]:
+        return {key: recording[key] for key in _RECORDING_STATE_KEYS if key in recording}
+
+    def _clear_selected_configuration_state(self) -> None:
+        for key in ("metadata", "selected_bids_group", "selected_recordings", "duration_events",
+                    "instant_events", "broadband"):
+            self.state.pop(key, None)
+
     def _clear_loaded_state(self) -> None:
         super()._clear_loaded_state()
-        for key in ("bids_root", "bids_groups", "selected_bids_group", "selected_recordings"):
+        for key in ("bids_root", "bids_groups", "selected_bids_group", "selected_recordings",
+                    "duration_events", "instant_events"):
             self.state.pop(key, None)
         self._configuration_groups = []
         if hasattr(self, "group_combo"):
