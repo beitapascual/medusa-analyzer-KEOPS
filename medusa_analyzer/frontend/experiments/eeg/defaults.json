@@ -87,6 +87,7 @@
   },
   "segmentation": {
     "segmentation_mode": "independent",
+    "segmentation_strategy": "window",
     "event_groups": [],
     "epoch_parameters": {
       "duration": {
