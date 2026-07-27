@@ -1,0 +1,2251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Medusa Analyzer KEOPS · Guía interactiva</title>
+  <style>
+    :root {
+      --bg: #f6f3ef;
+      --panel: #fffdfa;
+      --panel-strong: #fff;
+      --line: #d8d0ca;
+      --line-strong: #b8aba2;
+      --text: #231f1b;
+      --muted: #645b55;
+      --accent: #7b2d3b;
+      --accent-soft: #f5e6ea;
+      --accent-2: #0e7c86;
+      --accent-2-soft: #e5f4f5;
+      --accent-3: #8a6a0a;
+      --accent-3-soft: #f7f1dd;
+      --shadow: 0 10px 24px rgba(34, 24, 20, 0.08);
+      --radius: 8px;
+      --content-width: 1320px;
+      --code-bg: #221f1d;
+      --code-text: #f8f4f0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, #f8f4ef 0%, #f4f0ea 38%, #f7f6f4 100%);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--accent-2);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code,
+    pre {
+      font-family: "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
+    }
+
+    .page {
+      max-width: var(--content-width);
+      margin: 0 auto;
+      padding: 28px 24px 52px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+      gap: 24px;
+      align-items: stretch;
+      padding-bottom: 22px;
+    }
+
+    .hero-main {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px 28px 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 18px 0 0 var(--accent-2), 36px 0 0 var(--accent-3);
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      font-size: clamp(2rem, 4vw, 2.9rem);
+      line-height: 1.08;
+      font-weight: 750;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      max-width: 68ch;
+      font-size: 1rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .quick-action {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text);
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+      transition: border-color 0.18s ease, transform 0.18s ease;
+    }
+
+    .quick-action:hover {
+      border-color: var(--accent-2);
+      transform: translateY(-1px);
+    }
+
+    .hero-side {
+      display: grid;
+      gap: 14px;
+    }
+
+    .mini-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .mini-panel h2,
+    .mini-panel h3,
+    .section-card h2,
+    .section-card h3,
+    .subsection h3 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      line-height: 1.3;
+    }
+
+    .mini-panel p,
+    .section-card p,
+    .subsection p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .small-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: var(--panel-strong);
+    }
+
+    .small-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.94rem;
+    }
+
+    .small-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 290px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .tabs {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .tabs h2 {
+      margin: 0 0 10px;
+      font-size: 0.98rem;
+    }
+
+    .tab-button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 8px;
+      padding: 11px 12px;
+      margin-bottom: 4px;
+      font: inherit;
+      color: var(--text);
+      cursor: pointer;
+      transition: background-color 0.16s ease, border-color 0.16s ease;
+    }
+
+    .tab-button:last-child {
+      margin-bottom: 0;
+    }
+
+    .tab-button:hover {
+      background: #f6f4f1;
+      border-color: #ece3dd;
+    }
+
+    .tab-button[aria-selected="true"] {
+      background: var(--accent-soft);
+      border-color: #e9c3cb;
+      color: #5f1d2b;
+      font-weight: 650;
+    }
+
+    .sidebar-note {
+      background: linear-gradient(180deg, var(--accent-2-soft), #f9fffe);
+      border: 1px solid #cce7ea;
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .sidebar-note p {
+      margin: 0;
+      color: #25545a;
+      font-size: 0.95rem;
+    }
+
+    .content {
+      min-width: 0;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.is-active {
+      display: block;
+    }
+
+    .section-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+
+    .section-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    .section-header p {
+      max-width: 72ch;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .tag.accent {
+      background: var(--accent-soft);
+      border-color: #eac2ca;
+      color: #692433;
+    }
+
+    .tag.teal {
+      background: var(--accent-2-soft);
+      border-color: #cde6e9;
+      color: #195c64;
+    }
+
+    .tag.gold {
+      background: var(--accent-3-soft);
+      border-color: #eaddae;
+      color: #725907;
+    }
+
+    .flow-grid,
+    .info-grid,
+    .split-grid,
+    .metric-grid,
+    .experiments-grid,
+    .checklist-grid,
+    .inheritance-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .flow-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .info-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .split-grid {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    }
+
+    .metric-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .experiments-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .checklist-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .inheritance-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .step-card,
+    .subsection,
+    .metric-card,
+    .experiment-demo,
+    .recipe-card,
+    .inherit-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: var(--panel-strong);
+    }
+
+    .step-card h3,
+    .subsection h3,
+    .metric-card h3,
+    .experiment-demo h3,
+    .recipe-card h3,
+    .inherit-card h3 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .step-card p,
+    .subsection p,
+    .metric-card p,
+    .experiment-demo p,
+    .recipe-card p,
+    .inherit-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .step-index {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .tree,
+    .code-block,
+    .state-viewer pre {
+      margin: 0;
+      border-radius: var(--radius);
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 16px;
+      overflow: auto;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .definition-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .definition-item {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid #eee6de;
+    }
+
+    .definition-item:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .definition-item strong {
+      font-size: 0.94rem;
+    }
+
+    .definition-item span {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel-strong);
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid #ece3dd;
+      vertical-align: top;
+      font-size: 0.94rem;
+    }
+
+    th {
+      background: #faf6f1;
+      font-size: 0.9rem;
+      color: #554d47;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .experiment-demo {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+    }
+
+    .experiment-demo img {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 4px solid #f2ede8;
+      background: #fff;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+    }
+
+    .badge.ready {
+      background: var(--accent-2-soft);
+      border-color: #cde6e9;
+      color: #155961;
+    }
+
+    .badge.dashboard {
+      background: var(--accent-soft);
+      border-color: #e8c4ca;
+      color: #6b2432;
+    }
+
+    .badge.workflow {
+      background: var(--accent-3-soft);
+      border-color: #e6dcad;
+      color: #7b6106;
+    }
+
+    .details-group {
+      display: grid;
+      gap: 12px;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      overflow: hidden;
+    }
+
+    summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      font-weight: 650;
+      position: relative;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    summary::after {
+      content: "+";
+      position: absolute;
+      right: 16px;
+      top: 12px;
+      font-size: 1.15rem;
+      color: var(--muted);
+    }
+
+    details[open] summary::after {
+      content: "−";
+    }
+
+    .details-body {
+      padding: 0 16px 16px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .state-controls,
+    .validation-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .state-button,
+    .validation-button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .state-button.is-active,
+    .validation-button.is-active {
+      background: var(--accent-soft);
+      border-color: #ebc4cb;
+      color: #672232;
+      font-weight: 650;
+    }
+
+    .state-note,
+    .validation-note {
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .callout {
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      border: 1px solid #dfd5c1;
+      background: #fff9eb;
+      color: #5d4b11;
+      font-size: 0.95rem;
+    }
+
+    .callout strong {
+      color: #4c3a00;
+    }
+
+    .route-boxes {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .route-box {
+      padding: 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+    }
+
+    .route-box.router {
+      border-color: #e7c1c8;
+      background: linear-gradient(180deg, #fff6f7, #fffdfd);
+    }
+
+    .route-box.navigator {
+      border-color: #cde6e9;
+      background: linear-gradient(180deg, #f3fdfe, #fffdfd);
+    }
+
+    .route-box h3 {
+      margin: 0 0 8px;
+    }
+
+    .route-box ul,
+    .recipe-card ol,
+    .section-card ul,
+    .details-body ul {
+      margin: 10px 0 0 18px;
+      color: var(--muted);
+      padding: 0;
+    }
+
+    .section-card li,
+    .details-body li,
+    .recipe-card li {
+      margin-bottom: 8px;
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    @media (max-width: 1120px) {
+      .hero,
+      .layout,
+      .split-grid,
+      .flow-grid,
+      .info-grid,
+      .metric-grid,
+      .experiments-grid,
+      .checklist-grid,
+      .inheritance-grid,
+      .route-boxes {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+      }
+
+      .definition-item {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .experiment-demo {
+        grid-template-columns: 72px minmax(0, 1fr);
+      }
+
+      .experiment-demo img {
+        width: 72px;
+        height: 72px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        padding: 18px 14px 40px;
+      }
+
+      .hero-main,
+      .mini-panel,
+      .section-card {
+        padding: 18px;
+      }
+
+      h1 {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- Cabecera principal -->
+    <section class="hero">
+      <div class="hero-main">
+        <div class="eyebrow">Guía de arquitectura</div>
+        <h1>Medusa Analyzer KEOPS</h1>
+        <p class="lead">
+          Esta guía explica cómo se construye el dashboard, cómo se descubren los experimentos,
+          cómo se insertan los pasos del workflow en el stack, qué papel juega el <code>state</code>,
+          cómo funcionan <code>Router</code> y <code>Navigator</code>, cómo lanzar <code>Worker</code>s
+          y cómo reutilizar el validador genérico sin volver a hardcodear reglas.
+        </p>
+        <div class="hero-actions">
+          <button class="quick-action" type="button" data-jump-tab="dashboard">Cómo añadir una tarjeta</button>
+          <button class="quick-action" type="button" data-jump-tab="experimentos">Cómo crear un experimento</button>
+          <button class="quick-action" type="button" data-jump-tab="workflow">Cómo meter un step nuevo</button>
+          <button class="quick-action" type="button" data-jump-tab="estado">Qué guarda el state</button>
+          <button class="quick-action" type="button" data-jump-tab="validacion">Cómo usar Validation</button>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div class="mini-panel">
+          <h2>Ruta real de arranque</h2>
+          <div class="card-grid">
+            <div class="small-card">
+              <strong><a href="../main.py">main.py</a></strong>
+              <span>Lanzador mínimo que delega en <code>medusa_analyzer.main.main()</code>.</span>
+            </div>
+            <div class="small-card">
+              <strong><a href="../medusa_analyzer/main.py">medusa_analyzer/main.py</a></strong>
+              <span>Delegación directa a <code>frontend.app.run()</code>.</span>
+            </div>
+            <div class="small-card">
+              <strong><a href="../medusa_analyzer/frontend/app.py">frontend/app.py</a></strong>
+              <span>Crea <code>MainWindow</code>, el stack principal y el router.</span>
+            </div>
+            <div class="small-card">
+              <strong><a href="../medusa_analyzer/frontend/experiments/__init__.py">frontend/experiments/__init__.py</a></strong>
+              <span>Descubre experimentos y crea páginas completas de workflow.</span>
+            </div>
+          </div>
+        </div>
+        <div class="mini-panel">
+          <h2>Ideas clave</h2>
+          <div class="card-grid">
+            <div class="small-card">
+              <strong>Dashboard</strong>
+              <span>Sale de <code>info.json</code> de cada experimento, pasado por <code>discover_experiments()</code> y <code>build_dashboard_catalog()</code>.</span>
+            </div>
+            <div class="small-card">
+              <strong>Workflow</strong>
+              <span>Sale de la lista <code>workflow</code> del <code>info.json</code> y se inserta en <code>WorkflowShell</code>.</span>
+            </div>
+            <div class="small-card">
+              <strong>State</strong>
+              <span>Es el diccionario compartido entre todos los steps de un experimento.</span>
+            </div>
+            <div class="small-card">
+              <strong>Validación</strong>
+              <span>Se centraliza en <code>frontend/models/validation.py</code> y se invoca desde widgets concretos.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <!-- Navegación por pestañas -->
+      <aside class="sidebar">
+        <div class="tabs" role="tablist" aria-label="Secciones de la guía">
+          <h2>Secciones</h2>
+          <button class="tab-button" type="button" role="tab" data-tab="vision" aria-selected="true">1. Visión general</button>
+          <button class="tab-button" type="button" role="tab" data-tab="dashboard" aria-selected="false">2. Dashboard y tarjetas</button>
+          <button class="tab-button" type="button" role="tab" data-tab="experimentos" aria-selected="false">3. Experimentos</button>
+          <button class="tab-button" type="button" role="tab" data-tab="workflow" aria-selected="false">4. Workflow y navegación</button>
+          <button class="tab-button" type="button" role="tab" data-tab="estado" aria-selected="false">5. State compartido</button>
+          <button class="tab-button" type="button" role="tab" data-tab="eeg" aria-selected="false">6. Caso EEG</button>
+          <button class="tab-button" type="button" role="tab" data-tab="workers" aria-selected="false">7. Workers</button>
+          <button class="tab-button" type="button" role="tab" data-tab="validacion" aria-selected="false">8. Validación</button>
+          <button class="tab-button" type="button" role="tab" data-tab="checklist" aria-selected="false">9. Checklist práctico</button>
+        </div>
+        <div class="sidebar-note">
+          <p>
+            Regla mental útil: el dashboard resuelve <strong>qué experimentos existen</strong>;
+            el workflow resuelve <strong>qué pasos tiene un experimento</strong>;
+            el state resuelve <strong>cómo se comunican esos pasos</strong>.
+          </p>
+        </div>
+      </aside>
+
+      <main class="content">
+        <!-- Visión general -->
+        <section class="tab-panel is-active" data-panel="vision">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Mapa de alto nivel</h2>
+                <p>
+                  El arranque real vive en <a href="../medusa_analyzer/frontend/app.py"><code>medusa_analyzer/frontend/app.py</code></a>.
+                  Esa ventana principal crea un <code>QStackedWidget</code>, monta el <code>Router</code>, descubre
+                  experimentos desde carpetas y construye el dashboard en base a esa metadata.
+                </p>
+              </div>
+              <div class="tag-row">
+                <span class="tag accent">Entrada: <code>run()</code></span>
+                <span class="tag teal">Catálogo: <code>build_dashboard_catalog()</code></span>
+                <span class="tag gold">Workflow: <code>create_experiment_page()</code></span>
+              </div>
+            </div>
+            <div class="flow-grid">
+              <div class="step-card">
+                <div class="step-index">1</div>
+                <h3><code>main.py</code> → <code>medusa_analyzer.main</code></h3>
+                <p>
+                  La app arranca por <code>main.py</code> y acaba en
+                  <code>medusa_analyzer.frontend.app.run()</code>.
+                </p>
+              </div>
+              <div class="step-card">
+                <div class="step-index">2</div>
+                <h3><code>MainWindow</code></h3>
+                <p>
+                  Crea el stack global, el router, descubre experimentos, crea sus páginas y registra rutas.
+                </p>
+              </div>
+              <div class="step-card">
+                <div class="step-index">3</div>
+                <h3>Dashboard y workflows</h3>
+                <p>
+                  El dashboard usa categorías e items generados desde <code>info.json</code>. Cada experimento se
+                  convierte en un <code>WorkflowShell</code> con sus steps.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Archivos que mandan de verdad</h2>
+                <p>
+                  Si alguien va a modificar el producto, estos son los puntos de entrada más importantes. No hace falta
+                  aprender todo el repo de golpe; hay que saber en qué capa se toca cada cosa.
+                </p>
+              </div>
+            </div>
+            <div class="info-grid">
+              <div class="subsection">
+                <h3>Núcleo de frontend</h3>
+                <div class="definition-list">
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/app.py">frontend/app.py</a></strong>
+                    <span><code>MainWindow</code>, <code>run()</code>, alta de páginas y conexión de rutas.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/dashboard.py">frontend/dashboard.py</a></strong>
+                    <span><code>DashboardCategory</code>, <code>DashboardItem</code>, <code>build_dashboard_catalog()</code>, <code>DashboardPage</code>.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/router.py">frontend/router.py</a></strong>
+                    <span>Navegación entre páginas completas mediante rutas string.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/navigator.py">frontend/navigator.py</a></strong>
+                    <span>Navegación entre steps internos de un workflow.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/experiments/__init__.py">frontend/experiments/__init__.py</a></strong>
+                    <span><code>discover_experiments()</code>, <code>_resolve_widget_class()</code> y <code>create_experiment_page()</code>.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/widgets/workflow_shell.py">frontend/widgets/workflow_shell.py</a></strong>
+                    <span>Stack interno, barra de pasos, botones <code>Back</code>/<code>Next</code> y <code>can_continue()</code>.</span>
+                  </div>
+                </div>
+              </div>
+              <div class="subsection">
+                <h3>Widgets reutilizables y EEG</h3>
+                <div class="definition-list">
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/widgets/load_data.py">widgets/load_data.py</a></strong>
+                    <span>Widget genérico de carga y uso de <code>Worker</code>s.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/widgets/features.py">widgets/features.py</a></strong>
+                    <span>Selección genérica de features y parámetros.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/widgets/filtering.py">widgets/filtering.py</a></strong>
+                    <span><code>FilterControls</code>, <code>FilterPreviewPlot</code> y validación central de filtros.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/widgets/report.py">widgets/report.py</a></strong>
+                    <span>Resumen final genérico con hooks para secciones específicas.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/models/validation.py">models/validation.py</a></strong>
+                    <span>Validador reutilizable con reglas comunes y validaciones custom.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/experiments/eeg/">frontend/experiments/eeg/</a></strong>
+                    <span>Experimento EEG: <code>info.json</code>, <code>defaults.json</code>, icono y widgets propios.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <!-- Dashboard -->
+        <section class="tab-panel" data-panel="dashboard">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>De dónde sale el dashboard</h2>
+                <p>
+                  Todo lo que se pinta en el dashboard nace en las carpetas de experimento. El flujo real es:
+                  <code>discover_experiments()</code> lee las carpetas, <code>build_dashboard_catalog()</code> transforma
+                  esa metadata en categorías e items, y <code>DashboardPage</code> convierte esos items en tarjetas.
+                </p>
+              </div>
+              <div class="tag-row">
+                <span class="tag accent"><code>build_dashboard_catalog()</code></span>
+                <span class="tag teal"><code>DashboardPage._create_category_section()</code></span>
+                <span class="tag gold"><code>ExperimentCard</code></span>
+              </div>
+            </div>
+
+            <div class="split-grid">
+              <div class="subsection">
+                <h3>Scripts y funciones que mandan</h3>
+                <div class="definition-list">
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/dashboard.py">frontend/dashboard.py</a></strong>
+                    <span><code>build_dashboard_catalog()</code> agrupa experimentos por categoría y crea <code>DashboardItem</code>.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><code>DashboardPage</code></strong>
+                    <span>Crea el scroll, mete el hero y una sección por categoría.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/widgets/experiment_card.py">widgets/experiment_card.py</a></strong>
+                    <span>Define la tarjeta clicable, icono, badge, accesibilidad y estado <code>enabled</code>.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><a href="../medusa_analyzer/frontend/widgets/module_grid.py">widgets/module_grid.py</a></strong>
+                    <span>Hace el layout responsive de tarjetas dentro de cada categoría.</span>
+                  </div>
+                </div>
+              </div>
+              <div class="subsection">
+                <h3>Qué campos del <code>info.json</code> afectan al dashboard</h3>
+                <pre class="tree">{
+  "title": "EEG Processing",
+  "subtitle": "Brain signal analysis and processing.",
+  "description": "Workflow for loading EEG recordings...",
+  "status": "Ready",
+  "accent": "burgundy",
+  "enabled": true,
+  "order": 10,
+  "category": {
+    "id": "biosignals",
+    "title": "Biosignals",
+    "description": "Signal processing workflows built from experiment folders.",
+    "order": 10
+  },
+  "route": "experiment:eeg",
+  "icon": "icon.png"
+}</pre>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Categorías, experimentos y tarjetas</h2>
+                <p>
+                  La categoría no se define en un archivo central. Se define en el <code>info.json</code> de cada experimento.
+                  Si varios experimentos comparten el mismo <code>category.id</code>, acabarán agrupados en la misma sección.
+                </p>
+              </div>
+            </div>
+
+            <div class="experiments-grid">
+              <div class="experiment-demo">
+                <img src="../medusa_analyzer/frontend/experiments/eeg/icon.png" alt="Icono del experimento EEG">
+                <div>
+                  <h3>EEG Processing</h3>
+                  <p>
+                    Viene de <a href="../medusa_analyzer/frontend/experiments/eeg/info.json"><code>experiments/eeg/info.json</code></a>.
+                    La tarjeta usa <code>title</code>, <code>subtitle</code>, <code>status</code>, <code>accent</code>,
+                    <code>enabled</code>, <code>route</code> e <code>icon</code>.
+                  </p>
+                  <div class="badge-row">
+                    <span class="badge ready">Ready</span>
+                    <span class="badge dashboard">Categoría: biosignals</span>
+                    <span class="badge workflow">Ruta: experiment:eeg</span>
+                  </div>
+                </div>
+              </div>
+              <div class="experiment-demo">
+                <img src="../medusa_analyzer/frontend/experiments/converter/icon.png" alt="Icono del experimento Converter">
+                <div>
+                  <h3>Converter</h3>
+                  <p>
+                    Viene de <a href="../medusa_analyzer/frontend/experiments/converter/info.json"><code>experiments/converter/info.json</code></a>.
+                    Mismo mecanismo, otra categoría distinta.
+                  </p>
+                  <div class="badge-row">
+                    <span class="badge ready">Ready</span>
+                    <span class="badge dashboard">Categoría: utils</span>
+                    <span class="badge workflow">Ruta: converter</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Cómo tocar el dashboard sin perderse</h2>
+                <p>
+                  Estas son las operaciones típicas: añadir una categoría nueva, meter un experimento dentro de una categoría ya
+                  existente o dejar una tarjeta visible pero bloqueada.
+                </p>
+              </div>
+            </div>
+
+            <div class="details-group">
+              <details open>
+                <summary>Añadir una categoría nueva</summary>
+                <div class="details-body">
+                  <ul>
+                    <li>Crea o edita el <code>info.json</code> del experimento.</li>
+                    <li>Dentro de <code>category</code>, usa un <code>id</code> nuevo y único.</li>
+                    <li>Define <code>title</code>, <code>description</code> y <code>order</code>.</li>
+                    <li>No hace falta tocar <code>dashboard.py</code>; <code>build_dashboard_catalog()</code> la detecta sola.</li>
+                  </ul>
+                </div>
+              </details>
+              <details>
+                <summary>Añadir un experimento dentro de una categoría existente</summary>
+                <div class="details-body">
+                  <ul>
+                    <li>Usa el mismo <code>category.id</code> que ya usan otros experimentos de esa sección.</li>
+                    <li>Ajusta el <code>order</code> del experimento para decidir en qué posición sale la tarjeta.</li>
+                    <li>Define <code>route</code> único, <code>icon</code>, <code>title</code> y <code>workflow</code>.</li>
+                  </ul>
+                </div>
+              </details>
+              <details>
+                <summary>Mostrar una tarjeta pero deshabilitada</summary>
+                <div class="details-body">
+                  <ul>
+                    <li>Pon <code>"enabled": false</code> en el <code>info.json</code>.</li>
+                    <li>La tarjeta seguirá existiendo, pero no navegará.</li>
+                    <li><code>ExperimentCard</code> cambiará accesibilidad, cursor, tooltip y badge automáticamente.</li>
+                    <li>El texto del badge sale de <code>status</code>; si no lo defines, la base pone un fallback.</li>
+                  </ul>
+                </div>
+              </details>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Objeto</th>
+                    <th>Campo relevante</th>
+                    <th>Para qué sirve</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>DashboardCategory</code></td>
+                    <td><code>id</code>, <code>title</code>, <code>subtitle</code>, <code>order</code></td>
+                    <td>Define la sección del dashboard.</td>
+                  </tr>
+                  <tr>
+                    <td><code>DashboardItem</code></td>
+                    <td><code>title</code>, <code>subtitle</code>, <code>route</code>, <code>icon_path</code></td>
+                    <td>Describe una tarjeta clicable.</td>
+                  </tr>
+                  <tr>
+                    <td><code>DashboardItem</code></td>
+                    <td><code>status</code>, <code>accent</code>, <code>enabled</code></td>
+                    <td>Controla el badge, la apariencia y si se puede abrir o no.</td>
+                  </tr>
+                  <tr>
+                    <td><code>DashboardPage.route_requested</code></td>
+                    <td>Señal Qt</td>
+                    <td>Es el puente entre el click en una tarjeta y <code>Router.navigate()</code>.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <!-- Experimentos -->
+        <section class="tab-panel" data-panel="experimentos">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Contrato mínimo de un experimento</h2>
+                <p>
+                  Los experimentos viven dentro de <a href="../medusa_analyzer/frontend/experiments/"><code>medusa_analyzer/frontend/experiments/</code></a>.
+                  <code>discover_experiments()</code> recorre cada carpeta y solo acepta aquellas que tengan
+                  <code>info.json</code>, <code>defaults.json</code> y un <code>workflow</code> válido.
+                </p>
+              </div>
+              <div class="tag-row">
+                <span class="tag accent"><code>discover_experiments()</code></span>
+                <span class="tag teal"><code>ExperimentDefinition</code></span>
+                <span class="tag gold"><code>create_experiment_page()</code></span>
+              </div>
+            </div>
+
+            <div class="split-grid">
+              <div class="subsection">
+                <h3>Estructura de carpeta esperada</h3>
+                <pre class="tree">medusa_analyzer/frontend/experiments/
+└── mi_experimento/
+    ├── __init__.py
+    ├── icon.png
+    ├── info.json
+    ├── defaults.json
+    └── widgets/
+        ├── __init__.py
+        ├── mi_step_1_widget.py
+        ├── mi_step_2_widget.py
+        └── ...</pre>
+              </div>
+              <div class="subsection">
+                <h3>Qué valida <code>discover_experiments()</code></h3>
+                <ul>
+                  <li>Que la carpeta no empiece por <code>__</code>.</li>
+                  <li>Que exista <code>info.json</code>.</li>
+                  <li>Que exista <code>defaults.json</code>.</li>
+                  <li>Que el JSON se pueda leer.</li>
+                  <li>Que <code>info.json</code> tenga <code>route</code> y una lista <code>workflow</code> no vacía.</li>
+                </ul>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Qué define <code>info.json</code> y qué define <code>defaults.json</code></h2>
+                <p>
+                  La separación es deliberada: <code>info.json</code> describe el experimento como módulo navegable;
+                  <code>defaults.json</code> contiene la configuración de trabajo que usarán los widgets.
+                </p>
+              </div>
+            </div>
+
+            <div class="info-grid">
+              <div class="subsection">
+                <h3><code>info.json</code></h3>
+                <div class="definition-list">
+                  <div class="definition-item">
+                    <strong><code>id</code></strong>
+                    <span>Identificador lógico del experimento.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><code>title</code>, <code>subtitle</code>, <code>description</code></strong>
+                    <span>Textos visibles en dashboard y workflow.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><code>category</code></strong>
+                    <span>Sección del dashboard donde aparecerá la tarjeta.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><code>route</code></strong>
+                    <span>Clave que usa el <code>Router</code> para navegar a la página del experimento.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><code>icon</code></strong>
+                    <span>Path relativo al icono de la tarjeta.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong><code>workflow</code></strong>
+                    <span>Lista ordenada de steps con <code>id</code>, <code>title</code> y <code>widget</code>.</span>
+                  </div>
+                </div>
+              </div>
+              <div class="subsection">
+                <h3><code>defaults.json</code></h3>
+                <div class="definition-list">
+                  <div class="definition-item">
+                    <strong>Bloques por step</strong>
+                    <span>Cada widget suele leer su propio bloque: <code>load_data</code>, <code>preprocessing</code>, <code>features</code>, <code>report</code>.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong>Valores de arranque</strong>
+                    <span>Extensiones permitidas, filtros, bandas, features y opciones de report.</span>
+                  </div>
+                  <div class="definition-item">
+                    <strong>Fuente de verdad local</strong>
+                    <span>El widget no debería hardcodear defaults si pueden vivir en este JSON.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Cómo se resuelve un widget desde el <code>info.json</code></h2>
+                <p>
+                  El string del step no se usa solo como nombre. <code>_resolve_widget_class()</code> lo convierte en
+                  un import real. Si pones <code>"widget": "eeg_features_widget.EEGFeaturesWidget"</code>, el sistema
+                  acabará importando <code>medusa_analyzer.frontend.experiments.eeg.widgets.eeg_features_widget</code>.
+                </p>
+              </div>
+            </div>
+            <pre class="code-block">{
+  "workflow": [
+    {
+      "id": "features",
+      "title": "Features",
+      "widget": "eeg_features_widget.EEGFeaturesWidget"
+    }
+  ]
+}</pre>
+          </article>
+        </section>
+
+        <!-- Workflow -->
+        <section class="tab-panel" data-panel="workflow">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Cómo se inserta el workflow en el stack</h2>
+                <p>
+                  <code>create_experiment_page()</code> crea el <code>state</code>, recorre la lista
+                  <code>workflow</code>, instancia cada widget y monta una lista de steps. Esa lista se pasa a
+                  <code>WorkflowShell</code>, que a su vez mete cada widget en un <code>QStackedWidget</code> interno
+                  a través de <code>Navigator.add_page()</code>.
+                </p>
+              </div>
+            </div>
+            <div class="flow-grid">
+              <div class="step-card">
+                <div class="step-index">1</div>
+                <h3><code>create_experiment_page()</code></h3>
+                <p>Crea el <code>state</code> compartido y resuelve cada clase de step.</p>
+              </div>
+              <div class="step-card">
+                <div class="step-index">2</div>
+                <h3>Lista <code>steps</code></h3>
+                <p>Cada entrada tiene <code>id</code>, <code>title</code> y el objeto <code>widget</code> instanciado.</p>
+              </div>
+              <div class="step-card">
+                <div class="step-index">3</div>
+                <h3><code>WorkflowShell</code></h3>
+                <p>Mete esos widgets en el stack, pinta la barra de progreso y controla la navegación.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Router vs Navigator</h2>
+                <p>
+                  Hay dos niveles de navegación. Si se mezclan mentalmente, se vuelve difícil entender por qué una cosa
+                  cambia la página completa y otra solo cambia el step actual.
+                </p>
+              </div>
+            </div>
+            <div class="route-boxes">
+              <div class="route-box router">
+                <h3><a href="../medusa_analyzer/frontend/router.py"><code>Router</code></a></h3>
+                <p>Cambia de página global dentro del stack principal de <code>MainWindow</code>.</p>
+                <ul>
+                  <li><code>register(route, page)</code></li>
+                  <li><code>navigate(route)</code></li>
+                  <li>Ejemplos: <code>dashboard</code>, <code>experiment:eeg</code>, <code>converter</code></li>
+                </ul>
+              </div>
+              <div class="route-box navigator">
+                <h3><a href="../medusa_analyzer/frontend/navigator.py"><code>Navigator</code></a></h3>
+                <p>Cambia de step interno dentro del <code>WorkflowShell</code> de un experimento.</p>
+                <ul>
+                  <li><code>add_page(page)</code></li>
+                  <li><code>go_to(index)</code></li>
+                  <li><code>next()</code> y <code>back()</code></li>
+                  <li>Ejemplos: Load data → Preprocessing → Features → Final report</li>
+                </ul>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Señales y condiciones de avance</h2>
+                <p>
+                  <code>WorkflowShell</code> escucha la señal <code>changed</code> si existe, y con eso recalcula si
+                  el botón <code>Next</code> debe estar activo. Además, si el widget actual implementa
+                  <code>can_continue()</code>, esa función decide si se puede avanzar.
+                </p>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Step EEG</th>
+                    <th>Widget</th>
+                    <th>Condición actual de <code>can_continue()</code></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Load data</td>
+                    <td><code>EEGLoadDataWidget</code> → hereda <code>LoadDataWidget</code></td>
+                    <td><code>bool(state["metadata_list"])</code></td>
+                  </tr>
+                  <tr>
+                    <td>Preprocessing</td>
+                    <td><code>EEGPreprocessingWidget</code></td>
+                    <td>Sampling rate resuelta y filtros válidos y tabla de bandas válida.</td>
+                  </tr>
+                  <tr>
+                    <td>Features</td>
+                    <td><code>EEGFeaturesWidget</code> → hereda <code>FeaturesWidget</code></td>
+                    <td>No debe haber errores de validación acumulados.</td>
+                  </tr>
+                  <tr>
+                    <td>Final report</td>
+                    <td><code>EEGReportWidget</code> → hereda <code>ReportWidget</code></td>
+                    <td>No implementa <code>can_continue()</code>; <code>WorkflowShell</code> deja terminar.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="details-group">
+              <details open>
+                <summary>Qué hace <code>changed</code></summary>
+                <div class="details-body">
+                  Si el widget emite <code>changed</code>, <code>WorkflowShell</code> llama a
+                  <code>_refresh_navigation()</code>. Eso actualiza la barra de progreso, el texto de los botones y
+                  si <code>Next</code> está habilitado.
+                </div>
+              </details>
+              <details>
+                <summary>Qué hace <code>on_step_activated()</code></summary>
+                <div class="details-body">
+                  Cuando entras en un step, <code>WorkflowShell</code> llama a <code>on_step_activated()</code> si el widget
+                  lo implementa. EEG lo usa para refrescar preprocessing, features y report con el último state.
+                </div>
+              </details>
+              <details>
+                <summary>Cómo añadir un step nuevo a un experimento</summary>
+                <div class="details-body">
+                  <ul>
+                    <li>Crea el archivo del widget dentro de <code>experiments/mi_experimento/widgets/</code>.</li>
+                    <li>Añade la entrada correspondiente en <code>info.json → workflow</code>.</li>
+                    <li>Si necesita defaults, crea su bloque en <code>defaults.json</code>.</li>
+                    <li>Si debe bloquear el avance, implementa <code>can_continue()</code>.</li>
+                    <li>Si necesita refrescar al entrar, implementa <code>on_step_activated()</code>.</li>
+                  </ul>
+                </div>
+              </details>
+            </div>
+          </article>
+        </section>
+
+        <!-- State -->
+        <section class="tab-panel" data-panel="estado">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>El <code>state</code> es la pieza central</h2>
+                <p>
+                  Todos los experimentos usan una variable compartida llamada <code>state</code>. No es una copia por step;
+                  es el mismo diccionario mutable que se crea en <code>create_experiment_page()</code> y se pasa a todos
+                  los widgets. Ahí se va guardando la interacción del usuario y es el mecanismo principal de comunicación
+                  entre pasos.
+                </p>
+              </div>
+              <div class="tag-row">
+                <span class="tag accent">Memoria compartida</span>
+                <span class="tag teal">Se crea una vez por experimento</span>
+                <span class="tag gold">Todos los steps leen y escriben</span>
+              </div>
+            </div>
+            <div class="callout">
+              <strong>Regla práctica:</strong> si un step necesita que el siguiente sepa algo, lo correcto es escribirlo
+              en <code>state</code>. Si lo dejas solo en variables internas del widget, el resto del workflow no lo verá.
+            </div>
+          </article>
+
+          <article class="section-card state-viewer">
+            <div class="section-header">
+              <div>
+                <h2>Visor conceptual del state</h2>
+                <p>
+                  Este visor resume cómo va creciendo el diccionario durante el workflow EEG actual. Los ejemplos son
+                  conceptuales, pero siguen la forma real de las claves que usa el código.
+                </p>
+              </div>
+            </div>
+
+            <div class="state-controls">
+              <button class="state-button is-active" type="button" data-state-sample="base">State inicial</button>
+              <button class="state-button" type="button" data-state-sample="load">Tras Load data</button>
+              <button class="state-button" type="button" data-state-sample="preprocessing">Tras Preprocessing</button>
+              <button class="state-button" type="button" data-state-sample="features">Tras Features</button>
+            </div>
+            <div class="state-note" id="state-note">
+              Se crea en <code>create_experiment_page()</code> antes de instanciar el primer widget.
+            </div>
+            <pre id="state-view">{
+  "experiment_id": "eeg",
+  "experiment_title": "EEG Processing",
+  "defaults": { ... copia profunda de defaults.json ... },
+  "loader_results": [],
+  "metadata_list": [],
+  "loaded_file_paths": [],
+  "selected_features": []
+}</pre>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Quién escribe qué dentro del state</h2>
+                <p>
+                  Esta es la forma útil de entenderlo: no como un JSON abstracto, sino como responsabilidades por step.
+                </p>
+              </div>
+            </div>
+            <div class="metric-grid">
+              <div class="metric-card">
+                <h3>Load data</h3>
+                <p>
+                  Escribe <code>loader_results</code>, <code>metadata_list</code> y <code>loaded_file_paths</code>.
+                  Además deja el estado preparado para que los siguientes steps trabajen con las claves actuales.
+                </p>
+              </div>
+              <div class="metric-card">
+                <h3>Preprocessing</h3>
+                <p>
+                  Escribe <code>state["preprocessing"]</code> con CAR, notch, bandpass, tabla de bandas,
+                  <code>selected_frequency_bands</code> y <code>broadband</code>.
+                </p>
+              </div>
+              <div class="metric-card">
+                <h3>Features</h3>
+                <p>
+                  Actualiza <code>selected_features</code>, <code>feature_params</code> y
+                  <code>eeg_feature_state</code>.
+                </p>
+              </div>
+              <div class="metric-card">
+                <h3>Report</h3>
+                <p>
+                  No suele persistir nada nuevo; recompone visualmente lo que ya existe en el state.
+                </p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <!-- EEG -->
+        <section class="tab-panel" data-panel="eeg">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Qué hereda EEG y qué compone EEG</h2>
+                <p>
+                  Aquí conviene ser preciso. En EEG sí hay widgets específicos que heredan de genéricos, pero no todos
+                  siguen exactamente el mismo patrón. <code>Load data</code>, <code>Features</code> y <code>Report</code>
+                  heredan base genérica. <code>Preprocessing</code> es un widget específico que reutiliza subwidgets genéricos
+                  por composición.
+                </p>
+              </div>
+            </div>
+
+            <div class="inheritance-grid">
+              <div class="inherit-card">
+                <h3><code>EEGLoadDataWidget</code></h3>
+                <p>
+                  Vive en <a href="../medusa_analyzer/frontend/experiments/eeg/widgets/eeg_load_data_widget.py"><code>eeg_load_data_widget.py</code></a>
+                  y hereda de <a href="../medusa_analyzer/frontend/widgets/load_data.py"><code>LoadDataWidget</code></a>.
+                  Lo específico es el <code>loader=load_edf_file</code> y los textos visibles.
+                </p>
+              </div>
+              <div class="inherit-card">
+                <h3><code>EEGFeaturesWidget</code></h3>
+                <p>
+                  Hereda de <a href="../medusa_analyzer/frontend/widgets/features.py"><code>FeaturesWidget</code></a>.
+                  Añade dependencias PSD, validación de features EEG y la lógica de bandas para band power relativo/absoluto.
+                </p>
+              </div>
+              <div class="inherit-card">
+                <h3><code>EEGReportWidget</code></h3>
+                <p>
+                  Hereda de <a href="../medusa_analyzer/frontend/widgets/report.py"><code>ReportWidget</code></a>.
+                  Sobrescribe la forma de resumir preprocessing y features del experimento EEG.
+                </p>
+              </div>
+              <div class="inherit-card">
+                <h3><code>EEGPreprocessingWidget</code></h3>
+                <p>
+                  No hereda de un <code>PreprocessingWidget</code> genérico. Compone
+                  <code>FilterControls</code>, <code>FilterPreviewPlot</code> y <code>EEGFrequencyBandsTable</code>.
+                  Ese detalle importa si alguien quiere generalizar preprocessing en el futuro.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Scripts EEG que merece la pena conocer</h2>
+                <p>
+                  Si vas a tocar el workflow EEG, estos son los archivos donde realmente vive la lógica del caso concreto.
+                </p>
+              </div>
+            </div>
+            <div class="info-grid">
+              <div class="subsection">
+                <h3>Preprocessing</h3>
+                <ul>
+                  <li><a href="../medusa_analyzer/frontend/experiments/eeg/widgets/eeg_preprocessing_widget.py"><code>eeg_preprocessing_widget.py</code></a></li>
+                  <li><a href="../medusa_analyzer/frontend/widgets/filtering.py"><code>widgets/filtering.py</code></a></li>
+                  <li><a href="../medusa_analyzer/frontend/experiments/eeg/widgets/frequency_bands_table.py"><code>frequency_bands_table.py</code></a></li>
+                </ul>
+              </div>
+              <div class="subsection">
+                <h3>Features y report</h3>
+                <ul>
+                  <li><a href="../medusa_analyzer/frontend/experiments/eeg/widgets/eeg_features_widget.py"><code>eeg_features_widget.py</code></a></li>
+                  <li><a href="../medusa_analyzer/frontend/widgets/features.py"><code>widgets/features.py</code></a></li>
+                  <li><a href="../medusa_analyzer/frontend/experiments/eeg/widgets/eeg_report_widget.py"><code>eeg_report_widget.py</code></a></li>
+                </ul>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Puntos funcionales importantes del EEG actual</h2>
+                <p>
+                  Esto resume cómo está organizado el EEG después del refactor de validación y bandas.
+                </p>
+              </div>
+            </div>
+            <div class="details-group">
+              <details open>
+                <summary>Bandas de frecuencia</summary>
+                <div class="details-body">
+                  <code>EEGFrequencyBandsTable</code> extiende <code>EditableTable</code> y encapsula la tabla de bandas EEG.
+                  La validación vive en <code>validate_eeg_frequency_bands()</code>. El paso de preprocessing recalcula sus
+                  límites con Nyquist y con el bandpass activo.
+                </div>
+              </details>
+              <details>
+                <summary>Preprocessing y broadband efectiva</summary>
+                <div class="details-body">
+                  <code>EEGPreprocessingWidget</code> construye una banda <code>broadband</code> efectiva para que el resto
+                  del flujo trabaje con un marco de frecuencia consistente. Esa banda también se escribe en
+                  <code>state["preprocessing"]</code>.
+                </div>
+              </details>
+              <details>
+                <summary>Features dependientes del preprocessing</summary>
+                <div class="details-body">
+                  <code>EEGFeaturesWidget</code> lee <code>state["preprocessing"]</code> para resolver bandas efectivas,
+                  forzar la dependencia de PSD y decidir si <code>relative_band_power</code> usa bandas del preprocessing
+                  o una tabla custom.
+                </div>
+              </details>
+              <details>
+                <summary>Report final</summary>
+                <div class="details-body">
+                  <code>EEGReportWidget</code> no recalcula nada. Resume metadata, preprocessing y features a partir del
+                  state ya consolidado.
+                </div>
+              </details>
+            </div>
+          </article>
+        </section>
+
+        <!-- Workers -->
+        <section class="tab-panel" data-panel="workers">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Cómo usar un worker en este proyecto</h2>
+                <p>
+                  La infraestructura está en <a href="../medusa_analyzer/frontend/workers/worker.py"><code>frontend/workers/worker.py</code></a>
+                  y <a href="../medusa_analyzer/frontend/workers/task_runner.py"><code>frontend/workers/task_runner.py</code></a>.
+                  El patrón actual es sencillo: envuelves una función costosa en un <code>Worker</code>, conectas señales
+                  y lanzas el trabajo con <code>TaskRunner.start(worker)</code>.
+                </p>
+              </div>
+            </div>
+            <div class="checklist-grid">
+              <div class="recipe-card">
+                <h3>Receta</h3>
+                <ol>
+                  <li>Escribe una función pesada que pueda ejecutarse fuera del hilo de UI.</li>
+                  <li>Crea <code>worker = Worker(mi_funcion, *args)</code>.</li>
+                  <li>Conecta <code>progress</code>, <code>result</code>, <code>error</code> y <code>finished</code>.</li>
+                  <li>Lanza <code>self.runner.start(worker)</code>.</li>
+                </ol>
+              </div>
+              <div class="recipe-card">
+                <h3>Detalle importante</h3>
+                <p>
+                  <code>Worker.run()</code> inyecta automáticamente <code>progress_callback</code> en <code>kwargs</code>.
+                  La función costosa puede llamar a ese callback para notificar progreso sin tocar directamente la UI.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Ejemplo real: <code>LoadDataWidget</code></h2>
+                <p>
+                  El uso más claro está en <a href="../medusa_analyzer/frontend/widgets/load_data.py"><code>widgets/load_data.py</code></a>.
+                  Ese widget selecciona ficheros, crea un <code>Worker</code> con <code>_load_files</code>, escucha el progreso
+                  y actualiza el estado cuando llega el resultado.
+                </p>
+              </div>
+            </div>
+            <pre class="code-block">worker = Worker(_load_files, self.loader, paths)
+worker.signals.progress.connect(self.overlay.progress.setValue)
+worker.signals.result.connect(self._loaded)
+worker.signals.error.connect(self._failed)
+worker.signals.finished.connect(self._finished_loading)
+self.runner.start(worker)</pre>
+          </article>
+
+          <article class="section-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Señal</th>
+                    <th>Emisor</th>
+                    <th>Uso típico</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>progress</code></td>
+                    <td><code>WorkerSignals</code></td>
+                    <td>Actualizar barras de progreso u overlays.</td>
+                  </tr>
+                  <tr>
+                    <td><code>result</code></td>
+                    <td><code>WorkerSignals</code></td>
+                    <td>Recibir el resultado calculado y persistirlo en <code>state</code>.</td>
+                  </tr>
+                  <tr>
+                    <td><code>error</code></td>
+                    <td><code>WorkerSignals</code></td>
+                    <td>Mostrar el fallo en UI sin bloquear la app.</td>
+                  </tr>
+                  <tr>
+                    <td><code>finished</code></td>
+                    <td><code>WorkerSignals</code></td>
+                    <td>Limpiar overlays, reactivar botones y sacar el worker del set activo.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <!-- Validación -->
+        <section class="tab-panel" data-panel="validacion">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>El modelo genérico de validación</h2>
+                <p>
+                  La capa genérica vive en <a href="../medusa_analyzer/frontend/models/validation.py"><code>frontend/models/validation.py</code></a>.
+                  La idea es que el widget específico diga <strong>qué regla quiere aplicar</strong>, no que vuelva a
+                  programar esa regla. El objeto <code>Validation</code> expone <code>validate()</code>,
+                  <code>validate_errors()</code> y <code>validate_many()</code>.
+                </p>
+              </div>
+              <div class="tag-row">
+                <span class="tag accent"><code>validate()</code></span>
+                <span class="tag teal"><code>validate_errors()</code></span>
+                <span class="tag gold"><code>validate_many()</code></span>
+              </div>
+            </div>
+
+            <div class="validation-controls">
+              <button class="validation-button is-active" type="button" data-validation-example="max">Límite máximo</button>
+              <button class="validation-button" type="button" data-validation-example="filters">Filtros y fs/2</button>
+              <button class="validation-button" type="button" data-validation-example="custom">Custom EEG</button>
+            </div>
+            <div class="validation-note" id="validation-note">
+              Ejemplo simple: un valor numérico tiene que ser menor que otro valor dado.
+            </div>
+            <pre id="validation-view" class="code-block">validator = Validation()
+errors = validator.validate_many(
+    value,
+    [
+        "finite_number",
+        ("less_than", {"maximum": max_value, "suffix": " Hz"})
+    ],
+    label="High cut"
+)</pre>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Reglas reutilizables que ya existen</h2>
+                <p>
+                  Antes de inventar una validación nueva, conviene revisar si una regla genérica ya la cubre.
+                </p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Clave</th>
+                    <th>Qué comprueba</th>
+                    <th>Casos típicos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>required_text</code></td>
+                    <td>Texto obligatorio no vacío.</td>
+                    <td>Nombres de banda, labels, ids visibles.</td>
+                  </tr>
+                  <tr>
+                    <td><code>no_whitespace</code></td>
+                    <td>Que no haya espacios.</td>
+                    <td>Nombres de banda EEG.</td>
+                  </tr>
+                  <tr>
+                    <td><code>finite_number</code></td>
+                    <td>Que el valor sea numérico y finito.</td>
+                    <td>Frecuencias, ripple, attenuation, thresholds.</td>
+                  </tr>
+                  <tr>
+                    <td><code>integer</code></td>
+                    <td>Que sea entero.</td>
+                    <td>Órdenes de filtro, escalas, contadores.</td>
+                  </tr>
+                  <tr>
+                    <td><code>greater_than</code>, <code>greater_or_equal</code></td>
+                    <td>Límites inferiores.</td>
+                    <td><code>&gt; 0</code>, orden mínimo, frecuencia mínima.</td>
+                  </tr>
+                  <tr>
+                    <td><code>less_than</code>, <code>less_or_equal</code></td>
+                    <td>Límites superiores.</td>
+                    <td>Nyquist, <code>fs / 2</code>, máximos de UI.</td>
+                  </tr>
+                  <tr>
+                    <td><code>one_of</code></td>
+                    <td>Que el valor pertenezca a un conjunto de opciones.</td>
+                    <td>Diseños IIR, ventanas FIR, combos.</td>
+                  </tr>
+                  <tr>
+                    <td><code>minimum_length</code></td>
+                    <td>Que haya suficientes elementos.</td>
+                    <td>Seleccionar al menos una banda o una feature.</td>
+                  </tr>
+                  <tr>
+                    <td><code>pattern</code></td>
+                    <td>Que el texto siga un formato concreto.</td>
+                    <td><code>[1, 3, 5]</code> en multiscale LZ.</td>
+                  </tr>
+                  <tr>
+                    <td><code>custom</code></td>
+                    <td>Delegar en una función específica.</td>
+                    <td>Reglas compuestas de un workflow concreto.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Dónde se usa ahora mismo en EEG</h2>
+                <p>
+                  Después del refactor, la validación relevante ya no está dispersa por el workflow EEG.
+                </p>
+              </div>
+            </div>
+            <div class="checklist-grid">
+              <div class="recipe-card">
+                <h3>Filtros</h3>
+                <p>
+                  <a href="../medusa_analyzer/frontend/widgets/filtering.py"><code>widgets/filtering.py</code></a>
+                  centraliza las reglas del filtro en <code>_filter_config_errors()</code> y las expone mediante
+                  <code>filter_validation_errors()</code>.
+                </p>
+              </div>
+              <div class="recipe-card">
+                <h3>Bandas de frecuencia</h3>
+                <p>
+                  <a href="../medusa_analyzer/frontend/experiments/eeg/widgets/frequency_bands_table.py"><code>frequency_bands_table.py</code></a>
+                  usa <code>validate_eeg_frequency_bands()</code> para validar nombres y límites.
+                </p>
+              </div>
+              <div class="recipe-card">
+                <h3>Preprocessing EEG</h3>
+                <p>
+                  <a href="../medusa_analyzer/frontend/experiments/eeg/widgets/eeg_preprocessing_widget.py"><code>eeg_preprocessing_widget.py</code></a>
+                  reutiliza el sistema general y deja la regla notch-bandpass como validación custom.
+                </p>
+              </div>
+              <div class="recipe-card">
+                <h3>Features EEG</h3>
+                <p>
+                  <a href="../medusa_analyzer/frontend/experiments/eeg/widgets/eeg_features_widget.py"><code>eeg_features_widget.py</code></a>
+                  valida parámetros genéricos y usa custom para casos como <code>multiscale_lempel_ziv_complexity</code>.
+                </p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <!-- Checklist -->
+        <section class="tab-panel" data-panel="checklist">
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Checklist: añadir un experimento nuevo</h2>
+                <p>
+                  Esta es la secuencia útil si alguien quiere extender KEOPS con un experimento nuevo sin tocar más de lo necesario.
+                </p>
+              </div>
+            </div>
+
+            <div class="checklist-grid">
+              <div class="recipe-card">
+                <h3>1. Carpeta</h3>
+                <ol>
+                  <li>Crea <code>frontend/experiments/mi_experimento/</code>.</li>
+                  <li>Añade <code>__init__.py</code>, <code>icon.png</code>, <code>info.json</code>, <code>defaults.json</code> y <code>widgets/</code>.</li>
+                </ol>
+              </div>
+              <div class="recipe-card">
+                <h3>2. Metadata de catálogo</h3>
+                <ol>
+                  <li>Define <code>title</code>, <code>subtitle</code>, <code>description</code>.</li>
+                  <li>Define <code>category</code>, <code>status</code>, <code>accent</code>, <code>enabled</code>, <code>order</code>.</li>
+                  <li>Define <code>route</code> único.</li>
+                </ol>
+              </div>
+              <div class="recipe-card">
+                <h3>3. Workflow</h3>
+                <ol>
+                  <li>Rellena <code>workflow</code> con la lista ordenada de steps.</li>
+                  <li>Apunta cada <code>widget</code> a una clase real de <code>widgets/</code>.</li>
+                </ol>
+              </div>
+              <div class="recipe-card">
+                <h3>4. Defaults</h3>
+                <ol>
+                  <li>Crea los bloques de configuración que leerá cada widget.</li>
+                  <li>Evita defaults hardcodeados si pueden vivir en <code>defaults.json</code>.</li>
+                </ol>
+              </div>
+              <div class="recipe-card">
+                <h3>5. State</h3>
+                <ol>
+                  <li>Decide qué claves nuevas vas a escribir en <code>state</code>.</li>
+                  <li>Mantén nombres coherentes y evita duplicar la misma información en varios sitios.</li>
+                </ol>
+              </div>
+              <div class="recipe-card">
+                <h3>6. Validación y avance</h3>
+                <ol>
+                  <li>Si un step debe bloquear <code>Next</code>, implementa <code>can_continue()</code>.</li>
+                  <li>Usa <code>Validation</code> para reglas comunes y <code>custom</code> para reglas compuestas.</li>
+                </ol>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <div class="section-header">
+              <div>
+                <h2>Checklist: modificar un experimento existente</h2>
+                <p>
+                  Para no tocar archivos a ciegas, esta tabla resume dónde se hace cada cambio típico.
+                </p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Quiero cambiar...</th>
+                    <th>Dónde tocar</th>
+                    <th>Referencia importante</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>La categoría del dashboard</td>
+                    <td><code>info.json → category</code></td>
+                    <td><code>build_dashboard_catalog()</code></td>
+                  </tr>
+                  <tr>
+                    <td>El orden o estado de la tarjeta</td>
+                    <td><code>info.json → order / status / enabled / accent</code></td>
+                    <td><code>DashboardItem</code> y <code>ExperimentCard</code></td>
+                  </tr>
+                  <tr>
+                    <td>Los pasos del workflow</td>
+                    <td><code>info.json → workflow</code></td>
+                    <td><code>create_experiment_page()</code>, <code>WorkflowShell</code></td>
+                  </tr>
+                  <tr>
+                    <td>Los defaults que ve un step</td>
+                    <td><code>defaults.json</code></td>
+                    <td>El widget concreto suele leer solo su bloque</td>
+                  </tr>
+                  <tr>
+                    <td>La forma de guardar algo entre steps</td>
+                    <td>El widget que genera el dato y <code>state</code></td>
+                    <td>Todos los steps comparten el mismo diccionario</td>
+                  </tr>
+                  <tr>
+                    <td>Las reglas de validación</td>
+                    <td><code>models/validation.py</code> + widget concreto</td>
+                    <td><code>validate_many()</code>, <code>validate_errors()</code>, <code>custom</code></td>
+                  </tr>
+                  <tr>
+                    <td>Una tarea pesada en background</td>
+                    <td><code>frontend/workers/</code> + widget llamador</td>
+                    <td><code>Worker</code>, <code>TaskRunner</code>, señales de progreso</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="section-card">
+            <p class="footer-note">
+              Ruta recomendada para leer el proyecto sin perder tiempo: <code>frontend/app.py</code> →
+              <code>frontend/experiments/__init__.py</code> → <code>frontend/dashboard.py</code> →
+              <code>frontend/widgets/workflow_shell.py</code> → widgets genéricos →
+              widgets del experimento concreto.
+            </p>
+          </article>
+        </section>
+      </main>
+    </section>
+  </div>
+
+  <script>
+    const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
+    const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
+
+    function activateTab(tabId) {
+      tabButtons.forEach((button) => {
+        const active = button.dataset.tab === tabId;
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      tabPanels.forEach((panel) => {
+        panel.classList.toggle("is-active", panel.dataset.panel === tabId);
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", () => activateTab(button.dataset.tab));
+    });
+
+    document.querySelectorAll("[data-jump-tab]").forEach((button) => {
+      button.addEventListener("click", () => activateTab(button.dataset.jumpTab));
+    });
+
+    const stateSamples = {
+      base: {
+        note: 'Se crea en <code>create_experiment_page()</code> antes de instanciar el primer widget.',
+        content: `{
+  "experiment_id": "eeg",
+  "experiment_title": "EEG Processing",
+  "defaults": { ... copia profunda de defaults.json ... },
+  "loader_results": [],
+  "metadata_list": [],
+  "loaded_file_paths": [],
+  "selected_features": []
+}`
+      },
+      load: {
+        note: 'Lo rellena <code>LoadDataWidget._loaded()</code> después de que el <code>Worker</code> termine correctamente.',
+        content: `{
+  "experiment_id": "eeg",
+  "experiment_title": "EEG Processing",
+  "defaults": { ... },
+  "loader_results": [
+    {
+      "path": "C:/data/patient_01.edf",
+      "name": "patient_01.edf",
+      "channels": ["F3", "F4", "C3", "C4"],
+      "sampling_rate": 256.0,
+      "duration_seconds": 120.0,
+      "n_samples": 30720,
+      "data": "numpy.ndarray(...)"
+    }
+  ],
+  "metadata_list": [
+    "MetadataSummary(file_name='patient_01.edf', sampling_rate=256.0, ...)"
+  ],
+  "loaded_file_paths": ["C:/data/patient_01.edf"],
+  "selected_features": []
+}`
+      },
+      preprocessing: {
+        note: 'Lo escribe <code>EEGPreprocessingWidget</code>. Aquí ya aparecen filtros, bandas y broadband efectiva.',
+        content: `{
+  "experiment_id": "eeg",
+  "experiment_title": "EEG Processing",
+  "defaults": { ... },
+  "loader_results": [...],
+  "metadata_list": [...],
+  "loaded_file_paths": [...],
+  "selected_features": [],
+  "preprocessing": {
+    "car": true,
+    "notch": {
+      "enabled": true,
+      "filter_type": "bandstop",
+      "filter_design": "fir",
+      "low_cut": 49.0,
+      "high_cut": 51.0,
+      "order": 1001,
+      "window": "hamming"
+    },
+    "bandpass": {
+      "enabled": true,
+      "filter_type": "bandpass",
+      "filter_design": "fir",
+      "low_cut": 0.5,
+      "high_cut": 45.0,
+      "order": 1000,
+      "window": "hamming"
+    },
+    "frequency_bands": [
+      {"id": "alpha", "title": "Alpha", "enabled": true, "low_cut": 8.0, "high_cut": 13.0}
+    ],
+    "selected_frequency_bands": [
+      {"id": "alpha", "title": "Alpha", "enabled": true, "low_cut": 8.0, "high_cut": 13.0},
+      {"id": "broadband", "title": "Broadband", "enabled": true, "low_cut": 0.5, "high_cut": 45.0}
+    ],
+    "broadband": {
+      "id": "broadband",
+      "title": "Broadband",
+      "enabled": true,
+      "low_cut": 0.5,
+      "high_cut": 45.0
+    }
+  }
+}`
+      },
+      features: {
+        note: 'Lo completa <code>EEGFeaturesWidget</code>. Aquí ya quedan seleccionadas las features y sus parámetros.',
+        content: `{
+  "experiment_id": "eeg",
+  "experiment_title": "EEG Processing",
+  "defaults": { ... },
+  "loader_results": [...],
+  "metadata_list": [...],
+  "loaded_file_paths": [...],
+  "preprocessing": { ... },
+  "selected_features": [
+    "psd",
+    "absolute_band_power",
+    "mean"
+  ],
+  "feature_params": {
+    "psd": {
+      "segment_percent": 80,
+      "overlap_percent": 50,
+      "window": "hamming"
+    },
+    "absolute_band_power": {
+      "bands_source": "preprocessing",
+      "frequency_bands": [...],
+      "selected_frequency_bands": [...],
+      "broadband": {...}
+    }
+  },
+  "eeg_feature_state": {
+    "relative_band_power_frequency_bands": [
+      {"id": "delta", "title": "Delta", "enabled": false, "low_cut": 0.5, "high_cut": 4.0}
+    ]
+  }
+}`
+      }
+    };
+
+    const stateButtons = Array.from(document.querySelectorAll(".state-button"));
+    const stateView = document.getElementById("state-view");
+    const stateNote = document.getElementById("state-note");
+
+    function activateStateSample(sampleId) {
+      const sample = stateSamples[sampleId];
+      if (!sample) {
+        return;
+      }
+      stateButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.stateSample === sampleId);
+      });
+      stateView.textContent = sample.content;
+      stateNote.innerHTML = sample.note;
+    }
+
+    stateButtons.forEach((button) => {
+      button.addEventListener("click", () => activateStateSample(button.dataset.stateSample));
+    });
+
+    const validationExamples = {
+      max: {
+        note: 'Ejemplo simple: un valor numérico tiene que ser menor que otro valor dado.',
+        content: `validator = Validation()
+errors = validator.validate_many(
+    value,
+    [
+        "finite_number",
+        ("less_than", {"maximum": max_value, "suffix": " Hz"})
+    ],
+    label="High cut"
+)`
+      },
+      filters: {
+        note: 'Caso real de EEG: <code>fs / 2</code> no es una regla especial; es un máximo numérico como cualquier otro.',
+        content: `nyquist = fs / 2
+errors = validator.validate_many(
+    config.get("high_cut"),
+    [
+        "finite_number",
+        ("greater_than", {"minimum": 0.0, "suffix": " Hz"}),
+        ("less_than", {"maximum": nyquist, "suffix": " Hz"})
+    ],
+    label="High cut"
+)`
+      },
+      custom: {
+        note: 'Caso específico EEG: usar una validación custom que internamente reutiliza reglas genéricas.',
+        content: `errors = validator.validate_errors(
+    value,
+    "custom",
+    label="Multiscale Lempel-Ziv complexity: Scales",
+    validator=self._multiscale_lz_scales_errors
+)
+
+# Dentro de la función custom:
+return self._validator.validate_many(
+    value,
+    [
+        ("pattern", {
+            "pattern": self._multiscale_lz_scales_pattern,
+            "message": f"{label} must follow the format [1, 3, 5]."
+        })
+    ],
+    label=label
+)`
+      }
+    };
+
+    const validationButtons = Array.from(document.querySelectorAll(".validation-button"));
+    const validationView = document.getElementById("validation-view");
+    const validationNote = document.getElementById("validation-note");
+
+    function activateValidationExample(exampleId) {
+      const example = validationExamples[exampleId];
+      if (!example) {
+        return;
+      }
+      validationButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.validationExample === exampleId);
+      });
+      validationView.textContent = example.content;
+      validationNote.innerHTML = example.note;
+    }
+
+    validationButtons.forEach((button) => {
+      button.addEventListener("click", () => activateValidationExample(button.dataset.validationExample));
+    });
+  </script>
+</body>
+</html>
