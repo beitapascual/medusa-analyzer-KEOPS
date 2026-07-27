@@ -66,7 +66,7 @@ def run_pipeline(state):
             ## Second step: Get indices of the thresholding
             if state['segmentation']["thresholding"]['enabled']:
 
-                epochs = segment_signal(processed_signal, times, fs, events, state)
+                epochs,_ = segment_signal(processed_signal, times, fs, events, state)
 
                 # Get the thresholding parameters
                 thres_k = state['segmentation']['sigma']
@@ -87,10 +87,10 @@ def run_pipeline(state):
                         n_rejected = int((prc_rejected_tmp * epochs[base_evt][evt].shape[0]) / 100)
                         rejection_summary.append({
                             'subject': subj_id,
-                            'prc_rejected': prc_rejected_tmp,
-                            'n_rejected': n_rejected,
                             'base_event': base_evt,
-                            'event': evt
+                            'event': evt,
+                            'prc_rejected': prc_rejected_tmp,
+                            'n_rejected': n_rejected
                         })
 
                 del epochs  # Free memory
@@ -112,8 +112,6 @@ def run_pipeline(state):
 
                 # If the band is not broadband, apply band filtering (the broadband does not require filtering)
                 if band_name.lower() != 'broadband':
-                    order = 1000 if state['preprocessing']['bandpass'] is False else state['preprocessing']['filters']['bandpass']
-
                     processed_signal_band = (frequency_filtering.FIRFilter(
                         state['preprocessing']['filters']['bandpass']['order'], [low_cut, high_cut],
                         'bandpass', window=state['preprocessing']['filters']['bandpass']['window'])
@@ -132,7 +130,7 @@ def run_pipeline(state):
                 )
 
                 ## Fourth step: Segmentation
-                epochs = segment_signal(processed_signal, times, fs, events, state)
+                epochs, times_epochs = segment_signal(processed_signal, times, fs, events, state)
 
                 for base_evt, epochs_base in epochs.items():
                     for evt, epochs_base_evt in epochs_base.items():
@@ -145,76 +143,53 @@ def run_pipeline(state):
                         ## Fifth step: Apply thresholding rejection if enabled
                         if state['segmentation']["thresholding"]:
                             # If all the epochs are rejected, skip this condition
-                            if all(idx_threshold[cond]):
-                                _log_with_store(
-                                    f"⚠️ All epochs corresponding to condition '{cond}' in file '{file}' have been rejected. Skipping.",
-                                    'warning')
-                                continue
+                            if all(idx_reject[base_evt][evt]):
+                                a = 0
+                                # _log_with_store(
+                                #     f"⚠️ All epochs corresponding to condition '{cond}' in file '{file}' have been rejected. Skipping.",
+                                #     'warning')
+                                # continue
 
                             # Remove the rejected epochs from the epochs array
-                            epochs = np.delete(epochs, idx_threshold[cond], axis=0)
-                            # Also remove the discarded epochs from idx_events if segmentation type is 'event'
-                            if settings_dic['segmentation']['segmentation_type'] == 'event':
-                                idx_events = np.delete(idx_events, idx_threshold[cond], axis=0)
+                            epochs[base_evt][evt] = np.delete(epochs[base_evt][evt], idx_reject[base_evt][evt], axis=0)
 
-                        # Update the progress bar and labels
-                        global_progress = (
-                                                      i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 2) / total_steps * 100
-                        self.progress.emit(int(global_progress))
+                        # # Update the progress bar and labels
+                        # global_progress = (
+                        #                               i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 2) / total_steps * 100
+                        # self.progress.emit(int(global_progress))
 
                         ## Sixth step: Apply resampling if enabled
-                        if epochs is not None and settings_dic['segmentation']['resample']:
-                            resample_fs = settings_dic['segmentation']['resample_fs']
-                            window = [0, (epochs.shape[1] / fs) * 1000]  # Window in ms
-                            epochs = medusa.resample_epochs(epochs, window, resample_fs)
+                        # TODO OYE MIRAR LO DEL RESAMPLING A VER SI NECESITA ANTIALIASING!!!
+                        if epochs[base_evt][evt] is not None and state['segmentation']['resampling']['enabled']:
+                            resample_fs = state['segmentation']['resampling']['target_sampling_frequency']
+                            window = [0, (epochs[base_evt][evt].shape[1] / fs) * 1000]  # Window in ms
+                            epochs[base_evt][evt] = segmentation.resample_segments(epochs[base_evt][evt], window, resample_fs)
+                            fs = resample_fs
 
-                        # Update the progress bar and labels
-                        global_progress = (
-                                                      i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 3) / total_steps * 100
-                        self.progress.emit(int(global_progress))
 
-                        # Save the segmented signals (if required), separately for each condition (and event, if selected)
-                        if settings_dic['segmentation']['segmentation_type'] == 'condition':
-                            save_outputs(self, deepcopy(epochs), base_name, band_name, cond, None, 'seg',
-                                         settings_dic['save'])
-                        elif settings_dic['segmentation']['segmentation_type'] == 'event':
-                            for evt in np.unique(idx_events):
-                                # Get the epochs corresponding to the current event
-                                current_epochs = epochs[(idx_events.ravel() == evt), :, :]
-                                # Get the event name from its label
-                                event_name = None
-                                for key, info in signal_marks.app_settings['events'].items():
-                                    if info['label'] == evt:
-                                        event_name = key
-                                        break
-                                save_outputs(self, deepcopy(current_epochs), base_name, band_name, cond, event_name,
-                                             'seg', settings_dic['save'])
+                        # # Update the progress bar and labels
+                        # global_progress = (
+                        #                               i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 3) / total_steps * 100
+                        # self.progress.emit(int(global_progress))
+
+                        # Save the segmented signals (if required), separately for each event
+                        save_outputs(
+                            build_output_dict(epochs[base_evt][evt], times_epochs, channs, fs),
+                            file, band_name, [base_evt + evt], 'segmented', state
+                        )
 
                         if n_cha == 1:
-                            epochs = epochs[:, :, None]
+                            epochs[base_evt][evt] = epochs[base_evt][evt][:, :, None]
 
                         ## Seventh step: Parameter computation
-                        if settings_dic['segmentation']['segmentation_type'] == 'condition':
-                            params = compute_parameters(epochs, fs, band, settings_dic)
-                            save_outputs(self, deepcopy(params), base_name, band_name, cond, None, 'param',
-                                         settings_dic['save'])
-                        elif settings_dic['segmentation']['segmentation_type'] == 'event':
-                            for evt in np.unique(idx_events):
-                                # Get the epochs corresponding to the current event
-                                current_epochs = epochs[(idx_events.ravel() == evt), :, :]
-                                current_params = compute_parameters(current_epochs, fs, band, settings_dic)
-                                # Get the event name from its label
-                                event_name = None
-                                for key, info in signal_marks.app_settings['events'].items():
-                                    if info['label'] == evt:
-                                        event_name = key
-                                        break
-                                save_outputs(self, deepcopy(current_params), base_name, band_name, cond, event_name,
-                                             'param', settings_dic['save'])
-                    # Update the progress bar and labels
-                    global_progress = (
-                                                  i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 7) / total_steps * 100
-                    self.progress.emit(int(global_progress))
+                        params = compute_parameters(epochs[base_evt][evt], fs, band, state)
+                        save_outputs(params, file, band_name, [base_evt + evt], 'parameters', state)
+
+
+                    # # Update the progress bar and labels
+                    # global_progress = (
+                    #                               i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 7) / total_steps * 100
+                    # self.progress.emit(int(global_progress))
 
         # Exception handling
         except Exception as e:
@@ -225,26 +200,25 @@ def run_pipeline(state):
 
     # Save logs and summary
     try:
-        selected_folder = Path(settings_dic['save']["folder"])
-        derivatives_path = selected_folder / "derivatives"
+        derivatives_path = state['output_derivatives_path']
         derivatives_path.mkdir(exist_ok=True)
 
         # Save rejection summary to CSV
         if rejection_summary:
             csv_path = derivatives_path / "rejection_summary.csv"
             with open(csv_path, mode='w', newline='') as csv_file:
-                fieldnames = ['subject', 'condition', 'prc_rejected', 'n_rejected']
+                fieldnames = ['subject', 'base_event', 'event', 'prc_rejected', 'n_rejected']
                 writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
                 writer.writeheader()
                 for row in rejection_summary:
                     writer.writerow(row)
                 row = {
-                    'subject': f"K STDs: {settings_dic['segmentation']['thres_k']}",
-                    'condition': f"Samples: {settings_dic['segmentation']['thres_samples']}",
-                    'prc_rejected': f"N Channels: {settings_dic['segmentation']['thres_channels']}"
+                    'subject': f"K STDs: {state['segmentation']['sigma']}",
+                    'condition': f"Samples: {state['segmentation']['samples']}",
+                    'prc_rejected': f"N Channels: {state['segmentation']['channels']}"
                 }
                 writer.writerow(row)
-            self.log.emit(f"✅ Rejection summary saved to {csv_path}", "")
+            # self.log.emit(f"✅ Rejection summary saved to {csv_path}", "")
 
         # Save execution warnings/errors to TXT
         if execution_logs:
@@ -252,12 +226,13 @@ def run_pipeline(state):
             with open(log_path, mode='w', encoding='utf-8') as txt_file:
                 for log_entry in execution_logs:
                     txt_file.write(log_entry + "\n")
-            self.log.emit(f"✅ Execution logs saved to {log_path}", "")
+            # self.log.emit(f"✅ Execution logs saved to {log_path}", "")
 
     except Exception as e:
-        self.log.emit(f"⚠️ Could not save logs/summary: {e}", "warning")
+        a = 0
+        # self.log.emit(f"⚠️ Could not save logs/summary: {e}", "warning")
 
-    self.text_progress.emit("Completed")
+    # self.text_progress.emit("Completed")
 
     return error_found
 
@@ -293,10 +268,24 @@ def build_output_dict(signal, times, ch_names, fs):
     }
     return output_dic
 
-def segment_signal(signal, times, fs, events, state, norm = None):
+def segment_signal(signal, times, fs, events, state):
+
+    # Get segmentation params
+    try:
+        segment_length = state['segmentation']['epoch_parameters']['duration']['duration_epoch_length_ms']
+        stride = state['segmentation']['epoch_parameters']['duration']['stride_percent']
+        norm = state['segmentation']['normalization']['duration']
+    except:
+        epoch_window = state['segmentation']['epoch_parameters']['instant']['epoch_window_ms']
+        baseline = state['segmentation']['normalization']['instant']['baseline_window_ms']
+        segment_length = epoch_window['end'] - epoch_window['start'] + baseline['end'] - baseline['start']
+        norm = state['segmentation']['normalization']['instant']
+    n_samples = int(np.round((segment_length / 1000.0) * fs))
+    times_epochs = (np.arange(n_samples) / fs) * 1000
+    norm = norm['mode'] if norm['enabled'] else None
+    norm = 'z' if norm == 'mean_std' else 'dc'
 
     epochs = dict()
-    # For each condition selected...
     for base_evt in state['segmentation']['event_groups']:
 
         if base_evt['base_event'] == None:
@@ -312,8 +301,6 @@ def segment_signal(signal, times, fs, events, state, norm = None):
 
             # If segmentation type is 'condition'
             if base_evt['duration_events']:
-                segment_length = state['segmentation']['epoch_parameters']['duration']['duration_epoch_length_ms']
-                stride = state['segmentation']['epoch_parameters']['duration']['stride_percent']
 
                 for evt in base_evt['duration_events']:
                     current_evts = events[events['trial_type'] == evt]
@@ -336,8 +323,6 @@ def segment_signal(signal, times, fs, events, state, norm = None):
                             del epochs_tmp
 
             elif base_evt['instant_events']:
-                epoch_window = state['segmentation']['epoch_parameters']['instant']['epoch_window_ms']
-                baseline = state['segmentation']['epoch_parameters']['instant']['baseline']
 
                 for evt in base_evt['duration_events']:
                     current_evts = events[events['trial_type'] == evt]
@@ -358,21 +343,7 @@ def segment_signal(signal, times, fs, events, state, norm = None):
     #     print(f"⚠️ No valid epochs for '{cond}' in file '{file}'. Skipping.", 'warning')
     #     continue
 
-    return epochs
-
-
-
-
-def _get_event_indices_in_range(marks, event_key, start_time, end_time):
-    """
-    Return indices of events that occur within a given time interval.
-    """
-    events_labels = np.array(marks.events_labels)
-    events_times = np.array(marks.events_times)
-    return np.where(
-        (events_labels == event_key) &
-        (events_times >= start_time) &
-        (events_times <= end_time))[0]
+    return epochs, times_epochs
 
 
 def save_outputs(data, file, band_name, cond, key, state):
@@ -397,51 +368,32 @@ def save_outputs(data, file, band_name, cond, key, state):
 
         output_path = output_path.with_stem(f"{output_path.stem}_band-{band_name.replace('-', '')}")
 
-        signal_export = {
-            "fs": data['fs'],
-            "channels": data['ch_names'],
-            "times": data['times'],
-            "signal": data['signal']
-        }
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(signal_export, f)
+            json.dump(data, f)
 
         # worker.log.emit(f"✅ Preprocessed saved: {output_path}", "")
 
-    # --- Saving segmented signals (.mat) ---
-    if key == "seg" and settings_dic["save_segmented"]:
-        if ses_id:
-            seg_dir = derivatives_path / "segmented" / subj_id / ses_id / "EEG"
-        else:
-            seg_dir = derivatives_path / "segmented" / subj_id / "EEG"
-        seg_dir.mkdir(parents=True, exist_ok=True)
+    # --- Saving segmented signals (.json) ---
+    elif key == "segmented":
+        output_path = selected_folder / "segmented" / filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if event is not None:
-            output_name = f"{base_stem}_band-{band_name.replace('-', '')}_cond-{cond.replace('-', '')}_event-{event.replace('-', '')}.mat"
-        else:
-            output_name = f"{base_stem}_band-{band_name.replace('-', '')}_cond-{cond.replace('-', '')}.mat"
-        output_path = seg_dir / output_name
+        output_path = output_path.with_stem(f"{output_path.stem}_band-{band_name.replace('-', '')}"
+                                            f"_segment-{band_name.replace('-', '').replace('_', '')}")
 
-        savemat(output_path, {'epochs': data})
-        worker.log.emit(f"✅ Segmented saved: {output_path}", "")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+        # worker.log.emit(f"✅ Segmented saved: {output_path}", "")
 
     # --- Saving parameters (.mat) ---
-    if key == "param" and settings_dic["save_params"]:
-        if ses_id:
-            param_dir = derivatives_path / "parameters" / subj_id / ses_id / "EEG"
-        else:
-            param_dir = derivatives_path / "parameters" / subj_id / "EEG"
-        param_dir.mkdir(parents=True, exist_ok=True)
+    elif key == "parameters":
+        output_path = selected_folder / "parameters" / filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if not isinstance(data, dict):
-            if event is not None:
-                outname = f"{subj_id}_param-unknown_band-{band_name.replace('-', '')}_cond-{cond.replace('-', '')}_event-{event.replace('-', '')}.mat"
-            else:
-                outname = f"{subj_id}_param-unknown_band-{band_name.replace('-', '')}_cond-{cond.replace('-', '')}.mat"
-            outpath = param_dir / outname
-            savemat(outpath, {'parameters': data})
-            worker.log.emit(f"⚠️ Parameters: saved fallback file {outpath}", "")
-            return
+        output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
+                                            f"_band-{band_name.replace('-', '')}"
+                                            f"_segment-{band_name.replace('-', '').replace('_', '')}")
 
         params_dict = dict(data)
 
@@ -553,24 +505,9 @@ def apply_preprocessing(signal, fs, cfg):
     # CAR and return
     return spatial_filtering.car(signal) if cfg['car'] else signal
 
+##################### COMPUTE PARAMS
 
-##################### BAND FILTERING
-
-def band_filtering(signal, bp_min, bp_max, fs, cfg):
-    """
-    Apply band segmentation with a FIR bandpass filter. Used when preprocessing is disabled but band-specific
-    segmentation is required.
-    """
-    order = 1000 if cfg['bandpass'] is False else cfg['bp_order']
-    win = 'hamming' if cfg['bandpass'] is False else cfg['bp_win']
-    bp_filter = medusa.FIRFilter(order, [bp_min, bp_max], 'bandpass', window=win)
-    signal = bp_filter.fit_transform(signal, fs)
-    return signal
-
-
-##################### BAND FILTERING
-
-def compute_parameters(epochs, fs, band, cfg):
+def compute_parameters(epochs, fs, band, state):
     # Initialize dict that will contain all the computed parameters
     params = {}
 
