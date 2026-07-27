@@ -132,8 +132,6 @@ def file_to_bids(input_path: Path, output_path: Path):
             "times": component_data['times'],
             "signal": component_data['signal']
         }
-        # Volcado al disco
-        ruta_json_senal = full_output_path / f"{base_name}_{data_type}_signal.json"
 
         # Se omite el parámetro 'indent' para evitar que el tamaño del archivo
         # crezca desproporcionadamente debido a la matriz de la señal.
