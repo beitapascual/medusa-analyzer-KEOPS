@@ -35,6 +35,7 @@ class EEGPreprocessingWidget(QScrollArea):
         # Cogemos la definición de los filtros particularizado al experimento de eeg. La idea es saber qué filtros
         # existen y cómo se comportan.
         self.filter_definitions = [deepcopy(filter_config) for filter_config in self.config.get("filters", [])]
+        self.source_minimum_frequency = self._resolve_source_minimum_frequency()
         self.filters: dict[str, FilterControls] = {} # guardar widgets de control de cada filtro
         self.filter_plots: dict[str, FilterPreviewPlot] = {} # guardar plot asociado a cada filtro
 
@@ -59,24 +60,18 @@ class EEGPreprocessingWidget(QScrollArea):
             default_filter_state = default_state["filters"][filter_id]
             saved_filter_state = saved_filters.get(filter_id, {})
             if isinstance(saved_filter_state, dict):
-                legacy_filter_type = str(saved_filter_state.get("filter_type", "")).lower()
-                merged_filter_config = {**filter_definition, **saved_filter_state}
-                if legacy_filter_type in {"fir", "iir"}:
-                    merged_filter_config["filter_type"] = default_filter_state["filter_type"]
-                    merged_filter_config["filter_design"] = legacy_filter_type
-                    if "order" not in saved_filter_state:
-                        merged_filter_config.pop("order", None)
-                    if "window" not in saved_filter_state:
-                        merged_filter_config.pop("window", None)
+                saved_filter_config = {
+                    key: saved_filter_state[key]
+                    for key in ("enabled", "low_cut", "high_cut", "filter_design", "order", "window")
+                    if key in saved_filter_state
+                }
+                merged_filter_config = {**filter_definition, **saved_filter_config}
                 merged_filters[filter_id] = build_filter_defaults(merged_filter_config)
             else:
                 merged_filters[filter_id] = default_filter_state
-        saved_car_checked = preprocessing_state.get(
-            "car_checked",
-            preprocessing_state.get("car", default_state["car_checked"]),
-        )
+        saved_car = preprocessing_state.get("car", default_state["car"])
         merged_state = {
-            "car_checked": bool(saved_car_checked),
+            "car": bool(saved_car),
             "filters": merged_filters,
             "selected_frequency_bands": [
                 deepcopy(band) for band in (saved_selected_frequency_bands or [])
@@ -111,7 +106,7 @@ class EEGPreprocessingWidget(QScrollArea):
         car_title.setObjectName("panelTitle")
         self.car_checkbox = QCheckBox("Apply common average reference")
         # Lo inicializamos desde el estado
-        self.car_checkbox.setChecked(bool(self.state["preprocessing"]["car_checked"]))
+        self.car_checkbox.setChecked(bool(self.state["preprocessing"]["car"]))
         car_layout.addWidget(car_title)
         car_layout.addWidget(self.car_checkbox)
         root.addWidget(car_panel)
@@ -164,7 +159,7 @@ class EEGPreprocessingWidget(QScrollArea):
 
     def _build_default_state(self) -> dict[str, Any]:
         """Construye el estado inicial del widget desde defaults."""
-        return {"car_checked": bool(self.config.get("car", {}).get("checked_by_default", False)),
+        return {"car": bool(self.config.get("car", {}).get("checked_by_default", False)),
             "filters": {str(filter_config["id"]): build_filter_defaults(filter_config) for filter_config in
                         self.filter_definitions},
             "selected_frequency_bands": []}
@@ -182,6 +177,26 @@ class EEGPreprocessingWidget(QScrollArea):
         panel_layout.addWidget(title_label)
         panel_layout.addWidget(plot)
         return panel, plot
+
+    def _resolve_source_minimum_frequency(self) -> float:
+        candidates: list[float] = []
+        broadband = self.state.get("broadband")
+        if isinstance(broadband, dict) and broadband.get("low_cut") is not None:
+            candidates.append(float(broadband["low_cut"]))
+        for filter_definition in self.filter_definitions:
+            if filter_definition.get("limits_frequency_bands", False):
+                candidates.append(float(filter_definition["low_cut"]))
+        if not candidates:
+            candidates.append(float(self.config["initial_frequency_values"]["low_cut"]))
+        return min(candidates)
+
+    def _source_maximum_frequency(self) -> float:
+        if self.sampling_frequency is not None:
+            return float(self.sampling_frequency) / 2
+        broadband = self.state.get("broadband")
+        if isinstance(broadband, dict) and broadband.get("high_cut") is not None:
+            return float(broadband["high_cut"])
+        return float(self.config["initial_frequency_values"]["high_cut"])
 
     def _set_preprocessing_enabled(self, enabled: bool) -> None:
         """ Función para cambiar el estado del widget de preprocessing."""
@@ -241,14 +256,16 @@ class EEGPreprocessingWidget(QScrollArea):
 
         # Cuando existe frecuencia de muestreo, activamos los controles
         self._set_preprocessing_enabled(True)
-        self.minimum_band_frequency = float(self.state["broadband"]["low_cut"])
-        self.maximum_band_frequency = float(self.state["broadband"]["high_cut"])
+        source_maximum_frequency = self._source_maximum_frequency()
+        current_broadband = self.state.get("broadband") or {}
+        self.minimum_band_frequency = float(current_broadband.get("low_cut", self.source_minimum_frequency))
+        self.maximum_band_frequency = float(current_broadband.get("high_cut", source_maximum_frequency))
         for controls in self.filters.values():
-            controls.set_cut_frequency_bounds(self.minimum_band_frequency, self.sampling_frequency / 2)
+            controls.set_cut_frequency_bounds(self.source_minimum_frequency, source_maximum_frequency)
             # NOTA: ponemos de límite nyquist, aunque luego se valida con el máximo restringido
 
         # Copiamos el valor del checkbox CAR al estado
-        self.state["preprocessing"]["car_checked"] = self.car_checkbox.isChecked()
+        self.state["preprocessing"]["car"] = self.car_checkbox.isChecked()
 
         # Calculamos la respuesta de los filtros
         filter_validity = {} # dic para guardar si un filtro es válido o no
@@ -278,9 +295,9 @@ class EEGPreprocessingWidget(QScrollArea):
                 # Calculamos la intersección entre todos los filtros limitantes activos
                 self.active_filter_bounds = filter_bounds if self.active_filter_bounds is None else (
                     max(self.active_filter_bounds[0], filter_bounds[0]), min(self.active_filter_bounds[1], filter_bounds[1]))
-                # Actualizamos los límites restrictivos
-                self.minimum_band_frequency = max(self.minimum_band_frequency, filter_bounds[0])
-                self.maximum_band_frequency = min(self.maximum_band_frequency, filter_bounds[1])
+        if self.active_filter_bounds is not None:
+            self.minimum_band_frequency = max(self.source_minimum_frequency, self.active_filter_bounds[0])
+            self.maximum_band_frequency = min(source_maximum_frequency, self.active_filter_bounds[1])
 
         # Bucle para comprobar si un filtro debe de estar dentro del rango de otro filtro
         for filter_definition in self.filter_definitions:
@@ -326,7 +343,10 @@ class EEGPreprocessingWidget(QScrollArea):
     def on_step_activated(self) -> None:
         """WorkflowShell llama a este hook"""
         metadata = self.state.get("metadata") or {}
+        previous_sampling_frequency = self.sampling_frequency
         self.sampling_frequency = metadata.get("sampling_frequency")
+        if self.sampling_frequency is not None and previous_sampling_frequency != self.sampling_frequency:
+            self.source_minimum_frequency = self._resolve_source_minimum_frequency()
         self._sync()
 
     def can_continue(self) -> bool:

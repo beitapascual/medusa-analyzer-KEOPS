@@ -101,8 +101,9 @@ class EEGReportWidget(ReportWidget):
 
         selected_frequency_bands = preprocessing.get("selected_frequency_bands", [])
         filters = preprocessing.get("filters", {})
+        car_enabled = preprocessing.get("car")
         return self._section("Pre-processing", # llamamos a _section
-            [("CAR", "Enabled" if preprocessing.get("car_checked") else "Disabled"),
+            [("CAR", "Enabled" if car_enabled else "Disabled"),
                 *[(str(filter_id).replace("_", " ").title(), self._filter_description(filter_config))
                     for filter_id, filter_config in filters.items()],
                 ("Analysis bands", self._bands_summary(selected_frequency_bands))])
