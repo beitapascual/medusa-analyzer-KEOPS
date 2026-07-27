@@ -18,8 +18,8 @@
   "has_run_pipeline": false,
   "workflow": [
     {
-      "id": "load_data",
-      "title": "Load data",
+      "id": "explore_file",
+      "title": "Explore file",
       "widget": "explorer_explore_file_widget.ExplorerExploreFileWidget"
     }
   ]

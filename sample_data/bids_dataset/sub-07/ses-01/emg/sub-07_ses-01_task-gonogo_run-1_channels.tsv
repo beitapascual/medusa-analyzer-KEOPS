@@ -1,0 +1,3 @@
+name	type	units	sensor	reference	reference_method
+EMG_right	EMG	uV	EMG_R_act	EMG_R_ref	bipolar
+EMG_left	EMG	uV	EMG_L_act	EMG_L_ref	bipolar

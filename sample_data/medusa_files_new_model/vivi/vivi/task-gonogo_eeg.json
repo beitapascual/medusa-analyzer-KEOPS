@@ -1,0 +1,20 @@
+{
+    "TaskInformation": {
+        "Taskinformation": {
+            "Instructions": "Press button when green, hold when red",
+            "Taskdescription": "Standard go/no-go task with 5 seconds duration",
+            "Taskname": "gonogo"
+        }
+    },
+    "ECGChannelCount": 0,
+    "EEGChannelCount": 8,
+    "EEGReference": "GND",
+    "EMGChannelCount": 0,
+    "EOGChannelCount": 0,
+    "MISCChannelCount": 0,
+    "Manufacturer": "Brain Products",
+    "ManufacturersModelName": "actiCHamp Plus",
+    "RecordingDuration": 5.0,
+    "SamplingFrequency": 256.0,
+    "TriggerChannelCount": 0
+}

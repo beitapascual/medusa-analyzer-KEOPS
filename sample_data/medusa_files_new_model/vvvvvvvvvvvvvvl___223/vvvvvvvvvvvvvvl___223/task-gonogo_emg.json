@@ -1,0 +1,15 @@
+{
+    "TaskInformation": {
+        "Taskinformation": {
+            "Instructions": "Press button when green, hold when red",
+            "Taskdescription": "Standard go/no-go task with 5 seconds duration",
+            "Taskname": "gonogo"
+        }
+    },
+    "EMGChannelCount": 2,
+    "Manufacturer": "Delsys",
+    "PowerLineFrequency": 50,
+    "RecordingDuration": 5.0,
+    "SamplingFrequency": 1000.0,
+    "TriggerChannelCount": 0
+}
