@@ -11,6 +11,7 @@
   ],
   "fir": {
     "default_window": "hamming",
+    "default_order": 101,
     "minimum_order": 3,
     "maximum_order": 99999,
     "windows": [
@@ -82,46 +83,17 @@
   },
   "iir": {
     "default_design": "butter",
+    "default_order": 4,
     "minimum_order": 1,
     "maximum_order": 20,
-    "rp_db": {
-      "minimum": 0.1,
-      "maximum": 20.0
-    },
-    "rs_db": {
-      "minimum": 1.0,
-      "maximum": 200.0
-    },
     "designs": [
       {
         "id": "butter",
-        "title": "Butterworth",
-        "uses_rp_db": false,
-        "uses_rs_db": false
-      },
-      {
-        "id": "cheby1",
-        "title": "Chebyshev I",
-        "uses_rp_db": true,
-        "uses_rs_db": false
-      },
-      {
-        "id": "cheby2",
-        "title": "Chebyshev II",
-        "uses_rp_db": false,
-        "uses_rs_db": true
-      },
-      {
-        "id": "ellip",
-        "title": "Elliptic",
-        "uses_rp_db": true,
-        "uses_rs_db": true
+        "title": "Butterworth"
       },
       {
         "id": "bessel",
-        "title": "Bessel",
-        "uses_rp_db": false,
-        "uses_rs_db": false
+        "title": "Bessel"
       }
     ]
   }

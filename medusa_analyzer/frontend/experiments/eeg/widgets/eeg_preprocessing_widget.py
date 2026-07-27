@@ -52,12 +52,32 @@ class EEGPreprocessingWidget(QScrollArea):
         else:
             frequency_band_rows = [deepcopy(band) for band in default_frequency_bands]
         self.default_frequency_bands = [deepcopy(band) for band in default_frequency_bands]
+        saved_filters = preprocessing_state.get("filters") or {}
+        merged_filters: dict[str, dict[str, Any]] = {}
+        for filter_definition in self.filter_definitions:
+            filter_id = str(filter_definition["id"])
+            default_filter_state = default_state["filters"][filter_id]
+            saved_filter_state = saved_filters.get(filter_id, {})
+            if isinstance(saved_filter_state, dict):
+                legacy_filter_type = str(saved_filter_state.get("filter_type", "")).lower()
+                merged_filter_config = {**filter_definition, **saved_filter_state}
+                if legacy_filter_type in {"fir", "iir"}:
+                    merged_filter_config["filter_type"] = default_filter_state["filter_type"]
+                    merged_filter_config["filter_design"] = legacy_filter_type
+                    if "order" not in saved_filter_state:
+                        merged_filter_config.pop("order", None)
+                    if "window" not in saved_filter_state:
+                        merged_filter_config.pop("window", None)
+                merged_filters[filter_id] = build_filter_defaults(merged_filter_config)
+            else:
+                merged_filters[filter_id] = default_filter_state
+        saved_car_checked = preprocessing_state.get(
+            "car_checked",
+            preprocessing_state.get("car", default_state["car_checked"]),
+        )
         merged_state = {
-            "car_checked": bool(preprocessing_state.get("car_checked", default_state["car_checked"])),
-            "filters": {
-                **default_state["filters"],
-                **(preprocessing_state.get("filters") or {}),
-            },
+            "car_checked": bool(saved_car_checked),
+            "filters": merged_filters,
             "selected_frequency_bands": [
                 deepcopy(band) for band in (saved_selected_frequency_bands or [])
             ],
@@ -105,10 +125,11 @@ class EEGPreprocessingWidget(QScrollArea):
         # Iteramos para crear cada filtro
         for row, filter_definition in enumerate(self.filter_definitions):
             filter_id = str(filter_definition["id"]) # extraemos el identificado del filtro
+            filter_state = self.state["preprocessing"]["filters"][filter_id]
             # Constructor: título del panel del filtro, configuración que queremos del filtro, modo del filtro y
             # frecuencia mínima permitida inicialmente.
-            controls = FilterControls(str(filter_definition["title"]), self.state["preprocessing"]["filters"][filter_id],
-                                      str(filter_definition["mode"]), minimum_frequency=self.minimum_band_frequency)
+            controls = FilterControls(str(filter_definition["title"]), filter_state,
+                                      str(filter_state["filter_type"]), minimum_frequency=self.minimum_band_frequency)
             controls.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             # Creamos el panel visual de la gráfica asociada a ese filtro. plot_panel es el contenedor completo con
             # borde, título, layour, etc. y plot es el widget real donde se pinta la respuesta del filtro.
@@ -234,9 +255,10 @@ class EEGPreprocessingWidget(QScrollArea):
         for filter_definition in self.filter_definitions: # recorremos las definiciones de los filtros
             filter_id = str(filter_definition["id"])
             # Guardamos la validez de cada uno de los filtros que tenemos definidos
+            filter_config = self.state["preprocessing"]["filters"][filter_id]
             _, filter_validity[filter_id] = self._update_filter_feedback(self.filters[filter_id],
-                self.filter_plots[filter_id], self.state["preprocessing"]["filters"][filter_id], self.sampling_frequency,
-                str(filter_definition["mode"]))
+                self.filter_plots[filter_id], filter_config, self.sampling_frequency,
+                str(filter_config["filter_type"]))
 
         # Antes de calcular qué filtros limitan qué bandas, limpiamos el valor anterior para evitar arrastrar límites
         # de una sincronización pasada.

@@ -26,18 +26,14 @@ frecuencia y dibujar una previsualización en pantalla. El flujo principal es es
 NOTA: Keys soportadas al definir un filtro en un experimento:
     - `id`
     - `title`
-    - `mode`
     - `plot_title` identifican el filtro y su UI
     - `enabled`
     - `filter_type`
+    - `filter_design`
     - `low_cut`
     - `high_cut`
-    - `fir_order`
-    - `fir_window`
-    - `iir_order`
-    - `iir_design`
-    - `iir_rp_db`
-    - `iir_rs_db` fijan el estado inicial
+    - `order`
+    - `window`
     `limits_frequency_bands`
     `must_be_within_filter` 
     `out_of_range_warning`"""
@@ -61,6 +57,12 @@ def _filter_families() -> list[Any]:
     """Devuelve una lista con las familias de filtros disponibles."""
     return filter_defaults.get("families", [])
 
+def _filter_family_ids() -> list[str]:
+    return _option_ids(_filter_families())
+
+def _filter_modes() -> list[str]:
+    return ["bandpass", "bandstop"]
+
 def _fir_options() -> dict[str, Any]:
     """Devuelve la configuración específica de filtros FIR"""
     return _filter_family_options("fir")
@@ -69,30 +71,48 @@ def _iir_options() -> dict[str, Any]:
     """Devuelve la configuración específica de filtros IIR"""
     return _filter_family_options("iir")
 
-def _range_options(options: dict[str, Any], key: str) -> tuple[float, float]:
-    """Recibe un diccionario de opciones y una clave. Busca dentro de options[key] un rango min-max."""
-    range_config = options.get(key, {})
-    return float(range_config["minimum"]), float(range_config["maximum"])
-
 def _integer_bounds(options: dict[str, Any], minimum_key: str, maximum_key: str) -> tuple[int, int]:
     """Obtener límites como orden mínimo y máximo"""
     return int(options[minimum_key]), int(options[maximum_key])
 
-def _iir_design_config(design_id: str) -> dict[str, Any]:
-    """Función para buscar la configuración de un diseño IIR concreto."""
-    # Recorremos la lista de diseños IIR definidos en el JSON
-    for design in _iir_options().get("designs", []):
-        if isinstance(design, dict) and str(design.get("id")) == design_id:
-            return design
-    return {}
+def _default_order_for_design(filter_design: str) -> int:
+    options = _iir_options() if filter_design == "iir" else _fir_options()
+    return int(options.get("default_order", options.get("minimum_order", 1)))
 
-def _iir_design_uses_rp(design_id: str) -> bool:
-    """Devuelve True si el diseño IIR indicado usa rp_db (rizado)"""
-    return bool(_iir_design_config(design_id).get("uses_rp_db", False))
+def _default_window_for_design(filter_design: str) -> str:
+    if filter_design == "iir":
+        return str(_iir_options().get("default_design", "butter"))
+    return str(_fir_options().get("default_window", "hamming"))
 
-def _iir_design_uses_rs(design_id: str) -> bool:
-    """Devuelve True si el diseño IIR indicado usa rp_db (atenuación mínima)"""
-    return bool(_iir_design_config(design_id).get("uses_rs_db", False))
+def _filter_type_from_config(config: dict[str, Any]) -> str:
+    """Devuelve el modo del filtro. Acepta `mode` solo como compatibilidad legacy."""
+    filter_type = str(config.get("filter_type", config.get("mode", "bandpass"))).lower()
+    if filter_type in _filter_family_ids():
+        return str(config.get("mode", "bandpass")).lower()
+    return filter_type
+
+def _filter_design_from_config(config: dict[str, Any]) -> str:
+    """Devuelve la familia FIR/IIR. Acepta el viejo `filter_type=fir|iir` como entrada legacy."""
+    filter_design = str(config.get("filter_design", "")).lower()
+    if not filter_design:
+        legacy_filter_type = str(config.get("filter_type", "")).lower()
+        if legacy_filter_type in _filter_family_ids():
+            filter_design = legacy_filter_type
+    if filter_design not in _filter_family_ids():
+        filter_design = "fir"
+    return filter_design
+
+def _order_from_config(config: dict[str, Any], filter_design: str) -> int:
+    if "order" in config:
+        return int(config["order"])
+    legacy_key = "iir_order" if filter_design == "iir" else "fir_order"
+    return int(config.get(legacy_key, _default_order_for_design(filter_design)))
+
+def _window_from_config(config: dict[str, Any], filter_design: str) -> str:
+    if "window" in config:
+        return str(config["window"])
+    legacy_key = "iir_design" if filter_design == "iir" else "fir_window"
+    return str(config.get(legacy_key, _default_window_for_design(filter_design)))
 
 def normalize_choice(choice: Any) -> tuple[str, str]:
     """Normaliza ids/opciones del JSON para que un combobox siempre reciba (id_interno, titulo_visible)."""
@@ -111,18 +131,20 @@ def normalize_fir_order(value: int, require_odd: bool = False) -> int:
 def build_filter_defaults(config: dict[str, Any]) -> dict[str, Any]:
     """ Construye la configuración inicial de un filtro a partir de los parámetros definidos en un JSON (particular
     de un experimento)."""
-    fir = _fir_options() # cargamos opciones FIR desde el JSON
-    iir = _iir_options() # cargamos opciones IIR desde el JSON
+    filter_type = _filter_type_from_config(config)
+    filter_design = _filter_design_from_config(config)
     return {"enabled": bool(config["enabled"]),
         "low_cut": float(config["low_cut"]),
         "high_cut": float(config["high_cut"]),
-        "filter_type": str(config["filter_type"]).lower(),
-        "fir_order": int(config["fir_order"]),
-        "fir_window": str(config.get("fir_window", fir.get("default_window"))),
-        "iir_order": int(config["iir_order"]),
-        "iir_design": str(config.get("iir_design", iir.get("default_design"))),
-        "iir_rp_db": float(config["iir_rp_db"]),
-        "iir_rs_db": float(config["iir_rs_db"])}
+        "filter_type": filter_type,
+        "filter_design": filter_design,
+        "order": _order_from_config(config, filter_design),
+        "window": _window_from_config(config, filter_design)}
+
+def _normalized_filter_config(config: dict[str, Any]) -> dict[str, Any]:
+    if {"filter_design", "order", "window"}.issubset(config):
+        return config
+    return build_filter_defaults(config)
 
 def _option_ids(options: list[dict[str, Any]] | list[str] | tuple[str, ...] | None) -> list[str]:
     """Extrae los ids válidos de una lista de opciones. Se usa para validar que el usuario haya elegido
@@ -143,6 +165,7 @@ def filter_validation_errors(config: dict[str, Any], fs: float, *, minimum_frequ
 
     if not config.get("enabled", True):  # si el filtro está desactivado no se valida nada
         return []
+    config = _normalized_filter_config(config)
 
     fir = _fir_options() # Cargamos las opciones de un filtro FIR
     iir = _iir_options() # Cargamos las opciones de un filtro IIR
@@ -150,9 +173,11 @@ def filter_validation_errors(config: dict[str, Any], fs: float, *, minimum_frequ
     nyquist = fs / 2
     minimum_frequency = float(minimum_frequency)
     maximum_frequency = nyquist if maximum_frequency is None else min(float(maximum_frequency), nyquist)
-    # Validamos que el filtro sea una de las familias permitidas (fir o iir)
+    # Validamos el tipo funcional del filtro y su diseño FIR/IIR.
     errors.extend(_filter_validation.validate_many(config.get("filter_type"),
-        [("one_of", {"options": _option_ids(_filter_families())})], label="Filter type"))
+        [("one_of", {"options": _filter_modes()})], label="Filter type"))
+    errors.extend(_filter_validation.validate_many(config.get("filter_design"),
+        [("one_of", {"options": _filter_family_ids()})], label="Filter design"))
     # Validamos también low_cut y high_cut.
     errors.extend(_filter_validation.validate_many(config["low_cut"],
         ["finite_number", ("greater_or_equal", {"minimum": minimum_frequency, "suffix": " Hz"}),
@@ -171,35 +196,28 @@ def filter_validation_errors(config: dict[str, Any], fs: float, *, minimum_frequ
     if errors:
         return errors
 
+    filter_design = str(config["filter_design"]).lower()
     # Si el filtro es fir, validamos que el orden sea entero y mayor o igual que 3
-    if str(config["filter_type"]).lower() == "fir":
-        errors.extend(_filter_validation.validate_many(config["fir_order"],
-            ["integer", ("greater_or_equal", {"minimum": 3})], label="FIR order"))
-        # También validamos que fir_window sea una ventana permitida dependiendo del JSON de opciones
+    if filter_design == "fir":
+        errors.extend(_filter_validation.validate_many(config["order"],
+            ["integer", ("greater_or_equal", {"minimum": 3})], label="Order"))
+        # También validamos que window sea una ventana permitida dependiendo del JSON de opciones
         fir_windows = _option_ids(fir.get("windows")) # extraemos los ids de las ventanas permitidas
         if fir_windows:
-            errors.extend(_filter_validation.validate_many(config.get("fir_window"),
-                [("one_of", {"options": fir_windows})], label="FIR window"))
+            errors.extend(_filter_validation.validate_many(config.get("window"),
+                [("one_of", {"options": fir_windows})], label="Window"))
         return errors
 
     # Si el filtro es iir, valida que el orden sea entero y mayor o igual que 1. NOTA: si no es FIR, se asume IIR
-    errors.extend(_filter_validation.validate_many(config.get("iir_order"),
-        ["integer", ("greater_or_equal", {"minimum": 1})], label="IIR order"))
+    errors.extend(_filter_validation.validate_many(config.get("order"),
+        ["integer", ("greater_or_equal", {"minimum": 1})], label="Order"))
     # También valida que el diseño elegido sea uno permitido
     iir_designs = _option_ids(iir.get("designs"))
     if iir_designs:
-        errors.extend(_filter_validation.validate_many(config.get("iir_design"),
-            [("one_of", {"options": iir_designs})], label="IIR design"))
+        errors.extend(_filter_validation.validate_many(config.get("window"),
+            [("one_of", {"options": iir_designs})], label="Window"))
     if errors:
         return errors
-    # Después miramos el tipo de diseño porque hay algunos con parámetros individuales
-    design = str(config["iir_design"])
-    if _iir_design_uses_rp(design): # comprobamos si necesitamos rp
-        errors.extend(_filter_validation.validate_many(config["iir_rp_db"],
-            ["finite_number", ("greater_or_equal", {"minimum": 0.0, "suffix": " dB"})], label="Passband ripple"))
-    if _iir_design_uses_rs(design): # comprobamos si necesitamos rs
-        errors.extend(_filter_validation.validate_many(config["iir_rs_db"],
-            ["finite_number", ("greater_or_equal", {"minimum": 0.0, "suffix": " dB"})], label="Stopband attenuation"))
     return errors
 
 def filter_response_error(config: dict[str, Any], fs: float, *, minimum_frequency: float = 0.0,
@@ -218,6 +236,7 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode,
     # Si el filtro está desactivado, devolvemos una línea plana a 0 dB
     if not config.get("enabled", True):
         return FilterResponse([0.0, fs / 2], [0.0, 0.0])
+    config = _normalized_filter_config(config)
     # Después valida la configuración. Si hay errores, no calcula nada.
     if filter_validation_errors(config, fs, minimum_frequency=minimum_frequency, maximum_frequency=maximum_frequency):
         return None
@@ -226,20 +245,14 @@ def compute_filter_response(config: dict[str, Any], fs: float, mode: FilterMode,
     high_cut = Validation.coerce_float(config["high_cut"])
 
     try:
-        if str(config["filter_type"]).lower() == "fir": # Filtro FIR
-            numtaps = normalize_fir_order(config["fir_order"], require_odd=mode == "bandstop")
+        if str(config["filter_design"]).lower() == "fir": # Filtro FIR
+            numtaps = normalize_fir_order(config["order"], require_odd=mode == "bandstop")
             coefficients = signal.firwin(numtaps, [low_cut, high_cut], pass_zero=mode == "bandstop",
-                fs=fs, window=str(config["fir_window"])) # utilizamos scipy.signal.firwin
+                fs=fs, window=str(config["window"])) # utilizamos scipy.signal.firwin
             frequencies, response = signal.freqz(coefficients, worN=1024, fs=fs) # respuesta en frecuencia
         else: # Filtro IIR
-            iir_kwargs: dict[str, Any] = {}
-            design = str(config["iir_design"])
-            if _iir_design_uses_rp(design):
-                iir_kwargs["rp"] = float(config["iir_rp_db"])
-            if _iir_design_uses_rs(design):
-                iir_kwargs["rs"] = float(config["iir_rs_db"])
-            coefficients = signal.iirfilter(int(config["iir_order"]), [low_cut, high_cut], btype=mode,
-                fs=fs, ftype=str(config["iir_design"]), output="sos", **iir_kwargs) # utilizamos scipy.signal.iirfilter
+            coefficients = signal.iirfilter(int(config["order"]), [low_cut, high_cut], btype=mode,
+                fs=fs, ftype=str(config["window"]), output="sos") # utilizamos scipy.signal.iirfilter
             frequencies, response = signal.sosfreqz(coefficients, worN=1024, fs=fs) # respuesta en frecuencia
     except (ValueError, TypeError):
         return None
@@ -273,13 +286,12 @@ class FilterControls(QFrame):
         minimum_frequency: float = 0.0, maximum_frequency: float | None = None):
         super().__init__()
         self.config = config
-        self.mode = mode # dice si este panel representa un bandpass o un bandstop
+        self.mode = str(config.get("filter_type", mode)).lower() # dice si este panel representa un bandpass o un bandstop
         self.minimum_frequency = float(minimum_frequency)
         self.maximum_frequency = float(maximum_frequency) if maximum_frequency is not None else None
+        filter_design = str(config.get("filter_design", "fir")).lower()
         fir = _fir_options() # obtenemos las opciones FIR del filtering.json
         iir = _iir_options() # obtenemos las opciones IIR del filtering.json
-        rp_minimum, rp_maximum = _range_options(iir, "rp_db") # rango permitido
-        rs_minimum, rs_maximum = _range_options(iir, "rs_db") # rango permitido
         # Leemos el orden mínimo y máximo
         fir_minimum_order, fir_maximum_order = _integer_bounds(fir, "minimum_order", "maximum_order")
         iir_minimum_order, iir_maximum_order = _integer_bounds(iir, "minimum_order", "maximum_order")
@@ -306,14 +318,14 @@ class FilterControls(QFrame):
             family_id, family_title = normalize_choice(family)
             self.kind.addItem(family_title, family_id)
         # Buscamos en el combo la opción que coincide con el tipo de filtro actúal
-        family_index = self.kind.findData(str(config["filter_type"]).lower())
+        family_index = self.kind.findData(filter_design)
         if family_index >= 0:
             self.kind.setCurrentIndex(family_index) # si la encuentra, selecciona esa opción
         grid.addWidget(QLabel("Low cut"), 0, 0)
         grid.addWidget(self.low, 1, 0)
         grid.addWidget(QLabel("High cut"), 0, 1)
         grid.addWidget(self.high, 1, 1)
-        grid.addWidget(QLabel("Type"), 0, 2)
+        grid.addWidget(QLabel("Design"), 0, 2)
         grid.addWidget(self.kind, 1, 2)
         root.addLayout(grid)
 
@@ -337,14 +349,16 @@ class FilterControls(QFrame):
         self.fir_order = QSpinBox() # spinbox para el orden del filtro
         self.fir_order.setRange(fir_minimum_order, fir_maximum_order)
         self.fir_order.setSingleStep(1)
-        self.fir_order.setValue(int(config["fir_order"]))
+        fir_order_value = int(config["order"]) if filter_design == "fir" else int(config.get("fir_order", _default_order_for_design("fir")))
+        self.fir_order.setValue(fir_order_value)
         self.fir_order.setMaximumWidth(140)
         self.window = QComboBox() # combobox para la ventana del filtro
         for window in fir.get("windows", []): # recorremos ventanas definidas en filtering.json
             window_id, window_title = normalize_choice(window) # normalizamos las opciones del combo
             self.window.addItem(window_title, window_id)
         # Buscamos la ventana configurada actualmente
-        window_index = self.window.findData(str(config.get("fir_window", fir["default_window"])))
+        fir_window_value = str(config["window"]) if filter_design == "fir" else str(config.get("fir_window", fir["default_window"]))
+        window_index = self.window.findData(fir_window_value)
         if window_index >= 0:
             self.window.setCurrentIndex(window_index) # si la encuentra, la selecciona
         self.window.setMaximumWidth(180)
@@ -365,37 +379,23 @@ class FilterControls(QFrame):
         iir_layout.setColumnStretch(2, 1)
         self.iir_order = QSpinBox() # spinbox para el orden del filtro
         self.iir_order.setRange(iir_minimum_order, iir_maximum_order)
-        self.iir_order.setValue(int(config["iir_order"]))
+        iir_order_value = int(config["order"]) if filter_design == "iir" else int(config.get("iir_order", _default_order_for_design("iir")))
+        self.iir_order.setValue(iir_order_value)
         self.iir_order.setMaximumWidth(140)
         self.design = QComboBox() # combobox para el diseño del filtro
         for design in iir["designs"]:
             design_id, design_title = normalize_choice(design) # normalizamos las opciones del combo
             self.design.addItem(design_title, design_id)
         # Buscamos el diseño configurado actualmente
-        design_index = self.design.findData(str(config.get("iir_design", iir["default_design"])))
+        iir_window_value = str(config["window"]) if filter_design == "iir" else str(config.get("iir_design", iir["default_design"]))
+        design_index = self.design.findData(iir_window_value)
         if design_index >= 0:
             self.design.setCurrentIndex(design_index) # si encuentra el diseño, lo selecciona
         self.design.setMaximumWidth(180)
-        self.iir_rp = QDoubleSpinBox() # spinbox para el rizado de la banda de paso
-        self.iir_rp.setRange(rp_minimum, rp_maximum)
-        self.iir_rp.setDecimals(2)
-        self.iir_rp.setValue(float(config["iir_rp_db"]))
-        self.iir_rp.setSuffix(" dB")
-        self.iir_rp.setMaximumWidth(140)
-        self.iir_rs = QDoubleSpinBox() # spinbox para la atenuación en la banda de rechazo
-        self.iir_rs.setRange(rs_minimum, rs_maximum)
-        self.iir_rs.setDecimals(1)
-        self.iir_rs.setValue(float(config["iir_rs_db"]))
-        self.iir_rs.setSuffix(" dB")
-        self.iir_rs.setMaximumWidth(180)
         iir_layout.addWidget(QLabel("IIR order"), 0, 0)
         iir_layout.addWidget(QLabel("Design"), 0, 1)
         iir_layout.addWidget(self.iir_order, 1, 0)
         iir_layout.addWidget(self.design, 1, 1)
-        iir_layout.addWidget(QLabel("Passband ripple"), 2, 0)
-        iir_layout.addWidget(QLabel("Stopband attenuation"), 2, 1)
-        iir_layout.addWidget(self.iir_rp, 3, 0)
-        iir_layout.addWidget(self.iir_rs, 3, 1)
 
         # Añadimos los sub-paneles FIR e IIR al contenedor de parámetros.
         # Luego _sync() decide cuál se muestra y cuál se oculta.
@@ -410,8 +410,7 @@ class FilterControls(QFrame):
         root.addStretch(1)
 
         # Guardamos todos los controles editables en una lista para poder (des)activarlos de golpe.
-        self.controls = [self.low, self.high, self.kind, self.fir_order, self.window, self.iir_order, self.design,
-            self.iir_rp, self.iir_rs]
+        self.controls = [self.low, self.high, self.kind, self.fir_order, self.window, self.iir_order, self.design]
 
         # Conectamos todos los controles a _sync() para que cualquier cambio de la UI dispare
         self.enabled.toggled.connect(self._sync)
@@ -422,8 +421,6 @@ class FilterControls(QFrame):
             control.valueChanged.connect(self._sync)
         self.window.currentIndexChanged.connect(self._sync)
         self.design.currentIndexChanged.connect(self._sync)
-        self.iir_rp.valueChanged.connect(self._sync)
-        self.iir_rs.valueChanged.connect(self._sync)
         self._sync()
 
     @staticmethod
@@ -457,25 +454,27 @@ class FilterControls(QFrame):
     def _sync(self) -> None:
         """Lee la interfaz y actualiza self.config, muestra u oculta controles FIR/IIR, y activa/desactiva
         parámetros según el diseño."""
-        # Obtenemos tipo de filtro seleccionado
-        filter_type = str(self.kind.currentData() or self.kind.currentText()).lower()
-        require_odd_fir_order = self.mode == "bandstop" and filter_type == "fir"
+        # Obtenemos el diseño FIR/IIR seleccionado
+        filter_design = str(self.kind.currentData() or self.kind.currentText()).lower()
+        require_odd_fir_order = self.mode == "bandstop" and filter_design == "fir"
 
         # Leemos lo que el usuario ha puesto en la UI y lo guardamos en self.config
+        self.config.clear()
         self.config["enabled"] = self.enabled.isChecked()
+        self.config["filter_type"] = self.mode
+        self.config["filter_design"] = filter_design
         self.config["low_cut"] = self.low.value()
         self.config["high_cut"] = self.high.value()
-        self.config["filter_type"] = filter_type
-        # (Normalizamos el orden del filtro FIR)
-        self.config["fir_order"] = normalize_fir_order(self.fir_order.value(), require_odd=require_odd_fir_order)
-        self.config["fir_window"] = self.window.currentData()
-        self.config["iir_order"] = self.iir_order.value()
-        self.config["iir_design"] = self.design.currentData()
-        self.config["iir_rp_db"] = self.iir_rp.value()
-        self.config["iir_rs_db"] = self.iir_rs.value()
+        if filter_design == "fir":
+            # (Normalizamos el orden del filtro FIR)
+            self.config["order"] = normalize_fir_order(self.fir_order.value(), require_odd=require_odd_fir_order)
+            self.config["window"] = self.window.currentData()
+        else:
+            self.config["order"] = self.iir_order.value()
+            self.config["window"] = self.design.currentData()
 
         # Decidimos si el filtro es FIR o IIR. En función de la decisión, muestra el bloque correcto y oculta el otro.
-        is_fir = self.config["filter_type"] == "fir"
+        is_fir = self.config["filter_design"] == "fir"
         self.fir_widget.setVisible(is_fir)
         self.iir_widget.setVisible(not is_fir)
 
@@ -487,13 +486,6 @@ class FilterControls(QFrame):
         # Desactivamos todos los controles si el filtro está apagado
         for control in self.controls:
             control.setEnabled(self.config["enabled"])
-        if is_fir or not self.config["enabled"]:
-            self.iir_rp.setEnabled(False)
-            self.iir_rs.setEnabled(False)
-        else:
-            design = str(self.config["iir_design"])
-            self.iir_rp.setEnabled(_iir_design_uses_rp(design))
-            self.iir_rs.setEnabled(_iir_design_uses_rs(design))
 
         # Emitimos señal de que algo ha cambiado
         self.changed.emit()

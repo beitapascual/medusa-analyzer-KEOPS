@@ -84,11 +84,13 @@ class EEGReportWidget(ReportWidget):
         # Resume un filtro EEG en una línea
         if not config or not config.get("enabled", False):
             return "Disabled"
-        if str(config.get("filter_type", "fir")).lower() == "fir":
-            detail = f'order {config.get("fir_order")}, {config.get("fir_window")} window'
+        filter_type = str(config.get("filter_type", "")).upper()
+        filter_design = str(config.get("filter_design", "")).upper()
+        if str(config.get("filter_design", "fir")).lower() == "fir":
+            detail = f'order {config.get("order")}, {config.get("window")} window'
         else:
-            detail = f'order {config.get("iir_order")}, {config.get("iir_design")}'
-        return f'{config.get("low_cut"):g}-{config.get("high_cut"):g} Hz, {str(config.get("filter_type", "")).upper()}, {detail}'
+            detail = f'order {config.get("order")}, {config.get("window")}'
+        return f'{config.get("low_cut"):g}-{config.get("high_cut"):g} Hz, {filter_type}, {filter_design}, {detail}'
 
     def _preprocessing_section(self) -> QFrame | None:
         # Este métoodo rellena el hueco que ReportWidget dejó vacío. Construye el panel de Preprocessing específico de EEG
