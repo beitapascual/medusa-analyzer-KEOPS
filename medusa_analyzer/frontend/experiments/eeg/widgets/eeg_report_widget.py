@@ -245,6 +245,10 @@ class EEGReportWidget(ReportWidget):
             selection_mode = "instant"
         else:
             selection_mode = "none"
+        segmentation_strategy = segmentation.get("segmentation_strategy")
+        if segmentation_strategy not in {"window", "onset"}:
+            segmentation_strategy = "window"
+        strategy_text = "Window-based" if segmentation_strategy == "window" else "Onset-based"
 
         def _normalization_text(config: dict[str, Any], include_baseline: bool) -> str:
             if not config.get("enabled"):
@@ -266,11 +270,11 @@ class EEGReportWidget(ReportWidget):
         def _duration_epoch_text(config: dict[str, Any]) -> str:
             return (
                 f"{config.get('duration_epoch_length_ms')} ms, "
-                f"stride {config.get('stride_percent')}%, "
+                f"overlap {config.get('stride_percent')}%, "
                 f"average {'Yes' if config.get('average_epochs') else 'No'}"
             )
 
-        def _instant_epoch_text(config: dict[str, Any]) -> str:
+        def _onset_epoch_text(config: dict[str, Any]) -> str:
             window = config.get("epoch_window_ms") or {}
             return (
                 f"{window.get('start')} to {window.get('end')} ms, "
@@ -294,16 +298,22 @@ class EEGReportWidget(ReportWidget):
                 epoch_text = "Mixed nested event types are not supported"
                 normalization_text = "Mixed nested event types are not supported"
             elif has_duration:
-                epoch_text = f"Duration {_duration_epoch_text(duration_epoch)}"
-                normalization_text = f"Duration: {_normalization_text(duration_normalization, False)}"
+                if segmentation_strategy == "onset":
+                    epoch_text = f"Duration onset {_onset_epoch_text(duration_epoch)}"
+                    normalization_text = f"Duration: {_normalization_text(duration_normalization, True)}"
+                else:
+                    epoch_text = f"Duration window {_duration_epoch_text(duration_epoch)}"
+                    normalization_text = f"Duration: {_normalization_text(duration_normalization, False)}"
             elif has_instant:
-                epoch_text = f"Instant {_instant_epoch_text(instant_epoch)}"
+                epoch_text = f"Instant onset {_onset_epoch_text(instant_epoch)}"
                 normalization_text = f"Instant: {_normalization_text(instant_normalization, True)}"
+                strategy_text = "Onset-based"
             else:
                 epoch_text = "n/a"
                 normalization_text = "n/a"
             return self._section("Segmentation", [
                 ("Mode", mode_text),
+                ("Strategy", strategy_text),
                 ("Events", events_text),
                 ("Epoch", epoch_text),
                 ("Normalization", normalization_text),
@@ -315,22 +325,29 @@ class EEGReportWidget(ReportWidget):
             events_text = ", ".join(selected_duration) or "None"
             mode_text = "Duration events"
             duration_epoch = epoch_parameters.get("duration") or {}
-            epoch_text = _duration_epoch_text(duration_epoch)
-            normalization_text = _normalization_text(duration_normalization, False)
+            if segmentation_strategy == "onset":
+                epoch_text = _onset_epoch_text(duration_epoch)
+                normalization_text = _normalization_text(duration_normalization, True)
+            else:
+                epoch_text = _duration_epoch_text(duration_epoch)
+                normalization_text = _normalization_text(duration_normalization, False)
         elif selection_mode == "instant":
             events_text = ", ".join(selected_instant) or "None"
             mode_text = "Instant events"
+            strategy_text = "Onset-based"
             instant_epoch = epoch_parameters.get("instant") or {}
-            epoch_text = _instant_epoch_text(instant_epoch)
+            epoch_text = _onset_epoch_text(instant_epoch)
             normalization_text = _normalization_text(instant_normalization, True)
         else:
             events_text = "None"
             mode_text = "None"
+            strategy_text = "n/a"
             epoch_text = "n/a"
             normalization_text = "n/a"
 
         return self._section("Segmentation", [
             ("Mode", mode_text),
+            ("Strategy", strategy_text),
             ("Events", events_text),
             ("Epoch", epoch_text),
             ("Normalization", normalization_text),
