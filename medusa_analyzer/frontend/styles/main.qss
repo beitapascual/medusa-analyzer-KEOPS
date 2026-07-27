@@ -757,6 +757,25 @@ QFrame#summaryInstantChip[compact="true"] QPushButton {
     font-weight: 600;
 }
 
+QPushButton#chipRemoveButton {
+    min-width: 16px;
+    max-width: 16px;
+    min-height: 16px;
+    max-height: 16px;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid rgba(248, 238, 242, 88);
+    background: rgba(18, 13, 16, 150);
+    color: #F8EEF2;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+QPushButton#chipRemoveButton:hover {
+    background: rgba(248, 238, 242, 38);
+    border-color: rgba(248, 238, 242, 150);
+}
+
 QFrame[role="band-chip"] {
     background: #241A1F;
     border: 1px solid #3C2D34;

@@ -249,7 +249,7 @@ class EEGReportWidget(ReportWidget):
         def _normalization_text(config: dict[str, Any], include_baseline: bool) -> str:
             if not config.get("enabled"):
                 return "Disabled"
-            text = "Mean + std" if config.get("mode") == "mean_std" else "Mean"
+            text = "Z-score" if config.get("mode") == "mean_std" else "Mean"
             baseline = config.get("baseline_window_ms", {})
             if include_baseline:
                 text = f"{text}, baseline {baseline.get('start')} to {baseline.get('end')} ms"
@@ -290,23 +290,23 @@ class EEGReportWidget(ReportWidget):
                 for group in nested_groups
             ) or "None"
             mode_text = "Nested events"
-            epoch_parts = []
-            normalization_parts = []
-            if has_duration:
-                epoch_parts.append(f"Duration {_duration_epoch_text(duration_epoch)}")
-                normalization_parts.append(
-                    f"Duration: {_normalization_text(duration_normalization, False)}"
-                )
-            if has_instant:
-                epoch_parts.append(f"Instant {_instant_epoch_text(instant_epoch)}")
-                normalization_parts.append(
-                    f"Instant: {_normalization_text(instant_normalization, True)}"
-                )
+            if has_duration and has_instant:
+                epoch_text = "Mixed nested event types are not supported"
+                normalization_text = "Mixed nested event types are not supported"
+            elif has_duration:
+                epoch_text = f"Duration {_duration_epoch_text(duration_epoch)}"
+                normalization_text = f"Duration: {_normalization_text(duration_normalization, False)}"
+            elif has_instant:
+                epoch_text = f"Instant {_instant_epoch_text(instant_epoch)}"
+                normalization_text = f"Instant: {_normalization_text(instant_normalization, True)}"
+            else:
+                epoch_text = "n/a"
+                normalization_text = "n/a"
             return self._section("Segmentation", [
                 ("Mode", mode_text),
                 ("Events", events_text),
-                ("Epoch", "; ".join(epoch_parts) or "n/a"),
-                ("Normalization", "; ".join(normalization_parts) or "n/a"),
+                ("Epoch", epoch_text),
+                ("Normalization", normalization_text),
                 ("Thresholding", threshold_text),
                 ("Resampling", resampling_text),
             ])
