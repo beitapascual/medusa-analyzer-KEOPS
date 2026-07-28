@@ -2,7 +2,6 @@ import numpy as np
 from copy import deepcopy
 
 from scipy.stats import kurtosis, skew
-from scipy.io import savemat
 import csv
 from pathlib import Path
 import json
@@ -260,23 +259,37 @@ def build_recording(path):
 
     return rec
 
+def _convert(obj):
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: _convert(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_convert(v) for v in obj]
+    return obj
+
 def build_output_dict(signal, times, ch_names, fs):
+
     output_dic = {
         "fs": fs,
         "channels": ch_names,
         "times": times,
-        "signal": signal
+        "signal": _convert(signal)
     }
     return output_dic
 
 def segment_signal(signal, times, fs, events, state):
 
-    # Get segmentation params
-    try:
+    # Get segmentation params, time vector and normalization type in a medusa-compatible format
+    if state['segmentation']['segmentation_strategy'] == 'window_based':
         segment_length = state['segmentation']['epoch_parameters']['duration']['duration_epoch_length_ms']
         stride = state['segmentation']['epoch_parameters']['duration']['stride_percent']
         norm = state['segmentation']['normalization']['duration']
-    except:
+    else:
         epoch_window = state['segmentation']['epoch_parameters']['instant']['epoch_window_ms']
         baseline = state['segmentation']['normalization']['instant']['baseline_window_ms']
         segment_length = epoch_window['end'] - epoch_window['start'] + baseline['end'] - baseline['start']
@@ -357,6 +370,7 @@ def save_outputs(data, file, band_name, evt, key, state):
         ├── segmented/
         └── parameters/
     """
+
     selected_folder = Path(state["output_derivatives_path"])
     selected_folder.mkdir(exist_ok=True)
 
@@ -387,7 +401,7 @@ def save_outputs(data, file, band_name, evt, key, state):
 
         # worker.log.emit(f"✅ Segmented saved: {output_path}", "")
 
-    # --- Saving parameters (.mat) ---
+    # --- Saving parameters ---
     elif key == "parameters":
         output_path = selected_folder / "parameters" / filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -412,7 +426,7 @@ def save_outputs(data, file, band_name, evt, key, state):
 
             output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
                                                 f"_band-{band_name.replace('-', '')}"
-                                                f"_segment-{evt.replace('-', '').replace('_', '')}.mat")
+                                                f"_segment-{evt.replace('-', '').replace('_', '')}")
             
             save_struct = {}
             if psd_val is not None:
@@ -420,9 +434,10 @@ def save_outputs(data, file, band_name, evt, key, state):
             if freqs_val is not None:
                 save_struct['freqs'] = np.asarray(freqs_val)
 
-            mat_dict = {metric_label: save_struct}
+            output_dict = {metric_label: _convert(save_struct)}
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(output_dict, f)
 
-            savemat(output_path, mat_dict)
             # worker.log.emit(f"✅ Parameter saved: {outpath}", "")
 
         # 2) Other parameters
@@ -431,7 +446,7 @@ def save_outputs(data, file, band_name, evt, key, state):
 
             output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
                                                 f"_band-{band_name.replace('-', '')}"
-                                                f"_segment-{evt.replace('-', '').replace('_', '')}.mat")
+                                                f"_segment-{evt.replace('-', '').replace('_', '')}")
 
             if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and 'band' in v[0]:
                 for entry in v:
@@ -440,12 +455,12 @@ def save_outputs(data, file, band_name, evt, key, state):
 
                     output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
                                                         f"_band-{bname.replace('-', '')}"
-                                                        f"_segment-{evt.replace('-', '').replace('_', '')}.mat")
+                                                        f"_segment-{evt.replace('-', '').replace('_', '')}")
 
-                    savemat(output_path, {
-                        "param": val,
-                        "info": metric_label
-                    })
+                    output_dict = {"param": _convert(val), "info": metric_label}
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        json.dump(output_dict, f)
+
                     # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
 
             elif isinstance(v, dict):
@@ -453,21 +468,19 @@ def save_outputs(data, file, band_name, evt, key, state):
                 for kk, vv in v.items():
                     nested[kk] = np.asarray(vv)
 
-                savemat(output_path, {
-                    "param": nested,
-                    "info": metric_label
-                })
+                output_dict = {"param": _convert(nested), "info": metric_label}
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(output_dict, f)
+
             else:
                 try:
-                    savemat(output_path, {
-                        "param": np.asarray(v),
-                        "info": metric_label
-                    })
+                    output_dict = {"param": _convert(np.asarray(v)), "info": metric_label}
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        json.dump(output_dict, f)
                 except Exception:
-                    savemat(output_path, {
-                        "param": np.asarray(v, dtype=object),
-                        "info": metric_label
-                    })
+                    output_dict = {"param": _convert(np.asarray(v, dtype=object)), "info": metric_label}
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        json.dump(output_dict, f)
 
             # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
 
@@ -512,8 +525,6 @@ def compute_parameters(epochs, fs, band, state):
         if name in state['selected_features']:
             # Compute it
             val = func(epochs, axis=axis)
-            # Average across epochs if required and if multiple epochs are present
-            val = np.mean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             # Store in the params dict
             params[f"{name}"] = val
 
@@ -530,11 +541,10 @@ def compute_parameters(epochs, fs, band, state):
         # Compute PSD using specified segment and window settings
         fxx, psd = transforms.power_spectral_density(epochs, fs, segment_psd, overlap_psd, window_psd)
 
-        # Store PSD values: average across trials if averaging is enabled
+        # Store PSD values
         try:
-            psd_values = np.nanmean(psd, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else psd
             params['psd'] = {
-                'values': psd_values,
+                'values': psd,
                 'freqs': fxx
             }
         except Exception as e:
@@ -542,30 +552,24 @@ def compute_parameters(epochs, fs, band, state):
 
     ## SPECTRAL METRICS - RELATIVE POWER
     # Only compute the RP in the broadband, and if explicitly selected
-    if band['name'] == 'broadband' and 'relative_power' in state['selected_features']:
+    if band['title'].lower() == 'broadband' and 'relative_power' in state['selected_features']:
         val = []
 
         # The bands will be different if band segmentation is enabled or not
-        # TODO ESTO ESTA BIEN????
-        if state['preprocessing']['selected_frequency_bands']:
-            selected_bands = state['preprocessing']['selected_frequency_bands']
-        else:
-            selected_bands = state['feature_params']['relative_power']['selected_frequency_bands']
+        selected_bands = state['feature_params']['relative_power']['selected_frequency_bands']
 
         # Define broadband range based on the broadband limits
-        min_val = band['min']
-        max_val = band['max']
+        min_val = band['low_cut']
+        max_val = band['high_cut']
 
         # Loop through each selected band
         for band_rp in selected_bands:
-            if band_rp["name"] != 'broadband':
+            if band_rp["title"] != 'broadband':
                 # Define band parameters
-                band_range = [band_rp["min"], band_rp["max"]]
+                band_range = [band_rp["low_cut"], band_rp["high_cut"]]
                 # Compute the metric
                 val_band = spectral.band_power(psd, fs, band_range, 'relative',[min_val, max_val])
-                # Average across epochs if required and if multiple epochs are present
-                val_band = np.nanmean(val_band, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val_band
-                val.append({"band": band_rp["name"], "value": val_band})
+                val.append({"band": band_rp["title"], "value": val_band})
 
             params[f"relative_power"] = val
 
@@ -581,14 +585,12 @@ def compute_parameters(epochs, fs, band, state):
         # If selected...
         if name in state['selected_features']:
             # Get the current band range
-            band_range = [band['min'], band['max']]
+            band_range = [band['low_cut'], band['high_cut']]
             # Compute the metric
             if name == 'absolute_power':
                 val = func(psd, fs, band_range, 'absolute')
             else:
                 val = func(psd, fs, band_range)
-            # Average across epochs if required and if multiple epochs are present
-            val = np.nanmean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             # Store in the params dict
             params[f"{name}"] = val
 
@@ -612,8 +614,6 @@ def compute_parameters(epochs, fs, band, state):
         if name in state['selected_features']:
             # Compute it
             val = func()
-            # Average across epochs if required and if multiple epochs are present
-            val = np.nanmean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             params[f"{name}"] = val
 
     ## CONNECTIVITY METRICS
@@ -631,8 +631,6 @@ def compute_parameters(epochs, fs, band, state):
         if name in state['selected_features']:
             # Compute it
             val = func()
-            # Average across epochs if required and if multiple epochs are present
-            val = np.nanmean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             params[f"{name}"] = val
 
     return params
