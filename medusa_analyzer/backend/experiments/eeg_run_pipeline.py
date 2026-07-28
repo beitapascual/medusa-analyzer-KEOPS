@@ -36,9 +36,9 @@ def run_pipeline(state):
         try:
 
             #0 Load data
-            data = build_recording(file['path'])
+            data = build_recording(file['path'], file['datatype'])
             datatype = file['datatype']
-            subj_id = file['path'].split('\\')
+            subj_id = Path(file['path']).stem
 
             # Get information from recording
             raw_signal = data.data[datatype].signal
@@ -72,24 +72,24 @@ def run_pipeline(state):
                 thres_k = state['segmentation']['sigma']
                 thres_samples = state['segmentation']["samples"]
                 thres_channels = state['segmentation']["channels"]
-                prc_rejected = dict()
                 idx_reject = dict()
                 for base_evt, epochs_base in epochs.items():
+                    idx_reject[base_evt] = {}
                     for evt, epochs_base_evt in epochs_base.items():
                         # Get the indices of rejected epochs
                         thres_mean = np.nanmean(np.nanmean(epochs_base_evt, axis=1), axis=0)
                         thres_std = np.nanmean(np.nanstd(epochs_base_evt, axis=1), axis=0)
-                        prc_rejected[base_evt][evt], _, idx_reject[base_evt][evt] = artifact_removal.reject_noisy_segments(
+                        prc_rejected, _, idx_reject[base_evt][evt] = artifact_removal.reject_noisy_segments(
                             epochs_base_evt, thres_mean, thres_std, k=thres_k, n_samp=thres_samples, n_channels=thres_channels)
 
                         # Store rejection summary
-                        prc_rejected_tmp = np.round(prc_rejected[base_evt][evt], 2)
-                        n_rejected = int((prc_rejected_tmp * epochs[base_evt][evt].shape[0]) / 100)
+                        prc_rejected = np.round(prc_rejected, 2)
+                        n_rejected = int((prc_rejected * epochs[base_evt][evt].shape[0]) / 100)
                         rejection_summary.append({
                             'subject': subj_id,
                             'base_event': base_evt,
                             'event': evt,
-                            'prc_rejected': prc_rejected_tmp,
+                            'prc_rejected': prc_rejected,
                             'n_rejected': n_rejected
                         })
 
@@ -130,7 +130,7 @@ def run_pipeline(state):
                 )
 
                 ## Fourth step: Segmentation
-                epochs, times_epochs = segment_signal(processed_signal, times, fs, events, state)
+                epochs, times_epochs = segment_signal(processed_signal_band, times, fs, events, state)
 
                 for base_evt, epochs_base in epochs.items():
                     for evt, epochs_base_evt in epochs_base.items():
@@ -141,14 +141,14 @@ def run_pipeline(state):
                         # self.progress.emit(int(global_progress))
 
                         ## Fifth step: Apply thresholding rejection if enabled
-                        if state['segmentation']["thresholding"]:
+                        if state['segmentation']["thresholding"]['enabled']:
                             # If all the epochs are rejected, skip this condition
-                            if all(idx_reject[base_evt][evt]):
+                            if np.all(idx_reject[base_evt][evt]):
                                 a = 0
                                 # _log_with_store(
                                 #     f"⚠️ All epochs corresponding to condition '{cond}' in file '{file}' have been rejected. Skipping.",
                                 #     'warning')
-                                # continue
+                                continue
 
                             # Remove the rejected epochs from the epochs array
                             epochs[base_evt][evt] = np.delete(epochs[base_evt][evt], idx_reject[base_evt][evt], axis=0)
@@ -160,11 +160,16 @@ def run_pipeline(state):
 
                         ## Sixth step: Apply resampling if enabled
                         # TODO OYE MIRAR LO DEL RESAMPLING A VER SI NECESITA ANTIALIASING!!!
+                        current_fs = fs
+                        current_times_epochs = times_epochs.copy()
                         if epochs[base_evt][evt] is not None and state['segmentation']['resampling']['enabled']:
                             resample_fs = state['segmentation']['resampling']['target_sampling_frequency']
                             window = [0, (epochs[base_evt][evt].shape[1] / fs) * 1000]  # Window in ms
                             epochs[base_evt][evt] = segmentation.resample_segments(epochs[base_evt][evt], window, resample_fs)
-                            fs = resample_fs
+                            current_fs = resample_fs
+
+                            # Recalcular el vector de tiempos para que coincida con las nuevas dimensiones de las épocas
+                            current_times_epochs = (np.arange(epochs[base_evt][evt].shape[1]) / current_fs) * 1000
 
 
                         # # Update the progress bar and labels
@@ -174,16 +179,16 @@ def run_pipeline(state):
 
                         # Save the segmented signals (if required), separately for each event
                         save_outputs(
-                            build_output_dict(epochs[base_evt][evt], times_epochs, channs, fs),
-                            file, band_name, [base_evt + evt], 'segmented', state
+                            build_output_dict(epochs[base_evt][evt], current_times_epochs, channs, current_fs),
+                            file, band_name, base_evt + evt, 'segmented', state
                         )
 
                         if n_cha == 1:
                             epochs[base_evt][evt] = epochs[base_evt][evt][:, :, None]
 
                         ## Seventh step: Parameter computation
-                        params = compute_parameters(epochs[base_evt][evt], fs, band, state)
-                        save_outputs(params, file, band_name, [base_evt + evt], 'parameters', state)
+                        params = compute_parameters(epochs[base_evt][evt], current_fs, band, state)
+                        save_outputs(params, file, band_name, base_evt + evt, 'parameters', state)
 
 
                     # # Update the progress bar and labels
@@ -214,8 +219,8 @@ def run_pipeline(state):
                     writer.writerow(row)
                 row = {
                     'subject': f"K STDs: {state['segmentation']['sigma']}",
-                    'condition': f"Samples: {state['segmentation']['samples']}",
-                    'prc_rejected': f"N Channels: {state['segmentation']['channels']}"
+                    'base_event': f"Samples: {state['segmentation']['samples']}",
+                    'event': f"N Channels: {state['segmentation']['channels']}"
                 }
                 writer.writerow(row)
             # self.log.emit(f"✅ Rejection summary saved to {csv_path}", "")
@@ -239,29 +244,28 @@ def run_pipeline(state):
 
 #################### HELPER FUNCTIONS
 
-def build_recording(path):
+def build_recording(path, datatype):
     from medusa.core.data import Recording, Signal, ChannelSet, BidsInfo
 
     with open(path) as json_data:
         data = json.load(json_data)
-        json_data.close()
 
     rec = Recording(BidsInfo(
         subject="dummy", session="dummy", task="dummy", run=1,
-        participant={"age": 00, "sex": "F", "handedness": "right"}))
+        participant={"age": 0, "sex": "F", "handedness": "right"}))
     cs = ChannelSet()
     cs.add_unipolar_eeg_channels(
         data['channels'],
         reference="DummyRef", ground="DummyGnd")
     sig = Signal(data['signal'],
                      fs=data['fs'], channel_set=cs)
-    rec.add_signal("eeg", sig)
+    rec.add_signal(datatype, sig)
 
     return rec
 
 def _convert(obj):
     if isinstance(obj, np.ndarray):
-        return obj.tolist()
+        return _convert(obj.tolist()) # Se añade recursividad
     elif isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
@@ -301,17 +305,24 @@ def segment_signal(signal, times, fs, events, state):
 
     epochs = dict()
     for base_evt in state['segmentation']['event_groups']:
-
         if base_evt['base_event'] == None:
             base_evt['base_event'] = 'full_recording'
+        epochs[base_evt['base_event']] = {}
 
-        current_base_evt = events[events['trial_type'] == base_evt['base_event']]
+        # Construcción del evento base
+        if base_evt['base_event'] == 'full_recording':
+            # Se crea un evento ficticio que abarca desde la primera muestra hasta el final.
+            # Se añade un margen (+ 1.0 seg) para asegurar que searchsorted alcance el último índice.
+            total_duration = times[-1] - times[0] + 1.0
+            current_base_evt = pd.DataFrame([{'onset': times[0], 'duration': total_duration}])
+        else:
+            current_base_evt = events[events['trial_type'] == base_evt['base_event']]
 
-        for row in current_base_evt.itertuples(index=False):
-            start_idx = np.searchsorted(times, row.onset)
-            end_idx = np.searchsorted(times, row.onset + row.duration)
+        for row_base in current_base_evt.itertuples(index=False):
+            start_idx = np.searchsorted(times, row_base.onset)
+            end_idx = np.searchsorted(times, row_base.onset + row_base.duration)
             signal_base = signal[:, start_idx:end_idx]
-            times_base = times[:, start_idx:end_idx]
+            times_base = times[start_idx:end_idx]
 
             # If segmentation type is 'condition'
             if base_evt['duration_events']:
@@ -319,9 +330,9 @@ def segment_signal(signal, times, fs, events, state):
                 for evt in base_evt['duration_events']:
                     current_evts = events[events['trial_type'] == evt]
 
-                    for row in current_evts.itertuples(index=False):
-                        start_idx = np.searchsorted(times_base, row.onset)
-                        end_idx = np.searchsorted(times_base, row.onset + row.duration)
+                    for row_evt in current_evts.itertuples(index=False):
+                        start_idx = np.searchsorted(times_base, row_evt.onset)
+                        end_idx = np.searchsorted(times_base, row_evt.onset + row_evt.duration)
                         # Validar que los índices están dentro del rango y forman un segmento válido
                         if start_idx >= len(times_base) or end_idx > len(times_base):
                             continue  # Ignorar esta iteración y pasar al siguiente evento
@@ -333,12 +344,16 @@ def segment_signal(signal, times, fs, events, state):
                             signal_evt, segment_length, stride, norm=norm)
 
                         if epochs_tmp is not None:
-                            epochs[base_evt['base_event']][evt](epochs_tmp)
+                            if evt in epochs[base_evt['base_event']]:
+                                epochs[base_evt['base_event']][evt] = np.concatenate(
+                                    (epochs[base_evt['base_event']][evt], epochs_tmp), axis=0)
+                            else:
+                                epochs[base_evt['base_event']][evt] = epochs_tmp
                             del epochs_tmp
 
             elif base_evt['instant_events']:
 
-                for evt in base_evt['duration_events']:
+                for evt in base_evt['instant_events']:
                     current_evts = events[events['trial_type'] == evt]
 
                     try:
@@ -349,7 +364,7 @@ def segment_signal(signal, times, fs, events, state):
                     except KeyError:
                         continue
                     if epochs_tmp is not None:
-                        epochs[base_evt['base_event']][evt](epochs_tmp)
+                        epochs[base_evt['base_event']][evt]= epochs_tmp
                         del epochs_tmp
 
     # # If no epochs were found for this condition, skip it
@@ -403,38 +418,23 @@ def save_outputs(data, file, band_name, evt, key, state):
 
     # --- Saving parameters ---
     elif key == "parameters":
-        output_path = selected_folder / "parameters" / filename
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path_base = selected_folder / "parameters" / filename
+        output_path_base.parent.mkdir(parents=True, exist_ok=True)
 
         params_dict = dict(data)
 
-        # 1) PSDs: (psd_<band> + psd_freqs_<band>)
-        psd_bands = set()
-        for k in list(params_dict.keys()):
-            if k.startswith('psd_'):
-                psd_bands.add(k[4:])
-            if k.startswith('psdfreqs_'):
-                psd_bands.add(k[10:])
-
-        for b in psd_bands:
-            psd_key = f'psd{b}'
-            freqs_key = f'psdfreqs{b}'
-            psd_val = params_dict.pop(psd_key, None)
-            freqs_val = params_dict.pop(freqs_key, None)
-
-            metric_label = (f"psd{b}")
-
-            output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
+        # 1) Store PSDs only in broadband
+        if band_name.lower() == 'broadband':
+            output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-psd"
                                                 f"_band-{band_name.replace('-', '')}"
                                                 f"_segment-{evt.replace('-', '').replace('_', '')}")
-            
-            save_struct = {}
-            if psd_val is not None:
-                save_struct['psd'] = np.asarray(psd_val)
-            if freqs_val is not None:
-                save_struct['freqs'] = np.asarray(freqs_val)
 
-            output_dict = {metric_label: _convert(save_struct)}
+            save_struct = {
+                'psd': np.asarray(params_dict['psd']['values']),
+                'freqs': np.asarray(params_dict['psd']['freqs'])
+            }
+
+            output_dict = {'psd': _convert(save_struct)}
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(output_dict, f)
 
@@ -444,7 +444,7 @@ def save_outputs(data, file, band_name, evt, key, state):
         for k, v in list(params_dict.items()):
             metric_label = k.replace('_', '-')
 
-            output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
+            output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-{metric_label.replace('-', '')}"
                                                 f"_band-{band_name.replace('-', '')}"
                                                 f"_segment-{evt.replace('-', '').replace('_', '')}")
 
@@ -453,7 +453,7 @@ def save_outputs(data, file, band_name, evt, key, state):
                     bname = entry.get('band', 'unknown')
                     val = np.asarray(entry.get('value'))
 
-                    output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
+                    output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-{metric_label.replace('-', '')}"
                                                         f"_band-{bname.replace('-', '')}"
                                                         f"_segment-{evt.replace('-', '').replace('_', '')}")
 
@@ -464,44 +464,36 @@ def save_outputs(data, file, band_name, evt, key, state):
                     # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
 
             elif isinstance(v, dict):
-                nested = {}
-                for kk, vv in v.items():
-                    nested[kk] = np.asarray(vv)
-
-                output_dict = {"param": _convert(nested), "info": metric_label}
+                output_dict = {"param": _convert(v), "info": metric_label}
                 with open(output_path, 'w', encoding='utf-8') as f:
                     json.dump(output_dict, f)
 
             else:
-                try:
-                    output_dict = {"param": _convert(np.asarray(v)), "info": metric_label}
-                    with open(output_path, 'w', encoding='utf-8') as f:
-                        json.dump(output_dict, f)
-                except Exception:
-                    output_dict = {"param": _convert(np.asarray(v, dtype=object)), "info": metric_label}
-                    with open(output_path, 'w', encoding='utf-8') as f:
-                        json.dump(output_dict, f)
+                output_dict = {"param": _convert(v), "info": metric_label}
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(output_dict, f)
 
             # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
 
 
 #################### PREPROCESSING
 
-def apply_preprocessing(signal, fs, cfg):
+def apply_preprocessing(signal, fs, state):
     """
     Apply bandpass, notch filtering, and Common Average Reference (CAR).
     """
     # Bandpass filter
-    for filter in cfg['preprocessing']['filters']:
-        if filter['filter_type'] == 'fir':
-            signal = frequency_filtering.FIRFilter(filter['order'], [filter['low_cut'], filter['high_cut']], filter['type'],
-                                      window=filter['window']).fit_transform(signal, fs)
-        else:
-            signal = frequency_filtering.IIRFilter(filter['fir_order'], [filter['low_cut'], filter['high_cut']], filter['type'],
-                                      filt_method='sosfiltfilt').fit_transform(signal, fs)
+    for filter in state['preprocessing']['filters'].values():
+        if filter['enabled']:
+            if filter['filter_type'] == 'fir':
+                signal = frequency_filtering.FIRFilter(filter['order'], [filter['low_cut'], filter['high_cut']], filter['type'],
+                                          window=filter['window']).fit_transform(signal, fs)
+            else:
+                signal = frequency_filtering.IIRFilter(filter['fir_order'], [filter['low_cut'], filter['high_cut']], filter['type'],
+                                          filt_method='sosfiltfilt').fit_transform(signal, fs)
 
     # CAR and return
-    return spatial_filtering.car(signal) if cfg['car'] else signal
+    return spatial_filtering.car(signal) if state['preprocessing']['car'] else signal
 
 ##################### COMPUTE PARAMS
 
@@ -530,9 +522,7 @@ def compute_parameters(epochs, fs, band, state):
 
     ## POWER SPECTRAL DENSITY (PSD)
     # PSD would be computed if explicitly selected
-    require_psd = 'psd' in state['selected_features']
-
-    if require_psd:
+    if 'psd' in state['selected_features']:
         # Use user-defined parameters for segmenting and windowing
         segment_psd = state['feature_params']['psd']['segment_percent']
         overlap_psd = state['feature_params']['psd']['overlap_percent']
@@ -551,7 +541,6 @@ def compute_parameters(epochs, fs, band, state):
             print(e)
 
     ## SPECTRAL METRICS - RELATIVE POWER
-    # Only compute the RP in the broadband, and if explicitly selected
     if band['title'].lower() == 'broadband' and 'relative_power' in state['selected_features']:
         val = []
 
@@ -778,5 +767,4 @@ def compute_parameters(epochs, fs, band, state):
 if __name__ == '__main__':
     with open(rf"C:\Users\1993_\Desktop\config_Good.json") as json_data:
         state = json.load(json_data)
-        json_data.close()
     run_pipeline(state)
