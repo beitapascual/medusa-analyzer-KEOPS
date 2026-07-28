@@ -8,7 +8,8 @@ from pathlib import Path
 import json
 
 from medusa.core.data.recording import Recording
-from medusa.signal import frequency_filtering, spatial_filtering, artifact_removal, segmentation
+from medusa.signal import frequency_filtering, spatial_filtering, artifact_removal, segmentation, transforms
+from medusa.signal.metrics import *
 import pandas as pd
 
 def run_pipeline(state):
@@ -346,7 +347,7 @@ def segment_signal(signal, times, fs, events, state):
     return epochs, times_epochs
 
 
-def save_outputs(data, file, band_name, cond, key, state):
+def save_outputs(data, file, band_name, evt, key, state):
     """
     Guarda los resultados del pipeline en estructura semi-BIDS dentro de /derivatives.
 
@@ -379,7 +380,7 @@ def save_outputs(data, file, band_name, cond, key, state):
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         output_path = output_path.with_stem(f"{output_path.stem}_band-{band_name.replace('-', '')}"
-                                            f"_segment-{band_name.replace('-', '').replace('_', '')}")
+                                            f"_segment-{evt.replace('-', '').replace('_', '')}")
 
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
@@ -390,10 +391,6 @@ def save_outputs(data, file, band_name, cond, key, state):
     elif key == "parameters":
         output_path = selected_folder / "parameters" / filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
-                                            f"_band-{band_name.replace('-', '')}"
-                                            f"_segment-{band_name.replace('-', '').replace('_', '')}")
 
         params_dict = dict(data)
 
@@ -412,12 +409,11 @@ def save_outputs(data, file, band_name, cond, key, state):
             freqs_val = params_dict.pop(freqs_key, None)
 
             metric_label = (f"psd{b}")
-            if event is not None:
-                outname = f"{base_stem}_param-{metric_label.replace('-', '')}_band-{band_name.replace('-', '')}_cond-{cond.replace('-', '')}_event-{event.replace('-', '')}.mat"
-            else:
-                outname = f"{base_stem}_param-{metric_label.replace('-', '')}_band-{band_name.replace('-', '')}_cond-{cond.replace('-', '')}.mat"
-            outpath = param_dir / outname
 
+            output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
+                                                f"_band-{band_name.replace('-', '')}"
+                                                f"_segment-{evt.replace('-', '').replace('_', '')}.mat")
+            
             save_struct = {}
             if psd_val is not None:
                 save_struct['psd'] = np.asarray(psd_val)
@@ -426,65 +422,54 @@ def save_outputs(data, file, band_name, cond, key, state):
 
             mat_dict = {metric_label: save_struct}
 
-            savemat(outpath, mat_dict)
-            worker.log.emit(f"✅ Parameter saved: {outpath}", "")
+            savemat(output_path, mat_dict)
+            # worker.log.emit(f"✅ Parameter saved: {outpath}", "")
 
         # 2) Other parameters
         for k, v in list(params_dict.items()):
             metric_label = k.replace('_', '-')
 
-            if event is not None:
-                outname = f"{base_stem}_param-{metric_label.replace('-', '')}_band-{band_name}_cond-{cond}_event-{event.replace('-', '')}.mat"
-            else:
-                outname = f"{base_stem}_param-{metric_label.replace('-', '')}_band-{band_name.replace('-', '')}_cond-{cond.replace('-', '')}.mat"
-            outpath = param_dir / outname
+            output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
+                                                f"_band-{band_name.replace('-', '')}"
+                                                f"_segment-{evt.replace('-', '').replace('_', '')}.mat")
 
             if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and 'band' in v[0]:
                 for entry in v:
                     bname = entry.get('band', 'unknown')
                     val = np.asarray(entry.get('value'))
 
-                    # Nombre del archivo: usa la banda del diccionario, NO la del argumento
-                    if event is not None:
-                        outname = (
-                            f"{base_stem}_param-{metric_label.replace('-', '')}_band-{bname.replace('-', '')}"
-                            f"_cond-{cond.replace('-', '')}_event-{event.replace('-', '')}.mat"
-                        )
-                    else:
-                        outname = (
-                            f"{base_stem}_param-{metric_label.replace('-', '')}_band-{bname.replace('-', '')}"
-                            f"_cond-{cond.replace('-', '')}.mat"
-                        )
+                    output_path = output_path.with_stem(f"{output_path.stem}_param-{metric_label.replace('-', '')}"
+                                                        f"_band-{bname.replace('-', '')}"
+                                                        f"_segment-{evt.replace('-', '').replace('_', '')}.mat")
 
-                    outpath = param_dir / outname
-                    savemat(outpath, {
+                    savemat(output_path, {
                         "param": val,
                         "info": metric_label
                     })
-                    worker.log.emit(f"✅ Parameter saved: {outpath}", "")
+                    # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
 
             elif isinstance(v, dict):
                 nested = {}
                 for kk, vv in v.items():
                     nested[kk] = np.asarray(vv)
 
-                savemat(outpath, {
+                savemat(output_path, {
                     "param": nested,
                     "info": metric_label
                 })
             else:
                 try:
-                    savemat(outpath, {
+                    savemat(output_path, {
                         "param": np.asarray(v),
                         "info": metric_label
                     })
                 except Exception:
-                    savemat(outpath, {
+                    savemat(output_path, {
                         "param": np.asarray(v, dtype=object),
                         "info": metric_label
                     })
 
-            worker.log.emit(f"✅ Parameter saved: {outpath}", "")
+            # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
 
 
 #################### PREPROCESSING
@@ -524,35 +509,30 @@ def compute_parameters(epochs, fs, band, state):
     # For each parameter...
     for name, func in stat_funcs.items():
         # If selected...
-        if cfg['parameters'][name]:
+        if name in state['selected_features']:
             # Compute it
             val = func(epochs, axis=axis)
             # Average across epochs if required and if multiple epochs are present
-            val = np.mean(val, axis=0) if cfg['segmentation']['average'] and epochs.ndim == 3 else val
+            val = np.mean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             # Store in the params dict
             params[f"{name}"] = val
 
     ## POWER SPECTRAL DENSITY (PSD)
     # PSD would be computed if explicitly selected
-    explicit_psd = cfg['parameters']['psd']
-    # Or if any parameter that depends on it is selected
-    params_require_psd = any([cfg['parameters'][spec_param]
-                              for spec_param in
-                              ['absolute_power', 'median_frequency', 'spectral_entropy', 'relative_power']])
-    require_psd = explicit_psd or params_require_psd
+    require_psd = 'psd' in state['selected_features']
 
     if require_psd:
         # Use user-defined parameters for segmenting and windowing
-        segment_psd = cfg['parameters']['psd_segment_pct']
-        overlap_psd = cfg['parameters']['psd_overlap_pct']
-        window_psd = cfg['parameters']['psd_window']
+        segment_psd = state['feature_params']['psd']['segment_percent']
+        overlap_psd = state['feature_params']['psd']['overlap_percent']
+        window_psd = state['feature_params']['psd']['window']
 
         # Compute PSD using specified segment and window settings
-        fxx, psd = medusa.transforms.power_spectral_density(epochs, fs, segment_psd, overlap_psd, window_psd)
+        fxx, psd = transforms.power_spectral_density(epochs, fs, segment_psd, overlap_psd, window_psd)
 
         # Store PSD values: average across trials if averaging is enabled
         try:
-            psd_values = np.nanmean(psd, axis=0) if cfg['segmentation']['average'] and epochs.ndim == 3 else psd
+            psd_values = np.nanmean(psd, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else psd
             params['psd'] = {
                 'values': psd_values,
                 'freqs': fxx
@@ -562,21 +542,18 @@ def compute_parameters(epochs, fs, band, state):
 
     ## SPECTRAL METRICS - RELATIVE POWER
     # Only compute the RP in the broadband, and if explicitly selected
-    if band['name'] == 'broadband' and cfg['parameters']['relative_power']:
+    if band['name'] == 'broadband' and 'relative_power' in state['selected_features']:
         val = []
 
         # The bands will be different if band segmentation is enabled or not
-        if cfg['preprocessing']['band_segmentation']:
-            selected_bands = cfg['preprocessing']['selected_bands']
+        # TODO ESTO ESTA BIEN????
+        if state['preprocessing']['selected_frequency_bands']:
+            selected_bands = state['preprocessing']['selected_frequency_bands']
         else:
-            selected_bands = cfg['parameters']['selected_rp_bands']
+            selected_bands = state['feature_params']['relative_power']['selected_frequency_bands']
 
-        # # Define broadband range, as the minimum of the mins and the maximum of the maxs of the selected bands
-        # min_val = min(band["min"] for band in selected_bands if band["name"] != 'broadband')
-        # max_val = max(band["max"] for band in selected_bands if band["name"] != 'broadband')
         # Define broadband range based on the broadband limits
-        min_val = band[
-            'min']  # Now band is broadband (condition above), so we can use its min and max values to define the range
+        min_val = band['min']
         max_val = band['max']
 
         # Loop through each selected band
@@ -585,26 +562,24 @@ def compute_parameters(epochs, fs, band, state):
                 # Define band parameters
                 band_range = [band_rp["min"], band_rp["max"]]
                 # Compute the metric
-                val_band = medusa.signal_metrics.band_power.band_power(psd, fs, band_range, 'relative',
-                                                                       [min_val, max_val])
+                val_band = spectral.band_power(psd, fs, band_range, 'relative',[min_val, max_val])
                 # Average across epochs if required and if multiple epochs are present
-                val_band = np.nanmean(val_band, axis=0) if cfg['segmentation'][
-                                                               'average'] and epochs.ndim == 3 else val_band
+                val_band = np.nanmean(val_band, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val_band
                 val.append({"band": band_rp["name"], "value": val_band})
 
             params[f"relative_power"] = val
 
     ## SPECTRAL METRICS - OTHERS
     spectral_funcs = {
-        "absolute_power": medusa.signal_metrics.band_power.band_power,
-        "median_frequency": medusa.signal_metrics.median_frequency.median_frequency,
-        "spectral_entropy": medusa.signal_metrics.shannon_spectral_entropy.shannon_spectral_entropy,
+        "absolute_power": spectral.band_power,
+        "median_frequency": spectral.median_frequency,
+        "spectral_entropy": nonlinear.shannon_spectral_entropy
     }
 
     # For each parameter...
     for name, func in spectral_funcs.items():
         # If selected...
-        if cfg['parameters'][name]:
+        if name in state['selected_features']:
             # Get the current band range
             band_range = [band['min'], band['max']]
             # Compute the metric
@@ -613,197 +588,194 @@ def compute_parameters(epochs, fs, band, state):
             else:
                 val = func(psd, fs, band_range)
             # Average across epochs if required and if multiple epochs are present
-            val = np.nanmean(val, axis=0) if cfg['segmentation']['average'] and epochs.ndim == 3 else val
+            val = np.nanmean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             # Store in the params dict
             params[f"{name}"] = val
 
     ## NONLINEAR METRICS
     nonlinear_funcs = {
-        'ctm': lambda: medusa.signal_metrics.central_tendency.central_tendency_measure(epochs,
-                                                                                       cfg['parameters']['ctm_r']),
-        'sample_entropy': lambda: medusa.signal_metrics.sample_entropy.sample_entropy(epochs,
-                                                                                      cfg['parameters'][
-                                                                                          'sample_entropy_m'],
-                                                                                      cfg['parameters'][
-                                                                                          'sample_entropy_r']),
-        'multiscale_sample_entropy': lambda: medusa.signal_metrics.multiscale_entropy.multiscale_entropy(
-            epochs, cfg['parameters']['multiscale_sample_entropy_scale'],
-            cfg['parameters']['multiscale_sample_entropy_m'],
-            cfg['parameters']['multiscale_sample_entropy_r']),
-        'lzc': lambda: medusa.signal_metrics.lempelziv_complexity.lempelziv_complexity(epochs),
-        'multiscale_lzc': lambda: medusa.signal_metrics.multiscale_lempelziv_complexity.multiscale_lempelziv_complexity(
-            epochs, cfg['parameters']['multiscale_lzc_scales'])}
+        'ctm': lambda: nonlinear.central_tendency_measure(epochs, state['feature_params']['ctm']['r']),
+        'sample_entropy': lambda: nonlinear.sample_entropy(epochs,
+                                                           state['feature_params']['sample_entropy']['m'],
+                                                           state['feature_params']['sample_entropy']['r']),
+        'multiscale_sample_entropy': lambda: nonlinear.multiscale_entropy(epochs,
+                                                                          state['feature_params']['multiscale_sample_entropy']['max_scale'],
+                                                                          state['feature_params']['multiscale_sample_entropy']['m'],
+                                                                          state['feature_params']['multiscale_sample_entropy']['r']),
+        'lzc': lambda: nonlinear.lempelziv_complexity(epochs),
+        'multiscale_lzc': lambda: nonlinear.multiscale_lempelziv_complexity(epochs, state['feature_params']['multiscale_lzc']['scales'])
+    }
 
     # For each parameter...
     for name, func in nonlinear_funcs.items():
         # If selected...
-        if cfg['parameters'][name]:
+        if name in state['selected_features']:
             # Compute it
             val = func()
             # Average across epochs if required and if multiple epochs are present
-            val = np.nanmean(val, axis=0) if cfg['segmentation']['average'] and epochs.ndim == 3 else val
+            val = np.nanmean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             params[f"{name}"] = val
 
     ## CONNECTIVITY METRICS
     connectivity_funcs = {
-        'iac': lambda: medusa.connectivity_metrics.iac(epochs, cfg['parameters']['ort_iac']),
-        'aec': lambda: medusa.connectivity_metrics.aec(epochs, cfg['parameters']['ort_aec']),
-        'plv': lambda: medusa.connectivity_metrics.plv(epochs),
-        'pli': lambda: medusa.connectivity_metrics.pli(epochs),
-        'wpli': lambda: medusa.connectivity_metrics.wpli(epochs),
+        'iac': lambda: connectivity.iac(epochs, state['feature_params']['iac']['orthogonalize']),
+        'aec': lambda: connectivity.aec(epochs, state['feature_params']['aec']['orthogonalize']),
+        'plv': lambda: connectivity.plv(epochs),
+        'pli': lambda: connectivity.pli(epochs),
+        'wpli': lambda: connectivity.wpli(epochs),
     }
 
     # For each parameter...
     for name, func in connectivity_funcs.items():
         # If selected...
-        if cfg['parameters'][name]:
+        if name in state['selected_features']:
             # Compute it
             val = func()
             # Average across epochs if required and if multiple epochs are present
-            val = np.nanmean(val, axis=0) if cfg['segmentation']['average'] and epochs.ndim == 3 else val
+            val = np.nanmean(val, axis=0) if state['segmentation']['epoch_parameters']['average'] and epochs.ndim == 3 else val
             params[f"{name}"] = val
 
     return params
 
 
-def load_config(files_widget, data):
-    # BIOSIGNAL INFO
-    biosignal_txt = files_widget.biosignalBox.currentText()
-    biosignal = biosignal_txt.split(" ")[1]
-    files_widget.controller.biosignal_info = files_widget.controller.biosignals[biosignal]
-
-    # PREPROCESSING
-    prep_cfg = data["preprocessing"]
-    idx_preprocessing_widget = next(
-        (i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
-         d.get('widget') == "PreprocessingWidget"))
-    preproc_widget = files_widget.main_window.stackedWidget.widget(
-        idx_preprocessing_widget)  # widget(2) is the preprocessing widget
-    preproc_widget.minbroadBox.setValue(prep_cfg['broadband_min'])
-    preproc_widget.maxbroadBox.setValue(prep_cfg['broadband_max'])
-    preproc_widget.preprocessingButton.setChecked(bool(prep_cfg["apply_preprocessing"]))
-    preproc_widget.notchCBox.setChecked(bool(prep_cfg['notch']))
-    preproc_widget.minfreqnotchBox.setValue(
-        prep_cfg['notch_min'] if prep_cfg['notch_min'] is not None else preproc_widget.defaults["minfreqnotch"])
-    preproc_widget.maxfreqnotchBox.setValue(
-        prep_cfg['notch_max'] if prep_cfg['notch_max'] is not None else preproc_widget.defaults["minfreqnotch"])
-    preproc_widget.orderNotchBox.setValue(
-        prep_cfg['notch_order'] if prep_cfg['notch_order'] is not None else preproc_widget.defaults["ordernotch"])
-    preproc_widget.winnotchBox.setCurrentText(prep_cfg['notch_win'])
-    preproc_widget.bpCBox.setChecked(bool(prep_cfg['bandpass']))
-    preproc_widget.minfreqbpBox.setValue(
-        prep_cfg['bp_min'] if prep_cfg['bp_min'] is not None else preproc_widget.defaults["minfreqbp"])
-    preproc_widget.maxfreqbpBox.setValue(
-        prep_cfg['bp_max'] if prep_cfg['bp_max'] is not None else preproc_widget.defaults["maxfreqbp"])
-    preproc_widget.orderbpBox.setValue(
-        prep_cfg['bp_order'] if prep_cfg['bp_order'] is not None else preproc_widget.defaults["orderbp"])
-    preproc_widget.winbpBox.setCurrentText(prep_cfg['bp_win'])
-    preproc_widget.carCBox.setChecked(bool(prep_cfg['car']))
-    preproc_widget.bandCBox.setChecked(bool(prep_cfg['band_segmentation']))
-    bands_list = prep_cfg.get("selected_bands") or []
-    bands = bands_list[1:] if len(bands_list) > 1 else []  # Exclude 'broadband' if other bands are present
-    if bands:
-        preproc_widget.controller.update_band_label("segmentation", bands)
-    # Store
-    files_widget.main_window.controller.preproc_config = prep_cfg
-
-    # SEGMENTATION
-    segm_cfg = data["segmentation"]
-    idx_segmentation_widget = next(
-        (i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
-         d.get('widget') == "SegmentationWidget"))
-    segm_widget = files_widget.main_window.stackedWidget.widget(
-        idx_segmentation_widget)  # widget(3) is the segmentation widget
-    segm_widget.conditionRButton.setChecked(
-        segm_cfg['segmentation_type'] == 'condition')  # RButton, so it is exclusive with eventRButton
-    segm_widget.trialBox.setValue(
-        segm_cfg['trial_length'] if segm_cfg['trial_length'] is not None else segm_widget.defaults['triallength'])
-    segm_widget.trialstrideBox.setValue(
-        segm_cfg['trial_stride'] if segm_cfg['trial_stride'] is not None else segm_widget.defaults['trialstride'])
-    segm_widget.winBox_1.setValue(
-        segm_cfg['window_start'] if segm_cfg['window_start'] is not None else segm_widget.defaults['windowbox1'])
-    segm_widget.winBox_2.setValue(
-        segm_cfg['window_end'] if segm_cfg['window_end'] is not None else segm_widget.defaults['windowbox2'])
-    segm_widget.normCBox.setChecked(bool(segm_cfg['norm']))
-    if segm_cfg['norm_type'] == 'z':
-        segm_widget.zscoreRButton.setChecked(True)  # RButton, so it is exclusive with dcRButton
-    segm_widget.baselineCBox_1.setValue(
-        segm_cfg['baseline_start'] if segm_cfg['baseline_start'] is not None else segm_widget.defaults['baselinewin1'])
-    segm_widget.baselineCBox_2.setValue(
-        segm_cfg['baseline_end'] if segm_cfg['baseline_end'] is not None else segm_widget.defaults['baselinewin2'])
-    segm_widget.averageCBox.setChecked(bool(segm_cfg['average']))
-    segm_widget.thresCBox.setChecked(bool(segm_cfg['thresholding']))
-    segm_widget.threskBox.setValue(
-        segm_cfg['thres_k'] if segm_cfg['thres_k'] is not None else segm_widget.defaults['threshold'])
-    segm_widget.thressampBox.setValue(
-        segm_cfg['thres_samples'] if segm_cfg['thres_samples'] is not None else segm_widget.defaults['thressamples'])
-    segm_widget.threschanBox.setValue(
-        segm_cfg['thres_channels'] if segm_cfg['thres_channels'] is not None else segm_widget.defaults['threschannels'])
-    segm_widget.resampleCBox.setChecked(bool(segm_cfg['resample']))
-    segm_widget.resamplefsBox.setValue(
-        segm_cfg['resample_fs'] if segm_cfg['resample_fs'] is not None else segm_widget.defaults['resamplefs'])
-    # Store
-    files_widget.main_window.controller.segmentation_config = segm_cfg
-
-    # PARAMETERS
-    params_cfg = data["parameters"]
-    idx_parameters_widget = next((i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
-                                  d.get('widget') == "ParametersWidget"))
-    params_widget = files_widget.main_window.stackedWidget.widget(
-        idx_parameters_widget)  # widget(4) is the parameters widget
-    params_widget.meanCBox.setChecked(bool(params_cfg['mean']))
-    params_widget.medianCBox.setChecked(bool(params_cfg['median']))
-    params_widget.varianceCBox.setChecked(bool(params_cfg['variance']))
-    params_widget.kurtosisCBox.setChecked(bool(params_cfg['kurtosis']))
-    params_widget.skewnessCBox.setChecked(bool(params_cfg['skewness']))
-    params_widget.psdCBox.setChecked(bool(params_cfg['psd']))
-    params_widget.segmentpsdBox.setValue(
-        params_cfg['psd_segment_pct'] if params_cfg['psd_segment_pct'] is not None else params_widget.defaults[
-            'psdsegment'])
-    params_widget.overlappsdBox.setValue(
-        params_cfg['psd_overlap_pct'] if params_cfg['psd_overlap_pct'] is not None else params_widget.defaults[
-            'psdoverlap'])
-    params_widget.psdcomboBox.setCurrentText(params_cfg['psd_window'])
-    params_widget.controller.loading_config = True
-    params_widget.rpCBox.setChecked(bool(params_cfg['relative_power']))
-    params_widget.controller.update_band_label('rp', params_cfg["selected_rp_bands"])
-    params_widget.controller.loading_config = False
-    params_widget.apCBox.setChecked(bool(params_cfg['absolute_power']))
-    params_widget.mfCBox.setChecked(bool(params_cfg['median_frequency']))
-    params_widget.seCBox.setChecked(bool(params_cfg['spectral_entropy']))
-    params_widget.ctmCBox.setChecked(bool(params_cfg['ctm']))
-    params_widget.ctmrBox.setValue(
-        params_cfg['ctm_r'] if params_cfg['ctm_r'] is not None else params_widget.defaults['ctmradius'])
-    params_widget.sampenCBox.setChecked(bool(params_cfg['sample_entropy']))
-    params_widget.sampenrBox.setValue(
-        params_cfg['sample_entropy_r'] if params_cfg['sample_entropy_r'] is not None else params_widget.defaults[
-            'sampradius'])
-    params_widget.sampenmBox.setValue(
-        params_cfg['sample_entropy_m'] if params_cfg['sample_entropy_m'] is not None else params_widget.defaults[
-            'sampm'])
-    params_widget.msampenCBox.setChecked(bool(params_cfg['multiscale_sample_entropy']))
-    params_widget.msampenrBox.setValue(
-        params_cfg['multiscale_sample_entropy_r'] if params_cfg['multiscale_sample_entropy_r'] is not None else
-        params_widget.defaults['multisampradius'])
-    params_widget.msampenmBox.setValue(
-        params_cfg['multiscale_sample_entropy_m'] if params_cfg['multiscale_sample_entropy_m'] is not None else
-        params_widget.defaults['multisampm'])
-    params_widget.msampenscaleBox.setValue(
-        params_cfg['multiscale_sample_entropy_scale'] if params_cfg['multiscale_sample_entropy_scale'] is not None else
-        params_widget.defaults['multisampmaxscale'])
-    params_widget.lzcCBox.setChecked(bool(params_cfg['lzc']))
-    params_widget.mlzcCBox.setChecked(bool(params_cfg['multiscale_lzc']))
-    if params_cfg['multiscale_lzc_scales'] is not None:
-        params_widget.mlzcEdit.setText(str(params_cfg['multiscale_lzc_scales']))
-    params_widget.iacCBox.setChecked(bool(params_cfg['iac']))
-    params_widget.iacortButton.setChecked(bool(params_cfg['ort_iac']))
-    params_widget.aecCBox.setChecked(bool(params_cfg['aec']))
-    params_widget.aecortButton.setChecked(bool(params_cfg['ort_aec']))
-    params_widget.pliCBox.setChecked(bool(params_cfg['pli']))
-    params_widget.plvCBox.setChecked(bool(params_cfg['plv']))
-    params_widget.wpliCBox.setChecked(bool(params_cfg['wpli']))
-    # Store
-    files_widget.main_window.controller.parameters_config = params_cfg
+# def load_config(files_widget, data):
+#     # BIOSIGNAL INFO
+#     biosignal_txt = files_widget.biosignalBox.currentText()
+#     biosignal = biosignal_txt.split(" ")[1]
+#     files_widget.controller.biosignal_info = files_widget.controller.biosignals[biosignal]
+#
+#     # PREPROCESSING
+#     prep_cfg = data["preprocessing"]
+#     idx_preprocessing_widget = next(
+#         (i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
+#          d.get('widget') == "PreprocessingWidget"))
+#     preproc_widget = files_widget.main_window.stackedWidget.widget(
+#         idx_preprocessing_widget)  # widget(2) is the preprocessing widget
+#     preproc_widget.minbroadBox.setValue(prep_cfg['broadband_min'])
+#     preproc_widget.maxbroadBox.setValue(prep_cfg['broadband_max'])
+#     preproc_widget.preprocessingButton.setChecked(bool(prep_cfg["apply_preprocessing"]))
+#     preproc_widget.notchCBox.setChecked(bool(prep_cfg['notch']))
+#     preproc_widget.minfreqnotchBox.setValue(
+#         prep_cfg['notch_min'] if prep_cfg['notch_min'] is not None else preproc_widget.defaults["minfreqnotch"])
+#     preproc_widget.maxfreqnotchBox.setValue(
+#         prep_cfg['notch_max'] if prep_cfg['notch_max'] is not None else preproc_widget.defaults["minfreqnotch"])
+#     preproc_widget.orderNotchBox.setValue(
+#         prep_cfg['notch_order'] if prep_cfg['notch_order'] is not None else preproc_widget.defaults["ordernotch"])
+#     preproc_widget.winnotchBox.setCurrentText(prep_cfg['notch_win'])
+#     preproc_widget.bpCBox.setChecked(bool(prep_cfg['bandpass']))
+#     preproc_widget.minfreqbpBox.setValue(
+#         prep_cfg['bp_min'] if prep_cfg['bp_min'] is not None else preproc_widget.defaults["minfreqbp"])
+#     preproc_widget.maxfreqbpBox.setValue(
+#         prep_cfg['bp_max'] if prep_cfg['bp_max'] is not None else preproc_widget.defaults["maxfreqbp"])
+#     preproc_widget.orderbpBox.setValue(
+#         prep_cfg['bp_order'] if prep_cfg['bp_order'] is not None else preproc_widget.defaults["orderbp"])
+#     preproc_widget.winbpBox.setCurrentText(prep_cfg['bp_win'])
+#     preproc_widget.carCBox.setChecked(bool(prep_cfg['car']))
+#     preproc_widget.bandCBox.setChecked(bool(prep_cfg['band_segmentation']))
+#     bands_list = prep_cfg.get("selected_bands") or []
+#     bands = bands_list[1:] if len(bands_list) > 1 else []  # Exclude 'broadband' if other bands are present
+#     if bands:
+#         preproc_widget.controller.update_band_label("segmentation", bands)
+#     # Store
+#     files_widget.main_window.controller.preproc_config = prep_cfg
+#
+#     # SEGMENTATION
+#     segm_cfg = data["segmentation"]
+#     idx_segmentation_widget = next(
+#         (i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
+#          d.get('widget') == "SegmentationWidget"))
+#     segm_widget = files_widget.main_window.stackedWidget.widget(
+#         idx_segmentation_widget)  # widget(3) is the segmentation widget
+#     segm_widget.conditionRButton.setChecked(
+#         segm_cfg['segmentation_type'] == 'condition')  # RButton, so it is exclusive with eventRButton
+#     segm_widget.trialBox.setValue(
+#         segm_cfg['trial_length'] if segm_cfg['trial_length'] is not None else segm_widget.defaults['triallength'])
+#     segm_widget.trialstrideBox.setValue(
+#         segm_cfg['trial_stride'] if segm_cfg['trial_stride'] is not None else segm_widget.defaults['trialstride'])
+#     segm_widget.winBox_1.setValue(
+#         segm_cfg['window_start'] if segm_cfg['window_start'] is not None else segm_widget.defaults['windowbox1'])
+#     segm_widget.winBox_2.setValue(
+#         segm_cfg['window_end'] if segm_cfg['window_end'] is not None else segm_widget.defaults['windowbox2'])
+#     segm_widget.normCBox.setChecked(bool(segm_cfg['norm']))
+#     if segm_cfg['norm_type'] == 'z':
+#         segm_widget.zscoreRButton.setChecked(True)  # RButton, so it is exclusive with dcRButton
+#     segm_widget.baselineCBox_1.setValue(
+#         segm_cfg['baseline_start'] if segm_cfg['baseline_start'] is not None else segm_widget.defaults['baselinewin1'])
+#     segm_widget.baselineCBox_2.setValue(
+#         segm_cfg['baseline_end'] if segm_cfg['baseline_end'] is not None else segm_widget.defaults['baselinewin2'])
+#     segm_widget.averageCBox.setChecked(bool(segm_cfg['average']))
+#     segm_widget.thresCBox.setChecked(bool(segm_cfg['thresholding']))
+#     segm_widget.threskBox.setValue(
+#         segm_cfg['thres_k'] if segm_cfg['thres_k'] is not None else segm_widget.defaults['threshold'])
+#     segm_widget.thressampBox.setValue(
+#         segm_cfg['thres_samples'] if segm_cfg['thres_samples'] is not None else segm_widget.defaults['thressamples'])
+#     segm_widget.threschanBox.setValue(
+#         segm_cfg['thres_channels'] if segm_cfg['thres_channels'] is not None else segm_widget.defaults['threschannels'])
+#     segm_widget.resampleCBox.setChecked(bool(segm_cfg['resample']))
+#     segm_widget.resamplefsBox.setValue(
+#         segm_cfg['resample_fs'] if segm_cfg['resample_fs'] is not None else segm_widget.defaults['resamplefs'])
+#     # Store
+#     files_widget.main_window.controller.segmentation_config = segm_cfg
+#
+#     # PARAMETERS
+#     params_cfg = data["parameters"]
+#     idx_parameters_widget = next((i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
+#                                   d.get('widget') == "ParametersWidget"))
+#     params_widget = files_widget.main_window.stackedWidget.widget(
+#         idx_parameters_widget)  # widget(4) is the parameters widget
+#     params_widget.meanCBox.setChecked(bool(params_cfg['mean']))
+#     params_widget.medianCBox.setChecked(bool(params_cfg['median']))
+#     params_widget.varianceCBox.setChecked(bool(params_cfg['variance']))
+#     params_widget.kurtosisCBox.setChecked(bool(params_cfg['kurtosis']))
+#     params_widget.skewnessCBox.setChecked(bool(params_cfg['skewness']))
+#     params_widget.psdCBox.setChecked(bool(params_cfg['psd']))
+#     params_widget.segmentpsdBox.setValue(
+#         params_cfg['psd_segment_pct'] if params_cfg['psd_segment_pct'] is not None else params_widget.defaults[
+#             'psdsegment'])
+#     params_widget.overlappsdBox.setValue(
+#         params_cfg['psd_overlap_pct'] if params_cfg['psd_overlap_pct'] is not None else params_widget.defaults[
+#             'psdoverlap'])
+#     params_widget.psdcomboBox.setCurrentText(params_cfg['psd_window'])
+#     params_widget.controller.loading_config = True
+#     params_widget.rpCBox.setChecked(bool(params_cfg['relative_power']))
+#     params_widget.controller.update_band_label('rp', params_cfg["selected_rp_bands"])
+#     params_widget.controller.loading_config = False
+#     params_widget.apCBox.setChecked(bool(params_cfg['absolute_power']))
+#     params_widget.mfCBox.setChecked(bool(params_cfg['median_frequency']))
+#     params_widget.seCBox.setChecked(bool(params_cfg['spectral_entropy']))
+#     params_widget.ctmCBox.setChecked(bool(params_cfg['ctm']))
+#     params_widget.ctmrBox.setValue(
+#         params_cfg['ctm_r'] if params_cfg['ctm_r'] is not None else params_widget.defaults['ctmradius'])
+#     params_widget.sampenCBox.setChecked(bool(params_cfg['sample_entropy']))
+#     params_widget.sampenrBox.setValue(
+#         params_cfg['sample_entropy_r'] if params_cfg['sample_entropy_r'] is not None else params_widget.defaults[
+#             'sampradius'])
+#     params_widget.sampenmBox.setValue(
+#         params_cfg['sample_entropy_m'] if params_cfg['sample_entropy_m'] is not None else params_widget.defaults[
+#             'sampm'])
+#     params_widget.msampenCBox.setChecked(bool(params_cfg['multiscale_sample_entropy']))
+#     params_widget.msampenrBox.setValue(
+#         params_cfg['multiscale_sample_entropy_r'] if params_cfg['multiscale_sample_entropy_r'] is not None else
+#         params_widget.defaults['multisampradius'])
+#     params_widget.msampenmBox.setValue(
+#         params_cfg['multiscale_sample_entropy_m'] if params_cfg['multiscale_sample_entropy_m'] is not None else
+#         params_widget.defaults['multisampm'])
+#     params_widget.msampenscaleBox.setValue(
+#         params_cfg['multiscale_sample_entropy_scale'] if params_cfg['multiscale_sample_entropy_scale'] is not None else
+#         params_widget.defaults['multisampmaxscale'])
+#     params_widget.lzcCBox.setChecked(bool(params_cfg['lzc']))
+#     params_widget.mlzcCBox.setChecked(bool(params_cfg['multiscale_lzc']))
+#     if params_cfg['multiscale_lzc_scales'] is not None:
+#         params_widget.mlzcEdit.setText(str(params_cfg['multiscale_lzc_scales']))
+#     params_widget.iacCBox.setChecked(bool(params_cfg['iac']))
+#     params_widget.iacortButton.setChecked(bool(params_cfg['ort_iac']))
+#     params_widget.aecCBox.setChecked(bool(params_cfg['aec']))
+#     params_widget.aecortButton.setChecked(bool(params_cfg['ort_aec']))
+#     params_widget.pliCBox.setChecked(bool(params_cfg['pli']))
+#     params_widget.plvCBox.setChecked(bool(params_cfg['plv']))
+#     params_widget.wpliCBox.setChecked(bool(params_cfg['wpli']))
+#     # Store
+#     files_widget.main_window.controller.parameters_config = params_cfg
 
 if __name__ == '__main__':
     with open(rf"C:\Users\1993_\Desktop\config_Good.json") as json_data:
