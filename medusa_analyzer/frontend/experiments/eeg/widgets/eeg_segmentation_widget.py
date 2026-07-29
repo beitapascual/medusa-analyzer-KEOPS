@@ -1,6 +1,6 @@
 from __future__ import annotations
 from copy import deepcopy
-from math import pi, sin
+from math import ceil, pi, sin
 from typing import Any
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
@@ -11,11 +11,19 @@ from medusa_analyzer.frontend.validation import Validation
 
 
 class WindowSegmentationDiagram(QWidget):
+    VISUAL_MIN_EPOCH_MS = 100
+    VISUAL_FULL_WIDTH_EPOCH_MS = 60000
+    EPOCH_COUNT = 5
+    MIN_VISIBLE_EPOCH_WIDTH = 56.0
+    EPOCH_LABEL_MIN_WIDTH = 48.0
+    OVERLAP_LABEL_MIN_WIDTH = 10.0
+    MAX_DRAWN_WINDOWS = 260
+
     def __init__(self) -> None:
         super().__init__()
         self.epoch_length_ms = 1000
         self.overlap_percent = 0
-        self.setMinimumHeight(270)
+        self.setMinimumHeight(315)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def set_values(self, epoch_length_ms: int, overlap_percent: int) -> None:
@@ -67,31 +75,30 @@ class WindowSegmentationDiagram(QWidget):
         painter.setPen(text_color)
         painter.drawText(QRectF(signal_end_x + 14, signal_y - 16, 76, 32), Qt.AlignmentFlag.AlignVCenter, "Signal")
 
-        min_epoch_width = 86
-        max_epoch_width = 148
-        epoch_width = min_epoch_width + (
-            (self.epoch_length_ms - 400) / (2000 - 400)
-        ) * (max_epoch_width - min_epoch_width)
+        epoch_width = self._epoch_width(signal_width, self.epoch_length_ms)
         overlap_ratio = max(0, min(100, self.overlap_percent)) / 100
-        start_step = epoch_width * (1 - overlap_ratio)
+        start_step = max(0.1, epoch_width * (1 - overlap_ratio))
+        window_count = max(1, ceil(signal_width / start_step))
         window_fill = QColor(accent_color)
         window_fill.setAlpha(34)
         guide_pen = QPen(accent_color, 1.2, Qt.PenStyle.DashLine)
 
         painter.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
-        for index in range(5):
+        for index in self._visible_window_indices(window_count):
             start_x = signal_start_x + index * start_step
-            if start_x + epoch_width > signal_end_x + 12:
+            if start_x >= signal_end_x:
                 break
-            window_rect = QRectF(start_x, windows_top, epoch_width, windows_height)
+            visible_width = max(1.0, min(epoch_width, signal_end_x - start_x))
+            window_rect = QRectF(start_x, windows_top, visible_width, windows_height)
             painter.setBrush(window_fill)
             painter.setPen(QPen(accent_color, 1.6))
             painter.drawRoundedRect(window_rect, 7, 7)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(guide_pen)
             painter.drawLine(QPointF(start_x, signal_y + 38), QPointF(start_x, windows_top + windows_height))
-            painter.setPen(text_color)
-            painter.drawText(window_rect, Qt.AlignmentFlag.AlignCenter, f"Epoch {index + 1}")
+            if visible_width >= self.EPOCH_LABEL_MIN_WIDTH and start_step >= self.EPOCH_LABEL_MIN_WIDTH:
+                painter.setPen(text_color)
+                painter.drawText(window_rect, Qt.AlignmentFlag.AlignCenter, f"Epoch {index + 1}")
 
         self._draw_measurement(
             painter,
@@ -117,22 +124,48 @@ class WindowSegmentationDiagram(QWidget):
                     windows_top,
                     muted_color,
                     text_color,
+                    self.OVERLAP_LABEL_MIN_WIDTH,
                 )
 
     def _draw_measurement(self, painter: QPainter, x1: float, x2: float, y: float, label: str,
-        guide_top: float, muted_color: QColor, text_color: QColor) -> None:
+        guide_top: float, muted_color: QColor, text_color: QColor, label_min_width: float = 0.0) -> None:
         painter.setPen(QPen(muted_color, 1.0, Qt.PenStyle.DashLine))
         painter.drawLine(QPointF(x1, guide_top), QPointF(x1, y - 7))
         painter.drawLine(QPointF(x2, guide_top), QPointF(x2, y - 7))
 
-        painter.setPen(QPen(muted_color, 1.5))
-        painter.drawLine(QPointF(x1 + 7, y), QPointF(x2 - 7, y))
-        self._draw_arrow_head(painter, QPointF(x1 + 7, y), -1, muted_color)
-        self._draw_arrow_head(painter, QPointF(x2 - 7, y), 1, muted_color)
+        width = abs(x2 - x1)
+        if width >= 18:
+            painter.setPen(QPen(muted_color, 1.5))
+            painter.drawLine(QPointF(x1 + 7, y), QPointF(x2 - 7, y))
+            self._draw_arrow_head(painter, QPointF(x1 + 7, y), -1, muted_color)
+            self._draw_arrow_head(painter, QPointF(x2 - 7, y), 1, muted_color)
 
-        painter.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
-        painter.setPen(text_color)
-        painter.drawText(QRectF(x1 - 80, y + 7, (x2 - x1) + 160, 22), Qt.AlignmentFlag.AlignHCenter, label)
+        if width >= label_min_width:
+            painter.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+            painter.setPen(text_color)
+            painter.drawText(QRectF(x1 - 80, y + 7, width + 160, 22), Qt.AlignmentFlag.AlignHCenter, label)
+
+    @classmethod
+    def _epoch_width(cls, signal_width: float, epoch_length_ms: int) -> float:
+        max_epoch_width = signal_width / cls.EPOCH_COUNT
+        min_epoch_width = min(cls.MIN_VISIBLE_EPOCH_WIDTH, max_epoch_width)
+        bounded_epoch = max(cls.VISUAL_MIN_EPOCH_MS, min(int(epoch_length_ms), cls.VISUAL_FULL_WIDTH_EPOCH_MS))
+        epoch_ratio = (
+            (bounded_epoch - cls.VISUAL_MIN_EPOCH_MS)
+            / (cls.VISUAL_FULL_WIDTH_EPOCH_MS - cls.VISUAL_MIN_EPOCH_MS)
+        ) ** 0.5
+        return min_epoch_width + epoch_ratio * (max_epoch_width - min_epoch_width)
+
+    @classmethod
+    def _visible_window_indices(cls, window_count: int) -> list[int]:
+        if window_count <= cls.MAX_DRAWN_WINDOWS:
+            return list(range(window_count))
+
+        step = ceil(window_count / cls.MAX_DRAWN_WINDOWS)
+        indices = list(range(0, window_count, step))
+        if indices[-1] != window_count - 1:
+            indices.append(window_count - 1)
+        return indices
 
     @staticmethod
     def _draw_arrow_head(painter: QPainter, point: QPointF, direction: int, color: QColor) -> None:
@@ -149,6 +182,8 @@ class WindowSegmentationDiagram(QWidget):
 
 
 class WindowSegmentationWidget(QFrame):
+    MAX_EPOCH_LENGTH_MS = 2147483647
+
     epoch_length_changed = Signal(int)
     overlap_changed = Signal(int)
 
@@ -166,12 +201,10 @@ class WindowSegmentationWidget(QFrame):
         controls.setVerticalSpacing(12)
         layout.addLayout(controls)
 
-        epoch_card, self.epoch_slider, self.epoch_value = self._control(
-            "Epoch length", 400, 2000, 100, 1000, "ms",
-            "If epoch length increases, the windows become wider.")
+        epoch_card, self.epoch_slider = self._epoch_length_control()
         overlap_card, self.overlap_slider, self.overlap_value = self._control(
-            "Overlap", 0, 80, 5, 0, "%",
-            "Increasing overlap makes consecutive epochs overlap more.")
+            "Overlap", 0, 99, 1, 0, "%",
+            "Percentage of each epoch shared with the next epoch.")
 
         controls.addWidget(epoch_card, 0, 0)
         controls.addWidget(overlap_card, 0, 1)
@@ -182,6 +215,33 @@ class WindowSegmentationWidget(QFrame):
         self.epoch_slider.valueChanged.connect(self._epoch_slider_changed)
         self.overlap_slider.valueChanged.connect(self._overlap_slider_changed)
         self.set_values(1000, 0)
+
+    def _epoch_length_control(self) -> tuple[QFrame, QSpinBox]:
+        card = QFrame()
+        card.setProperty("role", "segmentation-visual-control")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+
+        header = QHBoxLayout()
+        label = QLabel("Epoch length")
+        label.setObjectName("subgroupTitle")
+        header.addWidget(label)
+        header.addStretch()
+        layout.addLayout(header)
+
+        spin = QSpinBox()
+        spin.setRange(100, self.MAX_EPOCH_LENGTH_MS)
+        spin.setSingleStep(100)
+        spin.setValue(1000)
+        spin.setSuffix(" ms")
+        layout.addWidget(spin)
+
+        hint_label = QLabel("Duration of each window used to segment duration events.")
+        hint_label.setObjectName("muted")
+        hint_label.setWordWrap(True)
+        layout.addWidget(hint_label)
+        return card, spin
 
     def _control(self, title: str, minimum: int, maximum: int, step: int, value: int,
         suffix: str, hint: str) -> tuple[QFrame, QSlider, QLabel]:
@@ -219,15 +279,14 @@ class WindowSegmentationWidget(QFrame):
         previous = self._syncing
         self._syncing = True
         try:
-            self.epoch_slider.setValue(int(epoch_length_ms))
+            self.epoch_slider.setValue(max(100, int(epoch_length_ms)))
             self.overlap_slider.setValue(int(overlap_percent))
             self._update_labels()
-            self.diagram.set_values(int(epoch_length_ms), int(overlap_percent))
+            self.diagram.set_values(max(100, int(epoch_length_ms)), int(overlap_percent))
         finally:
             self._syncing = previous
 
     def _update_labels(self) -> None:
-        self.epoch_value.setText(f"{self.epoch_slider.value()} ms")
         self.overlap_value.setText(f"{self.overlap_slider.value()}%")
 
     def _epoch_slider_changed(self, value: int) -> None:
@@ -244,21 +303,28 @@ class WindowSegmentationWidget(QFrame):
 
 
 class OnsetSegmentationDiagram(QWidget):
+    VISUAL_TIME_LIMIT_MS = 60000
+
     def __init__(self) -> None:
         super().__init__()
-        self.window_start_ms = 0
-        self.window_end_ms = 400
-        self.baseline_start_ms = -100
+        self.window_start_ms = -300
+        self.window_end_ms = 700
+        self.baseline_start_ms = -300
         self.baseline_end_ms = 0
+        self.window_invalid = False
+        self.baseline_invalid = False
         self.setMinimumHeight(330)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def set_values(self, window_start_ms: int, window_end_ms: int,
-        baseline_start_ms: int, baseline_end_ms: int) -> None:
+        baseline_start_ms: int, baseline_end_ms: int, window_invalid: bool = False,
+        baseline_invalid: bool = False) -> None:
         self.window_start_ms = int(window_start_ms)
         self.window_end_ms = int(window_end_ms)
         self.baseline_start_ms = int(baseline_start_ms)
         self.baseline_end_ms = int(baseline_end_ms)
+        self.window_invalid = bool(window_invalid)
+        self.baseline_invalid = bool(baseline_invalid)
         self.update()
 
     def paintEvent(self, event: Any) -> None:
@@ -288,7 +354,7 @@ class OnsetSegmentationDiagram(QWidget):
             signal_start_x + signal_width * 0.25,
             signal_start_x + signal_width * 0.74,
         ]
-        pixels_per_ms = signal_width / 2600
+        visual_span = self._visual_span(onset_positions, signal_start_x, signal_end_x)
         window_row_y = rect.top() + 168
         baseline_row_y = rect.top() + 248
 
@@ -324,39 +390,32 @@ class OnsetSegmentationDiagram(QWidget):
             painter.setPen(onset_color)
             painter.drawText(QRectF(onset_x - 36, onset_y - 30, 72, 18), Qt.AlignmentFlag.AlignCenter, "onset")
 
-            window_start_x = self._clamp_x(onset_x + self.window_start_ms * pixels_per_ms, signal_start_x, signal_end_x)
-            window_end_x = self._clamp_x(onset_x + self.window_end_ms * pixels_per_ms, signal_start_x, signal_end_x)
-            baseline_start_x = self._clamp_x(onset_x + self.baseline_start_ms * pixels_per_ms, signal_start_x, signal_end_x)
-            baseline_end_x = self._clamp_x(onset_x + self.baseline_end_ms * pixels_per_ms, signal_start_x, signal_end_x)
-
-            self._draw_interval(
-                painter,
-                window_start_x,
-                window_end_x,
-                window_row_y,
-                window_color,
-                "segmentation window",
-                f"start {self.window_start_ms} ms",
-                f"end {self.window_end_ms} ms",
-            )
-            self._draw_interval(
-                painter,
-                baseline_start_x,
-                baseline_end_x,
-                baseline_row_y,
-                baseline_color,
-                "baseline",
-                f"baseline start {self.baseline_start_ms} ms",
-                f"baseline end {self.baseline_end_ms} ms",
-            )
-
-        painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
-        painter.setPen(muted_color)
-        painter.drawText(
-            QRectF(rect.left() + 18, rect.bottom() - 26, rect.width() - 36, 20),
-            Qt.AlignmentFlag.AlignCenter,
-            "Onsets are separated so segmentation windows and baseline intervals remain readable.",
-        )
+            if not self.window_invalid:
+                window_start_x = self._offset_to_x(onset_x, self.window_start_ms, visual_span)
+                window_end_x = self._offset_to_x(onset_x, self.window_end_ms, visual_span)
+                self._draw_interval(
+                    painter,
+                    window_start_x,
+                    window_end_x,
+                    window_row_y,
+                    window_color,
+                    "segmentation window",
+                    f"start {self.window_start_ms} ms",
+                    f"end {self.window_end_ms} ms",
+                )
+            if not self.baseline_invalid:
+                baseline_start_x = self._offset_to_x(onset_x, self.baseline_start_ms, visual_span)
+                baseline_end_x = self._offset_to_x(onset_x, self.baseline_end_ms, visual_span)
+                self._draw_interval(
+                    painter,
+                    baseline_start_x,
+                    baseline_end_x,
+                    baseline_row_y,
+                    baseline_color,
+                    "baseline",
+                    f"baseline start {self.baseline_start_ms} ms",
+                    f"baseline end {self.baseline_end_ms} ms",
+                )
 
     @staticmethod
     def _signal_y(x: float, start_x: float, width: float, middle_y: float) -> float:
@@ -364,8 +423,25 @@ class OnsetSegmentationDiagram(QWidget):
         return middle_y - 28 * sin(ratio * pi * 8.5) - 8 * sin(ratio * pi * 21)
 
     @staticmethod
-    def _clamp_x(x: float, minimum: float, maximum: float) -> float:
-        return max(minimum + 5, min(maximum - 5, x))
+    def _visual_span(onset_positions: list[float], minimum: float, maximum: float) -> float:
+        available_spans: list[float] = []
+        for onset_x in onset_positions:
+            available_spans.append(onset_x - (minimum + 5))
+            available_spans.append((maximum - 5) - onset_x)
+        return max(1.0, min(available_spans))
+
+    @classmethod
+    def _offset_to_x(cls, onset_x: float, offset_ms: int, visual_span: float) -> float:
+        limit = cls.VISUAL_TIME_LIMIT_MS
+        bounded_offset = max(-limit, min(limit, int(offset_ms)))
+        if bounded_offset == 0:
+            return onset_x
+
+        visual_ratio = (abs(bounded_offset) / limit) ** 0.5
+        if bounded_offset < 0:
+            return onset_x - visual_span * visual_ratio
+
+        return onset_x + visual_span * visual_ratio
 
     def _draw_interval(self, painter: QPainter, x1: float, x2: float, y: float, color: QColor,
         title: str, start_label: str, end_label: str) -> None:
@@ -415,11 +491,16 @@ class OnsetSegmentationDiagram(QWidget):
 
 
 class OnsetSegmentationWidget(QFrame):
+    MIN_TIME_MS = -2147483647
+    MAX_TIME_MS = 2147483647
+    INTERVAL_GAP_MS = 1
+
     values_changed = Signal(int, int, int, int)
 
     def __init__(self) -> None:
         super().__init__()
         self._syncing = False
+        self.validation = Validation()
         self.setProperty("role", "segmentation-visual-widget")
 
         layout = QVBoxLayout(self)
@@ -431,18 +512,18 @@ class OnsetSegmentationWidget(QFrame):
         controls.setVerticalSpacing(12)
         layout.addLayout(controls)
 
-        start_card, self.window_start_slider, self.window_start_value = self._control(
-            "Start", -300, 200, 25, 0,
+        start_card, self.window_start_slider = self._control(
+            "Start", self.MIN_TIME_MS, self.MAX_TIME_MS, 25, -300,
             "Beginning of the segmentation window relative to the onset.")
-        end_card, self.window_end_slider, self.window_end_value = self._control(
-            "End", 50, 700, 25, 400,
+        end_card, self.window_end_slider = self._control(
+            "End", self.MIN_TIME_MS, self.MAX_TIME_MS, 25, 700,
             "End of the segmentation window relative to the onset.")
-        baseline_start_card, self.baseline_start_slider, self.baseline_start_value = self._control(
-            "Baseline start", -400, -25, 25, -100,
+        baseline_start_card, self.baseline_start_slider = self._control(
+            "Baseline start", self.MIN_TIME_MS, self.MAX_TIME_MS, 25, -300,
             "Beginning of the baseline interval relative to the onset.")
-        baseline_end_card, self.baseline_end_slider, self.baseline_end_value = self._control(
-            "Baseline end", -300, 0, 25, 0,
-            "By default, the baseline ends at the onset.")
+        baseline_end_card, self.baseline_end_slider = self._control(
+            "Baseline end", self.MIN_TIME_MS, self.MAX_TIME_MS, 25, 0,
+            "End of the baseline interval relative to the onset.")
 
         controls.addWidget(start_card, 0, 0)
         controls.addWidget(end_card, 0, 1)
@@ -452,18 +533,13 @@ class OnsetSegmentationWidget(QFrame):
         self.diagram = OnsetSegmentationDiagram()
         layout.addWidget(self.diagram)
 
-        for slider in (
-            self.window_start_slider,
-            self.window_end_slider,
-            self.baseline_start_slider,
-            self.baseline_end_slider,
-        ):
-            slider.valueChanged.connect(self._slider_changed)
+        for slider in (self.window_start_slider, self.window_end_slider, self.baseline_start_slider, self.baseline_end_slider):
+            slider.valueChanged.connect(self._value_changed)
 
-        self.set_values(0, 400, -100, 0)
+        self.set_values(-300, 700, -300, 0)
 
     def _control(self, title: str, minimum: int, maximum: int, step: int, value: int,
-        hint: str) -> tuple[QFrame, QSlider, QLabel]:
+        hint: str) -> tuple[QFrame, QSpinBox]:
         card = QFrame()
         card.setProperty("role", "segmentation-visual-control")
         layout = QVBoxLayout(card)
@@ -473,96 +549,158 @@ class OnsetSegmentationWidget(QFrame):
         header = QHBoxLayout()
         label = QLabel(title)
         label.setObjectName("subgroupTitle")
-        value_label = QLabel(f"{value} ms")
-        value_label.setObjectName("segmentationVisualBadge")
-        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header.addWidget(label)
         header.addStretch()
-        header.addWidget(value_label)
         layout.addLayout(header)
 
-        slider = QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(minimum, maximum)
-        slider.setSingleStep(step)
-        slider.setPageStep(step)
-        slider.setValue(value)
-        layout.addWidget(slider)
+        spin = QSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setSingleStep(step)
+        spin.setValue(value)
+        spin.setSuffix(" ms")
+        layout.addWidget(spin)
 
         hint_label = QLabel(hint)
         hint_label.setObjectName("muted")
         hint_label.setWordWrap(True)
         layout.addWidget(hint_label)
-        return card, slider, value_label
+        return card, spin
 
     def set_values(self, window_start_ms: int, window_end_ms: int,
         baseline_start_ms: int, baseline_end_ms: int) -> None:
-        values = self._normalized_values(window_start_ms, window_end_ms, baseline_start_ms, baseline_end_ms)
         previous = self._syncing
         self._syncing = True
         try:
-            self.window_start_slider.setValue(values[0])
-            self.window_end_slider.setValue(values[1])
-            self.baseline_start_slider.setValue(values[2])
-            self.baseline_end_slider.setValue(values[3])
-            self._update_labels(values)
-            self.diagram.set_values(*values)
+            self._reset_interval_constraints()
+            self.window_start_slider.setValue(self._clamp_to_control(self.window_start_slider, window_start_ms))
+            self.window_end_slider.setValue(self._clamp_to_control(self.window_end_slider, window_end_ms))
+            self.baseline_start_slider.setValue(self._clamp_to_control(self.baseline_start_slider, baseline_start_ms))
+            self.baseline_end_slider.setValue(self._clamp_to_control(self.baseline_end_slider, baseline_end_ms))
+            self._apply_interval_constraints()
+            values = self._current_values()
+            self._apply_values_to_preview(values)
         finally:
             self._syncing = previous
 
-    def _slider_changed(self, *_: Any) -> None:
-        values = self._normalized_values(
+    def _value_changed(self, *_: Any) -> None:
+        self._apply_interval_constraints()
+        values = self._current_values()
+        self._apply_values_to_preview(values)
+
+        if not self._syncing:
+            self.values_changed.emit(*values)
+
+    def _apply_values_to_preview(self, values: tuple[int, int, int, int]) -> None:
+        window_invalid, baseline_invalid = self._invalid_interval_flags(values)
+        self._update_control_status(window_invalid, baseline_invalid)
+        self.diagram.set_values(*values, window_invalid=window_invalid, baseline_invalid=baseline_invalid)
+
+    def _update_control_status(self, window_invalid: bool = False, baseline_invalid: bool = False) -> None:
+        for control, invalid in (
+            (self.window_start_slider, window_invalid),
+            (self.window_end_slider, window_invalid),
+            (self.baseline_start_slider, baseline_invalid),
+            (self.baseline_end_slider, baseline_invalid),
+        ):
+            control.setProperty("status", "error" if invalid else "ok")
+            control.style().unpolish(control)
+            control.style().polish(control)
+
+    def _invalid_interval_flags(self, values: tuple[int, int, int, int]) -> tuple[bool, bool]:
+        window_start_ms, window_end_ms, baseline_start_ms, baseline_end_ms = values
+        window_errors = [
+            *self.validation.validate_many(window_start_ms, ["integer"], label="Epoch start"),
+            *self.validation.validate_many(window_end_ms, ["integer"], label="Epoch end"),
+        ]
+        baseline_errors = [
+            *self.validation.validate_many(baseline_start_ms, ["integer"], label="Baseline start"),
+            *self.validation.validate_many(baseline_end_ms, ["integer"], label="Baseline end"),
+        ]
+
+        try:
+            window_start_ms = self.validation.coerce_int(window_start_ms)
+            window_end_ms = self.validation.coerce_int(window_end_ms)
+        except ValueError:
+            window_errors.append("Epoch window is invalid.")
+
+        try:
+            baseline_start_ms = self.validation.coerce_int(baseline_start_ms)
+            baseline_end_ms = self.validation.coerce_int(baseline_end_ms)
+        except ValueError:
+            baseline_errors.append("Baseline window is invalid.")
+
+        if not window_errors and window_end_ms <= window_start_ms:
+            window_errors.append("Epoch window: end must be greater than start.")
+        if not baseline_errors and baseline_end_ms <= baseline_start_ms:
+            baseline_errors.append("Baseline window: end must be greater than start.")
+
+        return bool(window_errors), bool(baseline_errors)
+
+    def _reset_interval_constraints(self) -> None:
+        self._reset_interval_controls(self.window_start_slider, self.window_end_slider)
+        self._reset_interval_controls(self.baseline_start_slider, self.baseline_end_slider)
+
+    def _apply_interval_constraints(self) -> None:
+        self._constrain_interval_controls(self.window_start_slider, self.window_end_slider)
+        self._constrain_interval_controls(self.baseline_start_slider, self.baseline_end_slider)
+
+    @classmethod
+    def _reset_interval_controls(cls, start_control: QSpinBox, end_control: QSpinBox) -> None:
+        previous_start = start_control.blockSignals(True)
+        previous_end = end_control.blockSignals(True)
+        try:
+            start_control.setRange(cls.MIN_TIME_MS, cls.MAX_TIME_MS)
+            end_control.setRange(cls.MIN_TIME_MS, cls.MAX_TIME_MS)
+        finally:
+            start_control.blockSignals(previous_start)
+            end_control.blockSignals(previous_end)
+
+    @classmethod
+    def _constrain_interval_controls(cls, start_control: QSpinBox, end_control: QSpinBox) -> None:
+        previous_start = start_control.blockSignals(True)
+        previous_end = end_control.blockSignals(True)
+        try:
+            start_control.setRange(cls.MIN_TIME_MS, cls.MAX_TIME_MS)
+            end_control.setRange(cls.MIN_TIME_MS, cls.MAX_TIME_MS)
+            start = start_control.value()
+            end = end_control.value()
+
+            if start >= cls.MAX_TIME_MS:
+                start_control.setValue(cls.MAX_TIME_MS - cls.INTERVAL_GAP_MS)
+                start = start_control.value()
+            if end <= cls.MIN_TIME_MS:
+                end_control.setValue(cls.MIN_TIME_MS + cls.INTERVAL_GAP_MS)
+                end = end_control.value()
+            if end <= start:
+                if start + cls.INTERVAL_GAP_MS <= cls.MAX_TIME_MS:
+                    end_control.setValue(start + cls.INTERVAL_GAP_MS)
+                    end = end_control.value()
+                else:
+                    start_control.setValue(end - cls.INTERVAL_GAP_MS)
+                    start = start_control.value()
+
+            start_control.setRange(cls.MIN_TIME_MS, end - cls.INTERVAL_GAP_MS)
+            end_control.setRange(start + cls.INTERVAL_GAP_MS, cls.MAX_TIME_MS)
+        finally:
+            start_control.blockSignals(previous_start)
+            end_control.blockSignals(previous_end)
+
+    @staticmethod
+    def _clamp_to_control(control: QSpinBox, value: int) -> int:
+        return max(control.minimum(), min(control.maximum(), int(value)))
+
+    def _current_values(self) -> tuple[int, int, int, int]:
+        return (
             self.window_start_slider.value(),
             self.window_end_slider.value(),
             self.baseline_start_slider.value(),
             self.baseline_end_slider.value(),
         )
-        previous = self._syncing
-        self._syncing = True
-        try:
-            self.window_start_slider.setValue(values[0])
-            self.window_end_slider.setValue(values[1])
-            self.baseline_start_slider.setValue(values[2])
-            self.baseline_end_slider.setValue(values[3])
-            self._update_labels(values)
-            self.diagram.set_values(*values)
-        finally:
-            self._syncing = previous
-
-        if not previous:
-            self.values_changed.emit(*values)
-
-    def _update_labels(self, values: tuple[int, int, int, int]) -> None:
-        self.window_start_value.setText(f"{values[0]} ms")
-        self.window_end_value.setText(f"{values[1]} ms")
-        self.baseline_start_value.setText(f"{values[2]} ms")
-        self.baseline_end_value.setText(f"{values[3]} ms")
-
-    def _normalized_values(self, window_start_ms: int, window_end_ms: int,
-        baseline_start_ms: int, baseline_end_ms: int) -> tuple[int, int, int, int]:
-        window_start_ms = self._clamp_to_slider(self.window_start_slider, window_start_ms)
-        window_end_ms = self._clamp_to_slider(self.window_end_slider, window_end_ms)
-        baseline_start_ms = self._clamp_to_slider(self.baseline_start_slider, baseline_start_ms)
-        baseline_end_ms = self._clamp_to_slider(self.baseline_end_slider, baseline_end_ms)
-
-        if window_end_ms <= window_start_ms:
-            window_end_ms = min(self.window_end_slider.maximum(), window_start_ms + 25)
-            if window_end_ms <= window_start_ms:
-                window_start_ms = max(self.window_start_slider.minimum(), window_end_ms - 25)
-
-        if baseline_end_ms <= baseline_start_ms:
-            baseline_end_ms = min(self.baseline_end_slider.maximum(), baseline_start_ms + 25)
-            if baseline_end_ms <= baseline_start_ms:
-                baseline_start_ms = max(self.baseline_start_slider.minimum(), baseline_end_ms - 25)
-
-        return window_start_ms, window_end_ms, baseline_start_ms, baseline_end_ms
-
-    @staticmethod
-    def _clamp_to_slider(slider: QSlider, value: int) -> int:
-        return max(slider.minimum(), min(slider.maximum(), int(value)))
 
 
 class EEGSegmentationWidget(QScrollArea):
     changed = Signal()
+    MAX_TARGET_SAMPLING_FREQUENCY_HZ = 2_147_483_647
 
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         super().__init__()
@@ -730,39 +868,6 @@ class EEGSegmentationWidget(QScrollArea):
         root.addWidget(self.strategy_panel)
 
         # ------------------------------------------------------------------
-        # Epoch parameters
-        # ------------------------------------------------------------------
-        epoch_panel = self._panel("Epoch parameters")
-        (self.epoch_target_panel, self.epoch_duration_target_button, self.epoch_instant_target_button) = self._target_selector("Edit epoch parameters for")
-        epoch_panel.layout().addWidget(self.epoch_target_panel)
-        epoch_grid = QGridLayout()
-        epoch_panel.layout().addLayout(epoch_grid)
-
-        instant_epoch_config = self._default_epoch_state("instant")
-        duration_epoch_config = self._default_epoch_state("duration")
-        self.epoch_start_label = QLabel("Epoch start")
-        self.epoch_end_label = QLabel("Epoch end")
-        self.duration_epoch_length_label = QLabel("Epoch length")
-        self.stride_label = QLabel("Stride")
-
-        self.epoch_start = self._spin(-60000, 60000, int(instant_epoch_config["epoch_window_ms"]["start"]))
-        self.epoch_end = self._spin(-60000, 60000, int(instant_epoch_config["epoch_window_ms"]["end"]))
-        self.duration_epoch_length = self._spin(1, 60000, int(duration_epoch_config["duration_epoch_length_ms"]))
-        self.stride = self._spin(0, 100, int(instant_epoch_config["stride_percent"]), suffix=" %")
-        self.average_epochs = QCheckBox("Average epochs before feature extraction")
-
-        epoch_grid.addWidget(self.epoch_start_label, 0, 0)
-        epoch_grid.addWidget(self.epoch_start, 0, 1)
-        epoch_grid.addWidget(self.epoch_end_label, 1, 0)
-        epoch_grid.addWidget(self.epoch_end, 1, 1)
-        epoch_grid.addWidget(self.duration_epoch_length_label, 2, 0)
-        epoch_grid.addWidget(self.duration_epoch_length, 2, 1)
-        epoch_grid.addWidget(self.stride_label, 3, 0)
-        epoch_grid.addWidget(self.stride, 3, 1)
-        epoch_grid.addWidget(self.average_epochs, 4, 0, 1, 2)
-        root.addWidget(epoch_panel)
-
-        # ------------------------------------------------------------------
         # Normalization
         # ------------------------------------------------------------------
         normalization_panel = self._panel("Normalization")
@@ -772,26 +877,20 @@ class EEGSegmentationWidget(QScrollArea):
         normalization_grid = QGridLayout()
         normalization_panel.layout().addLayout(normalization_grid)
 
-        normalization_config = self.config.get("normalization", {})
-        baseline_config = normalization_config.get("baseline_window_ms", {})
-
         self.normalization_enabled = QCheckBox("Normalize epochs")
         self.normalization_mode = QComboBox()
         self.normalization_mode.addItem("Mean", "mean")
         self.normalization_mode.addItem("Z-score", "mean_std")
-
-        self.baseline_start_label = QLabel("Baseline start")
-        self.baseline_end_label = QLabel("Baseline end")
-        self.baseline_start = self._spin(-60000, 60000, int(baseline_config.get("start", -100)))
-        self.baseline_end = self._spin(-60000, 60000, int(baseline_config.get("end", 0)))
+        self.normalization_baseline_hint = QLabel(
+            "For onset-based segmentation, normalization uses the baseline interval defined in the segmentation strategy widget."
+        )
+        self.normalization_baseline_hint.setObjectName("muted")
+        self.normalization_baseline_hint.setWordWrap(True)
 
         normalization_grid.addWidget(self.normalization_enabled, 0, 0, 1, 2)
         normalization_grid.addWidget(QLabel("Mode"), 1, 0)
         normalization_grid.addWidget(self.normalization_mode, 1, 1)
-        normalization_grid.addWidget(self.baseline_start_label, 2, 0)
-        normalization_grid.addWidget(self.baseline_start, 2, 1)
-        normalization_grid.addWidget(self.baseline_end_label, 3, 0)
-        normalization_grid.addWidget(self.baseline_end, 3, 1)
+        normalization_grid.addWidget(self.normalization_baseline_hint, 2, 0, 1, 2)
         root.addWidget(normalization_panel)
 
         # ------------------------------------------------------------------
@@ -832,22 +931,18 @@ class EEGSegmentationWidget(QScrollArea):
         resampling_panel.layout().addLayout(resampling_grid)
 
         self.resampling_enabled = QCheckBox("Resample epochs")
-        self.target_sampling_frequency = self._spin(250, 100000,
+        self.target_sampling_frequency = self._spin(1, self.MAX_TARGET_SAMPLING_FREQUENCY_HZ,
             int(self.config["resampling"]["target_sampling_frequency"]), suffix=" Hz")
-        nyquist_label = QLabel("Minimum 250 Hz (Nyquist).")
-        nyquist_label.setObjectName("muted")
         resampling_grid.addWidget(self.resampling_enabled, 0, 0, 1, 2)
         resampling_grid.addWidget(QLabel("Target sample frequency"), 1, 0)
         resampling_grid.addWidget(self.target_sampling_frequency, 1, 1)
-        resampling_grid.addWidget(nyquist_label, 2, 0, 1, 2)
         root.addWidget(resampling_panel)
         root.addStretch()
         self.setWidget(content)
 
         self._load_state()
 
-        for widget in [self.epoch_start, self.epoch_end, self.duration_epoch_length, self.stride, self.average_epochs,
-            self.normalization_enabled, self.normalization_mode, self.baseline_start, self.baseline_end,
+        for widget in [self.normalization_enabled, self.normalization_mode,
             self.threshold_enabled, self.threshold_sigma, self.threshold_samples, self.threshold_channels,
             self.resampling_enabled, self.target_sampling_frequency]:
             signal = (widget.currentIndexChanged if isinstance(widget, QComboBox) else widget.toggled
@@ -856,13 +951,11 @@ class EEGSegmentationWidget(QScrollArea):
 
         self.independent_mode_button.toggled.connect(self._segmentation_mode_changed)
         self.nested_mode_button.toggled.connect(self._segmentation_mode_changed)
-        self.window_strategy_button.toggled.connect(lambda checked: self._segmentation_strategy_changed("window") if checked else None)
-        self.onset_strategy_button.toggled.connect(lambda checked: self._segmentation_strategy_changed("onset") if checked else None)
+        self.window_strategy_button.toggled.connect(lambda checked: self._segmentation_strategy_changed("window-based") if checked else None)
+        self.onset_strategy_button.toggled.connect(lambda checked: self._segmentation_strategy_changed("onset-based") if checked else None)
         self.window_segmentation_widget.epoch_length_changed.connect(self._window_preview_epoch_length_changed)
         self.window_segmentation_widget.overlap_changed.connect(self._window_preview_overlap_changed)
         self.onset_segmentation_widget.values_changed.connect(self._onset_preview_values_changed)
-        self.epoch_duration_target_button.toggled.connect(lambda checked: self._epoch_target_changed("duration") if checked else None)
-        self.epoch_instant_target_button.toggled.connect(lambda checked: self._epoch_target_changed("instant") if checked else None)
         self.normalization_duration_target_button.toggled.connect(lambda checked: self._normalization_target_changed("duration") if checked else None)
         self.normalization_instant_target_button.toggled.connect(lambda checked: self._normalization_target_changed("instant") if checked else None)
         self.duration_events_list.itemSelectionChanged.connect(lambda group="duration": self._independent_event_changed(group))
@@ -895,7 +988,11 @@ class EEGSegmentationWidget(QScrollArea):
 
     @staticmethod
     def _strategy_or_default(value: Any, default: str = "window") -> str:
-        return str(value) if value in {"window", "onset"} else default
+        if value in {"window-based", "window"}:
+            return "window-based"
+        if value in {"onset-based", "onset"}:
+            return "onset-based"
+        return "onset-based" if default in {"onset-based", "onset"} else "window-based"
 
     @staticmethod
     def _set_button_checked(button: QPushButton, checked: bool) -> None:
@@ -947,12 +1044,12 @@ class EEGSegmentationWidget(QScrollArea):
         return {
             "segmentation_mode": mode,
             "segmentation_strategy": self._strategy_or_default(
-                current.get("segmentation_strategy", self.config.get("segmentation_strategy", "window"))
+                current.get("segmentation_strategy", self.config.get("segmentation_strategy", "window-based"))
             ),
             "event_groups": self._initial_event_groups(current, mode),
             "epoch_parameters": {
-                "duration": deepcopy(epoch_parameters.get("duration") or {}),
-                "instant": deepcopy(epoch_parameters.get("instant") or {}),
+                "duration_events": deepcopy(epoch_parameters.get("duration_events") or {}),
+                "instant_events": deepcopy(epoch_parameters.get("instant_events") or {}),
             },
             "normalization": {
                 "duration": deepcopy(normalization.get("duration") or {}),
@@ -985,51 +1082,168 @@ class EEGSegmentationWidget(QScrollArea):
                 group.get("instant_events")) for group in event_groups if isinstance(group, dict)]
         return []
 
-    def _default_epoch_window(self) -> dict[str, int]:
-        epoch = ((self.config.get("epoch_parameters") or {}).get("instant") or {}).get("epoch_window_ms", {})
-        return {"start": int(epoch.get("start", -300)), "end": int(epoch.get("end", 700))}
+    @staticmethod
+    def _is_broadband_band(band: Any) -> bool:
+        if not isinstance(band, dict):
+            return False
+        band_id = str(band.get("id") or "").lower()
+        title = str(band.get("title") or "").lower()
+        return band_id == "broadband" or title == "broadband"
 
-    def _normalized_epoch_window(self, value: Any | None = None) -> dict[str, int]:
-        default = self._default_epoch_window()
-        if isinstance(value, dict):
-            default.update({"start": int(value.get("start", default["start"])),
-                "end": int(value.get("end", default["end"]))})
-        return default
+    @staticmethod
+    def _float_or_none(value: Any) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
-    def _normalized_baseline_window(self, value: Any | None = None) -> dict[str, int]:
-        default = self._default_normalization_state("instant")["baseline_window_ms"]
-        if isinstance(value, dict):
-            default.update({"start": int(value.get("start", default["start"])),
-                "end": int(value.get("end", default["end"]))})
-        return default
+    def _sync_broadband_rows(self, rows: Any, high_cut: float, fallback_broadband: dict[str, Any] | None = None) -> None:
+        if not isinstance(rows, list):
+            return
+
+        valid_rows: list[dict[str, Any]] = []
+        found_broadband = False
+        for row in rows:
+            if self._is_broadband_band(row):
+                row["high_cut"] = high_cut
+                found_broadband = True
+                valid_rows.append(row)
+                continue
+
+            low_cut = self._float_or_none(row.get("low_cut")) if isinstance(row, dict) else None
+            row_high_cut = self._float_or_none(row.get("high_cut")) if isinstance(row, dict) else None
+            if low_cut is None or row_high_cut is None:
+                continue
+            if low_cut < row_high_cut <= high_cut:
+                valid_rows.append(row)
+
+        if not found_broadband and fallback_broadband is not None:
+            valid_rows.append(deepcopy(fallback_broadband))
+
+        rows[:] = valid_rows
+
+    @staticmethod
+    def _clamped_filter_low_cut(original_low: float, original_high: float, high_cut: float, minimum_low_cut: float) -> float:
+        original_width = max(original_high - original_low, 0.1)
+        if original_low < high_cut:
+            return max(minimum_low_cut, original_low)
+
+        fallback_width = min(original_width, max(0.1, high_cut - minimum_low_cut))
+        low_cut = high_cut - fallback_width
+        if low_cut >= high_cut:
+            low_cut = high_cut - min(0.1, high_cut / 2.0)
+        return max(0.0, min(low_cut, high_cut - 1e-9))
+
+    def _sync_resampling_filters(self, preprocessing: dict[str, Any], high_cut: float, minimum_low_cut: float) -> None:
+        filters = preprocessing.get("filters")
+        if not isinstance(filters, dict):
+            return
+
+        for filter_config in filters.values():
+            if not isinstance(filter_config, dict):
+                continue
+            low_cut = self._float_or_none(filter_config.get("low_cut"))
+            filter_high_cut = self._float_or_none(filter_config.get("high_cut"))
+            if low_cut is None or filter_high_cut is None:
+                continue
+
+            original_high_cut = filter_high_cut
+            if filter_high_cut > high_cut:
+                filter_config["high_cut"] = high_cut
+                filter_high_cut = high_cut
+
+            if low_cut >= filter_high_cut:
+                filter_config["low_cut"] = self._clamped_filter_low_cut(
+                    low_cut,
+                    original_high_cut,
+                    high_cut,
+                    minimum_low_cut,
+                )
+
+    def _sync_resampling_broadband(self) -> None:
+        segmentation = self.state.get("segmentation") or {}
+        resampling = segmentation.get("resampling") or {}
+        if not resampling.get("enabled", False):
+            return
+
+        high_cut = float(resampling.get("target_sampling_frequency", self.target_sampling_frequency.value())) / 2.0
+        fallback_broadband: dict[str, Any] | None = None
+        minimum_low_cut = 0.0
+
+        broadband = self.state.get("broadband")
+        if isinstance(broadband, dict):
+            broadband_low_cut = self._float_or_none(broadband.get("low_cut"))
+            if broadband_low_cut is not None:
+                if broadband_low_cut >= high_cut:
+                    minimum_low_cut = max(0.0, high_cut - min(0.1, high_cut / 2.0))
+                    broadband["low_cut"] = minimum_low_cut
+                else:
+                    minimum_low_cut = broadband_low_cut
+            broadband["high_cut"] = high_cut
+            fallback_broadband = deepcopy(broadband)
+
+        preprocessing = self.state.get("preprocessing")
+        if isinstance(preprocessing, dict):
+            self._sync_resampling_filters(preprocessing, high_cut, minimum_low_cut)
+            selected_frequency_bands = preprocessing.get("selected_frequency_bands")
+            if not isinstance(selected_frequency_bands, list):
+                selected_frequency_bands = []
+                preprocessing["selected_frequency_bands"] = selected_frequency_bands
+            self._sync_broadband_rows(
+                selected_frequency_bands,
+                high_cut,
+                fallback_broadband,
+            )
+
+        feature_params = self.state.get("feature_params")
+        if isinstance(feature_params, dict):
+            relative_band_power = feature_params.get("relative_band_power")
+            if isinstance(relative_band_power, dict):
+                self._sync_broadband_rows(
+                    relative_band_power.get("selected_frequency_bands"),
+                    high_cut,
+                )
+
+    def _default_onset_epoch_state(self) -> dict[str, int]:
+        defaults = ((self.config.get("epoch_parameters") or {}).get("instant_events") or {})
+        return {
+            "start": int(defaults.get("start", -300)),
+            "end": int(defaults.get("end", 700)),
+            "baseline_start": int(defaults.get("baseline_start", -300)),
+            "baseline_end": int(defaults.get("baseline_end", 0)),
+        }
+
+    def _normalized_onset_epoch_state(self, value: Any | None = None) -> dict[str, int]:
+        state = self._default_onset_epoch_state()
+        if not isinstance(value, dict):
+            return state
+        state["start"] = int(value.get("start", state["start"]))
+        state["end"] = int(value.get("end", state["end"]))
+        state["baseline_start"] = int(value.get("baseline_start", state["baseline_start"]))
+        state["baseline_end"] = int(value.get("baseline_end", state["baseline_end"]))
+        return state
 
     def _current_state_strategy(self) -> str:
         segmentation = self.state.get("segmentation") or {}
-        return self._strategy_or_default(segmentation.get("segmentation_strategy"), "window")
+        return self._strategy_or_default(segmentation.get("segmentation_strategy"), "window-based")
 
     def _target_uses_window(self, target: str) -> bool:
-        return self._target_or_default(target) == "duration" and self._current_state_strategy() == "window"
+        return self._target_or_default(target) == "duration" and self._current_state_strategy() == "window-based"
 
     def _target_uses_onset(self, target: str) -> bool:
         target = self._target_or_default(target)
-        return target == "instant" or (target == "duration" and self._current_state_strategy() == "onset")
+        return target == "instant" or (target == "duration" and self._current_state_strategy() == "onset-based")
 
     def _default_epoch_state(self, target: str) -> dict[str, Any]:
         target = self._target_or_default(target)
-        defaults = ((self.config.get("epoch_parameters") or {}).get(target) or {})
+        epoch_key = "duration_events" if target == "duration" else "instant_events"
+        defaults = ((self.config.get("epoch_parameters") or {}).get(epoch_key) or {})
         if self._target_uses_window(target):
             return {
                 "duration_epoch_length_ms": int(defaults.get("duration_epoch_length_ms", 1000)),
                 "stride_percent": int(defaults.get("stride_percent", 0)),
-                "average_epochs": bool(defaults.get("average_epochs", False)),
             }
-        if target == "duration":
-            defaults = ((self.config.get("epoch_parameters") or {}).get("instant") or {})
-        return {
-            "epoch_window_ms": self._normalized_epoch_window(defaults.get("epoch_window_ms")),
-            "stride_percent": int(defaults.get("stride_percent", 0)),
-            "average_epochs": bool(defaults.get("average_epochs", False)),
-        }
+        return self._default_onset_epoch_state()
 
     def _normalized_epoch_state(self, target: str, value: Any | None = None) -> dict[str, Any]:
         target = self._target_or_default(target)
@@ -1039,9 +1253,9 @@ class EEGSegmentationWidget(QScrollArea):
         if self._target_uses_window(target):
             state["duration_epoch_length_ms"] = int(value.get("duration_epoch_length_ms", state["duration_epoch_length_ms"]))
         else:
-            state["epoch_window_ms"] = self._normalized_epoch_window(value.get("epoch_window_ms"))
+            state = self._normalized_onset_epoch_state(value)
+            return state
         state["stride_percent"] = int(value.get("stride_percent", state["stride_percent"]))
-        state["average_epochs"] = bool(value.get("average_epochs", state["average_epochs"]))
         return state
 
     def _default_normalization_state(self, target: str) -> dict[str, Any]:
@@ -1051,14 +1265,6 @@ class EEGSegmentationWidget(QScrollArea):
             "enabled": bool(defaults.get("enabled", False)),
             "mode": str(defaults.get("mode", "mean_std")),
         }
-        if self._target_uses_onset(target):
-            if target == "duration":
-                defaults = ((self.config.get("normalization") or {}).get("instant") or defaults)
-            baseline = defaults.get("baseline_window_ms", {})
-            state["baseline_window_ms"] = {
-                "start": int(baseline.get("start", -100)),
-                "end": int(baseline.get("end", 0)),
-            }
         return state
 
     def _normalized_normalization_state(self, target: str, value: Any | None = None) -> dict[str, Any]:
@@ -1068,8 +1274,6 @@ class EEGSegmentationWidget(QScrollArea):
             return state
         state["enabled"] = bool(value.get("enabled", state["enabled"]))
         state["mode"] = str(value.get("mode", state["mode"]))
-        if self._target_uses_onset(target):
-            state["baseline_window_ms"] = self._normalized_baseline_window(value.get("baseline_window_ms"))
         return state
 
     def _active_event_types_from_state(self) -> tuple[bool, bool]:
@@ -1086,10 +1290,26 @@ class EEGSegmentationWidget(QScrollArea):
         segmentation = self.state["segmentation"]
         epoch_parameters = segmentation.get("epoch_parameters") if isinstance(segmentation.get("epoch_parameters"), dict) else {}
         normalization = segmentation.get("normalization") if isinstance(segmentation.get("normalization"), dict) else {}
-        segmentation["epoch_parameters"] = {
-            "duration": self._normalized_epoch_state("duration", epoch_parameters.get("duration")) if has_duration else {},
-            "instant": self._normalized_epoch_state("instant", epoch_parameters.get("instant")) if has_instant else {},
-        }
+        strategy = self._strategy_for_active_types(
+            bool(has_duration),
+            bool(has_instant),
+            segmentation.get("segmentation_strategy", self.config.get("segmentation_strategy", "window-based")),
+        )
+        segmentation["segmentation_strategy"] = strategy
+        if has_duration or has_instant:
+            if strategy == "window-based" and has_duration:
+                segmentation["epoch_parameters"] = {
+                    "duration_events": self._normalized_epoch_state("duration", epoch_parameters.get("duration_events")),
+                    "instant_events": {},
+                }
+            else:
+                onset_parameters = epoch_parameters.get("instant_events") or epoch_parameters.get("duration_events")
+                segmentation["epoch_parameters"] = {
+                    "duration_events": {},
+                    "instant_events": self._normalized_epoch_state("instant", onset_parameters),
+                }
+        else:
+            segmentation["epoch_parameters"] = {"duration_events": {}, "instant_events": {}}
         segmentation["normalization"] = {
             "duration": self._normalized_normalization_state("duration", normalization.get("duration")) if has_duration else {},
             "instant": self._normalized_normalization_state("instant", normalization.get("instant")) if has_instant else {},
@@ -1097,11 +1317,16 @@ class EEGSegmentationWidget(QScrollArea):
 
     def _epoch_state(self, target: str, create: bool = True) -> dict[str, Any]:
         target = self._target_or_default(target)
-        epoch_parameters = self.state["segmentation"].setdefault("epoch_parameters", {"duration": {}, "instant": {}})
-        current = epoch_parameters.get(target)
+        epoch_parameters = self.state["segmentation"].setdefault("epoch_parameters", {"duration_events": {}, "instant_events": {}})
+        parameter_key = "duration_events" if self._target_uses_window(target) else "instant_events"
+        current = epoch_parameters.get(parameter_key)
         if create:
             current = self._normalized_epoch_state(target, current)
-            epoch_parameters[target] = current
+            epoch_parameters[parameter_key] = current
+            if parameter_key == "duration_events":
+                epoch_parameters["instant_events"] = {}
+            else:
+                epoch_parameters["duration_events"] = {}
         return current if isinstance(current, dict) and current else self._default_epoch_state(target)
 
     def _normalization_state(self, target: str, create: bool = True) -> dict[str, Any]:
@@ -1113,42 +1338,29 @@ class EEGSegmentationWidget(QScrollArea):
             normalization[target] = current
         return current if isinstance(current, dict) and current else self._default_normalization_state(target)
 
-    def _set_epoch_target_buttons(self) -> None:
-        self._set_button_checked(self.epoch_duration_target_button, self._epoch_target == "duration")
-        self._set_button_checked(self.epoch_instant_target_button, self._epoch_target == "instant")
-
     def _set_normalization_target_buttons(self) -> None:
         self._set_button_checked(self.normalization_duration_target_button, self._normalization_target == "duration")
         self._set_button_checked(self.normalization_instant_target_button, self._normalization_target == "instant")
 
-    def _set_epoch_controls_from_state(self, target: str) -> None:
-        state = self._epoch_state(target, create=False)
-        previous = self._syncing_parameter_controls
-        self._syncing_parameter_controls = True
-        try:
-            if self._target_uses_window(target):
-                self.duration_epoch_length.setValue(
-                    int(state.get("duration_epoch_length_ms", self._default_epoch_state("duration")["duration_epoch_length_ms"])))
-            else:
-                epoch = self._normalized_epoch_window(state.get("epoch_window_ms"))
-                self.epoch_start.setValue(epoch["start"])
-                self.epoch_end.setValue(epoch["end"])
-            self.stride.setValue(int(state.get("stride_percent", self._default_epoch_state(target)["stride_percent"])))
-            self.average_epochs.setChecked(
-                bool(state.get("average_epochs", self._default_epoch_state(target)["average_epochs"])))
-        finally:
-            self._syncing_parameter_controls = previous
-
     def _store_epoch_controls(self, target: str) -> None:
         if self._syncing_parameter_controls:
             return
-        state = self._epoch_state(target)
+        target = self._target_or_default(target)
+        epoch_parameters = self.state["segmentation"].setdefault("epoch_parameters", {"duration_events": {}, "instant_events": {}})
         if self._target_uses_window(target):
-            state["duration_epoch_length_ms"] = self.duration_epoch_length.value()
+            epoch_parameters["duration_events"] = {
+                "duration_epoch_length_ms": self.window_segmentation_widget.epoch_slider.value(),
+                "stride_percent": self.window_segmentation_widget.overlap_slider.value(),
+            }
+            epoch_parameters["instant_events"] = {}
         else:
-            state["epoch_window_ms"] = {"start": self.epoch_start.value(), "end": self.epoch_end.value()}
-        state["stride_percent"] = self.stride.value()
-        state["average_epochs"] = self.average_epochs.isChecked()
+            epoch_parameters["duration_events"] = {}
+            epoch_parameters["instant_events"] = {
+                "start": self.onset_segmentation_widget.window_start_slider.value(),
+                "end": self.onset_segmentation_widget.window_end_slider.value(),
+                "baseline_start": self.onset_segmentation_widget.baseline_start_slider.value(),
+                "baseline_end": self.onset_segmentation_widget.baseline_end_slider.value(),
+            }
 
     def _set_normalization_controls_from_state(self, target: str) -> None:
         state = self._normalization_state(target, create=False)
@@ -1159,10 +1371,6 @@ class EEGSegmentationWidget(QScrollArea):
             self.normalization_enabled.setChecked(bool(state.get("enabled", default["enabled"])))
             index = self.normalization_mode.findData(state.get("mode", default["mode"]))
             self.normalization_mode.setCurrentIndex(max(0, index))
-            if target == "instant":
-                baseline = self._normalized_baseline_window(state.get("baseline_window_ms"))
-                self.baseline_start.setValue(baseline["start"])
-                self.baseline_end.setValue(baseline["end"])
         finally:
             self._syncing_parameter_controls = previous
 
@@ -1172,8 +1380,6 @@ class EEGSegmentationWidget(QScrollArea):
         state = self._normalization_state(target)
         state["enabled"] = self.normalization_enabled.isChecked()
         state["mode"] = self.normalization_mode.currentData()
-        if self._target_uses_onset(target):
-            state["baseline_window_ms"] = {"start": self.baseline_start.value(), "end": self.baseline_end.value()}
 
     def _selection_mode_for_state(self, mode: str, selected_duration_events: list[str], selected_instant_events: list[str]) -> str:
         if mode == "nested":
@@ -1197,21 +1403,21 @@ class EEGSegmentationWidget(QScrollArea):
         return "instant"
 
     def _current_segmentation_strategy(self) -> str:
-        return "window" if self.window_strategy_button.isChecked() else "onset"
+        return "window-based" if self.window_strategy_button.isChecked() else "onset-based"
 
     def _strategy_for_active_types(self, has_duration: bool, has_instant: bool, current_strategy: str) -> str:
         if has_instant and not has_duration:
-            return "onset"
+            return "onset-based"
         if has_duration and not has_instant:
-            return self._strategy_or_default(current_strategy, "window")
-        return self._strategy_or_default(current_strategy, "window")
+            return self._strategy_or_default(current_strategy, "window-based")
+        return self._strategy_or_default(current_strategy, "window-based")
 
     def _set_strategy_buttons(self, strategy: str) -> None:
         previous = self._updating_strategy
         self._updating_strategy = True
         try:
-            self._set_button_checked(self.window_strategy_button, strategy == "window")
-            self._set_button_checked(self.onset_strategy_button, strategy == "onset")
+            self._set_button_checked(self.window_strategy_button, strategy == "window-based")
+            self._set_button_checked(self.onset_strategy_button, strategy == "onset-based")
         finally:
             self._updating_strategy = previous
 
@@ -1228,8 +1434,6 @@ class EEGSegmentationWidget(QScrollArea):
 
         if epoch_target != self._epoch_target:
             self._epoch_target = epoch_target
-            self._set_epoch_target_buttons()
-            self._set_epoch_controls_from_state(epoch_target)
 
         if normalization_target != self._normalization_target:
             self._normalization_target = normalization_target
@@ -1245,58 +1449,47 @@ class EEGSegmentationWidget(QScrollArea):
         self._store_epoch_controls(self._epoch_target)
         self._store_normalization_controls(self._normalization_target)
         self.state["segmentation"]["segmentation_strategy"] = strategy
-        self._set_epoch_controls_from_state(self._epoch_target)
         self._set_normalization_controls_from_state(self._normalization_target)
         self._sync_strategy_preview()
         self._sync()
 
     def _window_preview_epoch_length_changed(self, value: int) -> None:
-        if self._syncing_parameter_controls or self._current_state_strategy() != "window":
+        del value
+        if self._syncing_parameter_controls or self._current_state_strategy() != "window-based":
             return
         if self._epoch_target == "duration":
-            self.duration_epoch_length.setValue(value)
+            self._sync()
 
     def _window_preview_overlap_changed(self, value: int) -> None:
-        if self._syncing_parameter_controls or self._current_state_strategy() != "window":
+        del value
+        if self._syncing_parameter_controls or self._current_state_strategy() != "window-based":
             return
         if self._epoch_target == "duration":
-            self.stride.setValue(value)
+            self._sync()
 
     def _onset_preview_values_changed(self, window_start: int, window_end: int,
         baseline_start: int, baseline_end: int) -> None:
+        del window_start, window_end, baseline_start, baseline_end
         if self._syncing_parameter_controls or not self._target_uses_onset(self._epoch_target):
             return
-
-        previous = self._syncing_parameter_controls
-        self._syncing_parameter_controls = True
-        try:
-            self.epoch_start.setValue(window_start)
-            self.epoch_end.setValue(window_end)
-            self.baseline_start.setValue(baseline_start)
-            self.baseline_end.setValue(baseline_end)
-        finally:
-            self._syncing_parameter_controls = previous
         self._sync()
 
     def _sync_strategy_preview(self) -> None:
         if self._target_uses_window(self._epoch_target):
-            self.window_segmentation_widget.set_values(self.duration_epoch_length.value(), self.stride.value())
-        if self._target_uses_onset(self._epoch_target):
-            self.onset_segmentation_widget.set_values(
-                self.epoch_start.value(),
-                self.epoch_end.value(),
-                self.baseline_start.value(),
-                self.baseline_end.value(),
+            state = self._epoch_state(self._epoch_target, create=False)
+            default = self._default_epoch_state("duration")
+            self.window_segmentation_widget.set_values(
+                int(state.get("duration_epoch_length_ms", default["duration_epoch_length_ms"])),
+                int(state.get("stride_percent", default["stride_percent"])),
             )
-
-    def _epoch_target_changed(self, target: str) -> None:
-        target = self._target_or_default(target)
-        if self._syncing_parameter_controls or target == self._epoch_target:
-            return
-        self._store_epoch_controls(self._epoch_target)
-        self._epoch_target = target
-        self._set_epoch_controls_from_state(target)
-        self._sync()
+        if self._target_uses_onset(self._epoch_target):
+            state = self._epoch_state(self._epoch_target, create=False)
+            self.onset_segmentation_widget.set_values(
+                int(state.get("start", self._default_onset_epoch_state()["start"])),
+                int(state.get("end", self._default_onset_epoch_state()["end"])),
+                int(state.get("baseline_start", self._default_onset_epoch_state()["baseline_start"])),
+                int(state.get("baseline_end", self._default_onset_epoch_state()["baseline_end"])),
+            )
 
     def _normalization_target_changed(self, target: str) -> None:
         target = self._target_or_default(target)
@@ -1334,16 +1527,14 @@ class EEGSegmentationWidget(QScrollArea):
         strategy = self._strategy_for_active_types(
             has_duration,
             has_instant,
-            segmentation.get("segmentation_strategy", self.config.get("segmentation_strategy", "window")),
+            segmentation.get("segmentation_strategy", self.config.get("segmentation_strategy", "window-based")),
         )
         segmentation["segmentation_strategy"] = strategy
         self._epoch_target = default_target
         self._normalization_target = default_target
         self._set_strategy_buttons(strategy)
         self._ensure_parameter_state(has_duration, has_instant)
-        self._set_epoch_target_buttons()
         self._set_normalization_target_buttons()
-        self._set_epoch_controls_from_state(self._epoch_target)
         self._set_normalization_controls_from_state(self._normalization_target)
         self._sync_strategy_preview()
 
@@ -1775,42 +1966,21 @@ class EEGSegmentationWidget(QScrollArea):
         self.window_strategy_button.setVisible(duration_strategy_available)
         self.window_strategy_button.setEnabled(duration_strategy_available)
         self.onset_strategy_button.setEnabled(has_active_events)
-        self.window_segmentation_widget.setVisible(duration_strategy_available and strategy == "window")
-        self.onset_segmentation_widget.setVisible(has_active_events and strategy == "onset")
+        self.window_segmentation_widget.setVisible(duration_strategy_available and strategy == "window-based")
+        self.onset_segmentation_widget.setVisible(has_active_events and strategy == "onset-based")
 
-        self.epoch_target_panel.setVisible(False)
         self.normalization_target_panel.setVisible(False)
 
-        normalization = self.normalization_enabled.isChecked()
         thresholding = self.threshold_enabled.isChecked()
         resampling = self.resampling_enabled.isChecked()
-        epoch_target = self._target_or_default(self._epoch_target)
         normalization_target = self._target_or_default(self._normalization_target)
-        show_epoch_instant = (
-            has_instant_epochs and epoch_target == "instant"
-        ) or (
-            has_duration_epochs and epoch_target == "duration" and strategy == "onset"
-        )
-        show_epoch_duration = has_duration_epochs and epoch_target == "duration" and strategy == "window"
-        show_any_epoch_controls = show_epoch_instant or show_epoch_duration
 
-        self._set_visible([self.epoch_start_label, self.epoch_start, self.epoch_end_label, self.epoch_end],
-            show_epoch_instant)
-        self._set_visible([self.duration_epoch_length_label, self.duration_epoch_length, self.stride_label,
-                self.stride], show_epoch_duration)
-        self.stride_label.setText("Overlap" if show_epoch_duration else "Stride")
-        self.average_epochs.setVisible(show_any_epoch_controls)
-
-        baseline_visible = normalization and (
-            has_instant_epochs and normalization_target == "instant"
-            or has_duration_epochs and normalization_target == "duration" and strategy == "onset"
-        )
-        self._set_visible([self.baseline_start_label, self.baseline_start, self.baseline_end_label,
-                self.baseline_end], baseline_visible)
-
+        normalization = self.normalization_enabled.isChecked()
         self.normalization_mode.setEnabled(normalization)
-        self.baseline_start.setEnabled(baseline_visible)
-        self.baseline_end.setEnabled(baseline_visible)
+        self.normalization_baseline_hint.setVisible(
+            has_instant_epochs and normalization_target == "instant"
+            or has_duration_epochs and normalization_target == "duration" and strategy == "onset-based"
+        )
 
         for widget in (self.threshold_sigma, self.threshold_samples, self.threshold_channels):
             widget.setEnabled(thresholding)
@@ -1968,8 +2138,8 @@ class EEGSegmentationWidget(QScrollArea):
             "segmentation_strategy": segmentation_strategy,
             "event_groups": event_groups,
             "epoch_parameters": {
-                "duration": deepcopy(previous_epoch_parameters.get("duration") or {}),
-                "instant": deepcopy(previous_epoch_parameters.get("instant") or {}),
+                "duration_events": deepcopy(previous_epoch_parameters.get("duration_events") or {}),
+                "instant_events": deepcopy(previous_epoch_parameters.get("instant_events") or {}),
             },
             "normalization": {
                 "duration": deepcopy(previous_normalization.get("duration") or {}),
@@ -1998,6 +2168,7 @@ class EEGSegmentationWidget(QScrollArea):
         self._ensure_parameter_state(has_duration_epochs, has_instant_epochs)
         self._align_parameter_targets(mode, selection_mode)
         self._ensure_parameter_state(has_duration_epochs, has_instant_epochs)
+        self._sync_resampling_broadband()
 
         self._set_dependent_enabled(mode)
         self._sync_strategy_preview()
@@ -2057,7 +2228,7 @@ class EEGSegmentationWidget(QScrollArea):
 
         self._ensure_parameter_state()
         duration_epoch = self._epoch_state("duration", create=False)
-        instant_epoch = self._epoch_state("instant", create=False)
+        onset_epoch = self._epoch_state("instant", create=False)
         duration_normalization = self._normalization_state("duration", create=False)
         instant_normalization = self._normalization_state("instant", create=False)
 
@@ -2066,76 +2237,95 @@ class EEGSegmentationWidget(QScrollArea):
 
         def validate_stride(value: Any, label: str) -> None:
             errors.extend(self.validation.validate_many(value,["integer", ("greater_or_equal", {"minimum": 0, "suffix": " %"}),
-                    ("less_or_equal", {"maximum": 100, "suffix": " %"})], label=label, stop_on_first_error=False))
+                    ("less_or_equal", {"maximum": 99, "suffix": " %"})], label=label, stop_on_first_error=False))
 
         def validate_duration_epoch() -> int:
             errors.extend(self.validation.validate_many(duration_epoch["duration_epoch_length_ms"],
-                    ["integer", ("greater_than", {"minimum": 0, "suffix": " ms"})],
+                    ["integer", ("greater_or_equal", {"minimum": 100, "suffix": " ms"})],
                     label="Duration epoch length" if mode == "nested" else "Epoch length",
                     stop_on_first_error=False))
             validate_stride(duration_epoch["stride_percent"], "Duration overlap" if mode == "nested" else "Overlap")
             return int(duration_epoch["duration_epoch_length_ms"])
 
         def validate_onset_epoch(epoch_config: dict[str, Any], target: str) -> int:
-            epoch = epoch_config["epoch_window_ms"]
-            start = epoch["start"]
-            end = epoch["end"]
+            start = epoch_config["start"]
+            end = epoch_config["end"]
+            baseline_start = epoch_config["baseline_start"]
+            baseline_end = epoch_config["baseline_end"]
             start_label = "Epoch start"
             end_label = "Epoch end"
+            baseline_start_label = "Baseline start"
+            baseline_end_label = "Baseline end"
             if mode == "nested" or target == "duration":
                 start_label = f"{target.title()} epoch start"
                 end_label = f"{target.title()} epoch end"
+                baseline_start_label = f"{target.title()} baseline start"
+                baseline_end_label = f"{target.title()} baseline end"
             errors.extend(self.validation.validate_many(start, ["integer"],
                             label=start_label))
             errors.extend(self.validation.validate_many(end, ["integer"],
                                     label=end_label))
+            errors.extend(self.validation.validate_many(baseline_start, ["integer"],
+                            label=baseline_start_label))
+            errors.extend(self.validation.validate_many(baseline_end, ["integer"],
+                                    label=baseline_end_label))
+            try:
+                start = self.validation.coerce_int(start)
+                end = self.validation.coerce_int(end)
+                baseline_start = self.validation.coerce_int(baseline_start)
+                baseline_end = self.validation.coerce_int(baseline_end)
+            except ValueError:
+                return 0
             if end <= start:
                 prefix = f"{target.title()} epoch window" if mode == "nested" or target == "duration" else "Epoch window"
                 errors.append(f"{prefix}: end must be greater than start.")
                 return 0
-            if "stride_percent" in epoch_config:
-                validate_stride(epoch_config["stride_percent"], f"{target.title()} stride" if mode == "nested" else "Stride")
+            if baseline_end <= baseline_start:
+                prefix = f"{target.title()} baseline window" if mode == "nested" or target == "duration" else "Baseline window"
+                errors.append(f"{prefix}: end must be greater than start.")
             return int(end - start)
 
-        def validate_normalization(normalization: dict[str, Any], target: str, epoch_window: dict[str, int] | None) -> None:
+        def validate_normalization(normalization: dict[str, Any], target: str, epoch_config: dict[str, int] | None) -> None:
             if not normalization.get("enabled", False):
                 return
             prefix = f"{target.title()} normalization" if mode == "nested" else "Normalization"
             errors.extend(self.validation.validate_many(normalization.get("mode"),
                     [("one_of", {"options": ["mean", "mean_std"]})], label=f"{prefix} mode"))
-            if epoch_window is None:
+            if epoch_config is None:
                 return
-            baseline = normalization.get("baseline_window_ms", {})
-            base_start = baseline.get("start")
-            base_end = baseline.get("end")
-            if base_end <= base_start:
-                errors.append(f"{prefix} baseline window: end must be greater than start.")
-            if base_start < epoch_window["start"] or base_end > epoch_window["end"]:
+            try:
+                base_start = self.validation.coerce_int(epoch_config["baseline_start"])
+                base_end = self.validation.coerce_int(epoch_config["baseline_end"])
+                epoch_start = self.validation.coerce_int(epoch_config["start"])
+                epoch_end = self.validation.coerce_int(epoch_config["end"])
+            except ValueError:
+                return
+            if base_start < epoch_start or base_end > epoch_end:
                 errors.append(f"{prefix} baseline window must be inside the onset epoch window.")
 
         epoch_lengths_ms: list[int] = []
         if has_duration_epochs:
-            epoch_length = validate_duration_epoch() if strategy == "window" else validate_onset_epoch(duration_epoch, "duration")
+            epoch_length = validate_duration_epoch() if strategy == "window-based" else validate_onset_epoch(onset_epoch, "duration")
             if epoch_length > 0:
                 epoch_lengths_ms.append(epoch_length)
 
         if has_instant_epochs:
-            epoch_length = validate_onset_epoch(instant_epoch, "instant")
+            epoch_length = validate_onset_epoch(onset_epoch, "instant")
             if epoch_length > 0:
                 epoch_lengths_ms.append(epoch_length)
 
         if mode == "nested":
             if has_duration_epochs:
                 validate_normalization(duration_normalization, "duration",
-                    duration_epoch["epoch_window_ms"] if strategy == "onset" else None)
+                    onset_epoch if strategy == "onset-based" else None)
             if has_instant_epochs:
-                validate_normalization(instant_normalization, "instant", instant_epoch["epoch_window_ms"])
+                validate_normalization(instant_normalization, "instant", onset_epoch)
         else:
             if selection_mode == "duration":
                 validate_normalization(duration_normalization, "duration",
-                    duration_epoch["epoch_window_ms"] if strategy == "onset" else None)
+                    onset_epoch if strategy == "onset-based" else None)
             elif selection_mode == "instant":
-                validate_normalization(instant_normalization, "instant", instant_epoch["epoch_window_ms"])
+                validate_normalization(instant_normalization, "instant", onset_epoch)
 
         smallest_epoch_ms = min(epoch_lengths_ms) if epoch_lengths_ms else 0
         epoch_samples = (int(smallest_epoch_ms * float(self.source_sampling_frequency or 0)/ 1000) if smallest_epoch_ms > 0
@@ -2158,21 +2348,14 @@ class EEGSegmentationWidget(QScrollArea):
         resampling = segmentation["resampling"]
         if resampling["enabled"]:
             target = resampling["target_sampling_frequency"]
-            errors.extend(self.validation.validate_many(target,["integer", ("greater_or_equal", {"minimum": 250, "suffix": " Hz"})],
+            errors.extend(self.validation.validate_many(target,["integer", ("greater_or_equal", {"minimum": 1, "suffix": " Hz"})],
                     label="Target sample frequency", stop_on_first_error=False))
-
-            if self.source_sampling_frequency is not None:
-                errors.extend(self.validation.validate_many(target,[("less_or_equal", {"maximum":
-                            self.source_sampling_frequency, "suffix": " Hz",})], label="Target sample frequency",))
 
         return errors
 
     def on_step_activated(self) -> None:
         metadata = self.state.get("metadata") or {}
         self.source_sampling_frequency = metadata.get("sampling_frequency")
-
-        if self.source_sampling_frequency is not None:
-            self.target_sampling_frequency.setMaximum(max(250, int(self.source_sampling_frequency)))
 
         self._refresh_events()
         self._sync()

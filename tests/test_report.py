@@ -14,6 +14,9 @@ from medusa_analyzer.frontend.experiments.eeg.widgets.eeg_preprocessing_widget i
 from medusa_analyzer.frontend.experiments.eeg.widgets.eeg_report_widget import (
     EEGReportWidget,
 )
+from medusa_analyzer.frontend.experiments.eeg.widgets.eeg_segmentation_widget import (
+    EEGSegmentationWidget,
+)
 from medusa_analyzer.frontend.widgets.report import ReportWidget
 
 
@@ -47,45 +50,36 @@ def _loaded_state() -> dict:
 
 
 def _segmentation_state(selection_mode: str, event_groups: list[dict] | None = None,
-    strategy: str = "window") -> dict:
+    strategy: str = "window-based") -> dict:
     has_duration = selection_mode == "duration" or any(
         group.get("duration_events") for group in (event_groups or [])
     )
     has_instant = selection_mode == "instant" or any(
         group.get("instant_events") for group in (event_groups or [])
     )
+    if strategy in {"window", "window-based"}:
+        strategy = "window-based"
+    elif strategy in {"onset", "onset-based"}:
+        strategy = "onset-based"
     if has_instant and not has_duration:
-        strategy = "onset"
-    duration_epoch = (
-        {
-            "epoch_window_ms": {"start": -100, "end": 400} if selection_mode == "duration"
-            else {"start": -120, "end": 380},
-            "stride_percent": 20 if selection_mode == "duration" else 0,
-            "average_epochs": True if selection_mode == "duration" else False,
-        }
-        if strategy == "onset"
-        else {
-            "duration_epoch_length_ms": 1500 if selection_mode == "duration" else 2000,
-            "stride_percent": 20 if selection_mode == "duration" else 25,
-            "average_epochs": True,
-        }
-    )
-    instant_epoch = {
-        "epoch_window_ms": {"start": -100, "end": 400} if selection_mode == "instant"
-        else {"start": -120, "end": 380},
-        "stride_percent": 20 if selection_mode == "instant" else 0,
-        "average_epochs": True if selection_mode == "instant" else False,
+        strategy = "onset-based"
+    duration_epoch = {
+        "duration_epoch_length_ms": 1500 if selection_mode == "duration" else 2000,
+        "stride_percent": 20 if selection_mode == "duration" else 25,
+    }
+    onset_epoch = {
+        "start": -100 if selection_mode in {"duration", "instant"} else -120,
+        "end": 400 if selection_mode in {"duration", "instant"} else 380,
+        "baseline_start": -50,
+        "baseline_end": 0,
     }
     duration_normalization = {
         "enabled": True,
         "mode": "mean_std" if selection_mode == "duration" else "mean",
     }
-    if strategy == "onset":
-        duration_normalization["baseline_window_ms"] = {"start": -50, "end": 0}
     instant_normalization = {
         "enabled": True,
         "mode": "mean_std",
-        "baseline_window_ms": {"start": -50, "end": 0},
     }
     return {
         "segmentation_mode": "nested" if selection_mode == "nested" else "independent",
@@ -96,8 +90,8 @@ def _segmentation_state(selection_mode: str, event_groups: list[dict] | None = N
             "instant_events": ["instant_event"] if selection_mode == "instant" else [],
         }] if selection_mode in {"duration", "instant"} else []),
         "epoch_parameters": {
-            "duration": duration_epoch if has_duration else {},
-            "instant": instant_epoch if has_instant else {},
+            "duration_events": duration_epoch if has_duration and strategy == "window-based" else {},
+            "instant_events": onset_epoch if has_instant or strategy == "onset-based" else {},
         },
         "normalization": {
             "duration": duration_normalization if has_duration else {},
@@ -183,7 +177,7 @@ class ReportWidgetTests(unittest.TestCase):
                 },
                 "segmentation": {
                     "segmentation_mode": "nested",
-                    "epoch_parameters": {"duration": {}, "instant": {}},
+                    "epoch_parameters": {"duration_events": {}, "instant_events": {}},
                     "normalization": {"duration": {"enabled": True, "mode": "mean"}, "instant": {}},
                 },
                 "selected_recordings": [
@@ -259,13 +253,27 @@ class ReportWidgetTests(unittest.TestCase):
             self.assertEqual(saved["bids_root"], temp_dir)
             self.assertEqual(saved["output_derivatives_path"], str(Path(temp_dir) / "derivatives"))
             self.assertEqual(saved["segmentation"]["segmentation_mode"], "nested")
+            self.assertEqual(saved["segmentation"]["segmentation_strategy"], "onset-based")
             self.assertNotIn("selection_mode", saved["segmentation"])
             self.assertEqual(
                 saved["segmentation"]["event_groups"][0]["instant_events"],
                 ["instant_child"],
             )
             self.assertIn("epoch_parameters", saved["segmentation"])
+            self.assertEqual(
+                saved["segmentation"]["epoch_parameters"],
+                {
+                    "duration_events": {},
+                    "instant_events": {
+                        "start": -120,
+                        "end": 380,
+                        "baseline_start": -50,
+                        "baseline_end": 0,
+                    },
+                },
+            )
             self.assertIn("normalization", saved["segmentation"])
+            self.assertNotIn("baseline_window_ms", saved["segmentation"]["normalization"]["instant"])
             self.assertNotIn("selected_duration_events", saved["segmentation"])
             self.assertNotIn("selected_instant_events", saved["segmentation"])
             self.assertNotIn("nested_groups", saved["segmentation"])
@@ -286,9 +294,9 @@ class ReportWidgetTests(unittest.TestCase):
         self.app.processEvents()
 
         texts = [label.text() for label in report.findChildren(QLabel)]
-        self.assertTrue(any("Duration window 2000 ms, overlap 25%, average Yes" in text for text in texts))
+        self.assertTrue(any("Duration window 2000 ms, overlap 25%" in text for text in texts))
         self.assertTrue(any("Duration: Mean" in text for text in texts))
-        self.assertFalse(any("Instant onset -120 to 380 ms, stride 0%, average No" in text for text in texts))
+        self.assertFalse(any("Instant onset -120 to 380 ms" in text for text in texts))
         self.assertFalse(any("Instant: Z-score, baseline -50 to 0 ms" in text for text in texts))
 
     def test_eeg_report_nested_segmentation_reports_only_instant_parameters_when_only_instant_children_exist(self):
@@ -304,9 +312,9 @@ class ReportWidgetTests(unittest.TestCase):
         self.app.processEvents()
 
         texts = [label.text() for label in report.findChildren(QLabel)]
-        self.assertTrue(any("Instant onset -120 to 380 ms, stride 0%, average No" in text for text in texts))
+        self.assertTrue(any("Instant onset -120 to 380 ms" in text for text in texts))
         self.assertTrue(any("Instant: Z-score, baseline -50 to 0 ms" in text for text in texts))
-        self.assertFalse(any("Duration window 2000 ms, overlap 25%, average Yes" in text for text in texts))
+        self.assertFalse(any("Duration window 2000 ms, overlap 25%" in text for text in texts))
         self.assertFalse(any("Duration: Mean" in text for text in texts))
 
     def test_eeg_report_nested_segmentation_marks_mixed_child_types_as_unsupported(self):
@@ -343,14 +351,14 @@ class ReportWidgetTests(unittest.TestCase):
 
         texts = [label.text() for label in report.findChildren(QLabel)]
         self.assertIn("Onset-based", texts)
-        self.assertTrue(any("-100 to 400 ms, stride 20%, average Yes" in text for text in texts))
+        self.assertTrue(any("-100 to 400 ms" in text for text in texts))
         self.assertTrue(any("Z-score, baseline -50 to 0 ms" in text for text in texts))
 
     def test_eeg_report_independent_segmentation_reports_only_selected_event_type_parameters(self):
         defaults = _eeg_defaults()
         cases = [
-            ("duration", "1500 ms, overlap 20%, average Yes", "Z-score", "baseline -50 to 0 ms"),
-            ("instant", "-100 to 400 ms, stride 20%, average Yes", "Z-score, baseline -50 to 0 ms", "1500 ms"),
+            ("duration", "1500 ms, overlap 20%", "Z-score", "baseline -50 to 0 ms"),
+            ("instant", "-100 to 400 ms", "Z-score, baseline -50 to 0 ms", "1500 ms"),
         ]
 
         for selection_mode, expected_epoch, expected_normalization, forbidden_text in cases:
@@ -476,6 +484,59 @@ class ReportWidgetTests(unittest.TestCase):
             )
             self.assertEqual(saved["preprocessing"]["filters"]["bandpass"]["filter_type"], "bandpass")
             self.assertEqual(saved["preprocessing"]["filters"]["bandpass"]["filter_design"], "fir")
+
+    def test_eeg_report_config_uses_resampled_broadband_state(self):
+        defaults = _eeg_defaults()
+        with TemporaryDirectory() as temp_dir:
+            state = _loaded_state()
+            state["bids_root"] = temp_dir
+            state["duration_events"] = ["recording"]
+            state["instant_events"] = []
+            state["preprocessing"] = {
+                "filters": {
+                    "bandpass": {
+                        "enabled": True,
+                        "filter_type": "bandpass",
+                        "filter_design": "fir",
+                        "low_cut": 1.0,
+                        "high_cut": 70.0,
+                        "order": 1000,
+                        "window": "hamming",
+                    },
+                    "notch": {
+                        "enabled": True,
+                        "filter_type": "bandstop",
+                        "filter_design": "fir",
+                        "low_cut": 75.0,
+                        "high_cut": 77.0,
+                        "order": 1001,
+                        "window": "hamming",
+                    },
+                },
+                "selected_frequency_bands": [
+                    {"id": "high_beta", "title": "High beta", "enabled": True, "low_cut": 55.0, "high_cut": 75.0},
+                    {"id": "broadband", "title": "Broadband", "enabled": True, "low_cut": 0.1, "high_cut": 128.0},
+                ],
+            }
+
+            segmentation = EEGSegmentationWidget({}, defaults, state)
+            segmentation.show()
+            self.app.processEvents()
+            segmentation.duration_events_list.item(0).setSelected(True)
+            segmentation.resampling_enabled.setChecked(True)
+            segmentation.target_sampling_frequency.setValue(120)
+            self.app.processEvents()
+
+            report = EEGReportWidget({}, defaults, state)
+            report.run_pipeline()
+
+            config_path = Path(temp_dir) / "derivatives" / "config.json"
+            saved = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["segmentation"]["resampling"]["target_sampling_frequency"], 120)
+            self.assertEqual(saved["broadband"]["high_cut"], 60.0)
+            self.assertEqual(saved["preprocessing"]["filters"]["bandpass"]["high_cut"], 60.0)
+            self.assertEqual(saved["preprocessing"]["filters"]["notch"]["high_cut"], 60.0)
+            self.assertEqual(saved["preprocessing"]["selected_frequency_bands"], [saved["broadband"]])
 
     def test_eeg_report_defaults_output_to_bids_derivatives(self):
         defaults = _eeg_defaults()

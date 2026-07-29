@@ -555,6 +555,18 @@ QLabel#segmentationVisualBadge {
     font-weight: 650;
 }
 
+QLabel#segmentationVisualBadge[status="error"] {
+    color: #FFB6C2;
+    background: #2A171D;
+    border-color: #C85663;
+}
+
+QSpinBox[status="error"] {
+    color: #FFB6C2;
+    background: #2A171D;
+    border-color: #C85663;
+}
+
 QSlider::groove:horizontal {
     height: 6px;
     background: #181215;

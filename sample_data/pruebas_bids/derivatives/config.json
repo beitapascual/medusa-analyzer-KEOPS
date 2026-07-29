@@ -83,11 +83,10 @@
     ],
     "datatype": "eeg",
     "n_channels": 8,
-    "n_recordings": 12,
-    "sampling_frequency": 500.0,
+    "n_recordings": 6,
+    "sampling_frequency": 1000.0,
     "sessions": [
-      "01",
-      "02"
+      "03"
     ],
     "subjects": [
       "13",
@@ -104,16 +103,16 @@
   "output_root_path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids",
   "pipeline_config_path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\derivatives\\config.json",
   "preprocessing": {
-    "car_checked": true,
+    "car": true,
     "filters": {
       "bandpass": {
         "enabled": true,
-        "filter_design": "iir",
+        "filter_design": "fir",
         "filter_type": "bandpass",
         "high_cut": 60.0,
         "low_cut": 0.5,
-        "order": 4,
-        "window": "butter"
+        "order": 1000,
+        "window": "hamming"
       },
       "notch": {
         "enabled": true,
@@ -172,27 +171,26 @@
   },
   "segmentation": {
     "epoch_parameters": {
-      "duration": {
-        "average_epochs": false,
-        "duration_epoch_length_ms": 1000,
-        "stride_percent": 0
-      },
-      "instant": {}
+      "duration_events": {},
+      "instant_events": {
+        "baseline_end": 0,
+        "baseline_start": -300,
+        "end": 700,
+        "start": -300
+      }
     },
     "event_groups": [
       {
-        "base_event": null,
+        "base_event": "full_recording",
         "duration_events": [
-          "full_recording",
-          "drug_exposure",
-          "rest_period"
+          "drug_exposure"
         ],
         "instant_events": []
       }
     ],
     "normalization": {
       "duration": {
-        "enabled": false,
+        "enabled": true,
         "mode": "mean_std"
       },
       "instant": {}
@@ -201,7 +199,8 @@
       "enabled": false,
       "target_sampling_frequency": 250
     },
-    "segmentation_mode": "independent",
+    "segmentation_mode": "nested",
+    "segmentation_strategy": "onset-based",
     "thresholding": {
       "channels": 1,
       "enabled": false,
@@ -209,7 +208,7 @@
       "sigma": 2.0
     }
   },
-  "selected_bids_group": "group-2",
+  "selected_bids_group": "group-3",
   "selected_features": [
     "psd",
     "absolute_band_power",
@@ -221,109 +220,55 @@
     {
       "datatype": "eeg",
       "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-18\\ses-02\\eeg\\sub-18_ses-02_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-18\\ses-02\\eeg\\sub-18_ses-02_task-gonogo_run-1_eeg.mpl",
+      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-18\\ses-03\\eeg\\sub-18_ses-03_task-gonogo_run-1_eeg.mpl",
+      "relative_path": "sub-18\\ses-03\\eeg\\sub-18_ses-03_task-gonogo_run-1_eeg.mpl",
       "run": "1",
-      "session": "02",
+      "session": "03",
       "subject": "18"
     },
     {
       "datatype": "eeg",
       "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-18\\ses-01\\eeg\\sub-18_ses-01_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-18\\ses-01\\eeg\\sub-18_ses-01_task-gonogo_run-1_eeg.mpl",
+      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-17\\ses-03\\eeg\\sub-17_ses-03_task-gonogo_run-1_eeg.mpl",
+      "relative_path": "sub-17\\ses-03\\eeg\\sub-17_ses-03_task-gonogo_run-1_eeg.mpl",
       "run": "1",
-      "session": "01",
-      "subject": "18"
-    },
-    {
-      "datatype": "eeg",
-      "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-17\\ses-02\\eeg\\sub-17_ses-02_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-17\\ses-02\\eeg\\sub-17_ses-02_task-gonogo_run-1_eeg.mpl",
-      "run": "1",
-      "session": "02",
+      "session": "03",
       "subject": "17"
     },
     {
       "datatype": "eeg",
       "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-17\\ses-01\\eeg\\sub-17_ses-01_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-17\\ses-01\\eeg\\sub-17_ses-01_task-gonogo_run-1_eeg.mpl",
+      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-16\\ses-03\\eeg\\sub-16_ses-03_task-gonogo_run-1_eeg.mpl",
+      "relative_path": "sub-16\\ses-03\\eeg\\sub-16_ses-03_task-gonogo_run-1_eeg.mpl",
       "run": "1",
-      "session": "01",
-      "subject": "17"
-    },
-    {
-      "datatype": "eeg",
-      "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-16\\ses-02\\eeg\\sub-16_ses-02_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-16\\ses-02\\eeg\\sub-16_ses-02_task-gonogo_run-1_eeg.mpl",
-      "run": "1",
-      "session": "02",
+      "session": "03",
       "subject": "16"
     },
     {
       "datatype": "eeg",
       "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-16\\ses-01\\eeg\\sub-16_ses-01_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-16\\ses-01\\eeg\\sub-16_ses-01_task-gonogo_run-1_eeg.mpl",
+      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-15\\ses-03\\eeg\\sub-15_ses-03_task-gonogo_run-1_eeg.mpl",
+      "relative_path": "sub-15\\ses-03\\eeg\\sub-15_ses-03_task-gonogo_run-1_eeg.mpl",
       "run": "1",
-      "session": "01",
-      "subject": "16"
-    },
-    {
-      "datatype": "eeg",
-      "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-15\\ses-02\\eeg\\sub-15_ses-02_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-15\\ses-02\\eeg\\sub-15_ses-02_task-gonogo_run-1_eeg.mpl",
-      "run": "1",
-      "session": "02",
+      "session": "03",
       "subject": "15"
     },
     {
       "datatype": "eeg",
       "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-15\\ses-01\\eeg\\sub-15_ses-01_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-15\\ses-01\\eeg\\sub-15_ses-01_task-gonogo_run-1_eeg.mpl",
+      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-14\\ses-03\\eeg\\sub-14_ses-03_task-gonogo_run-1_eeg.mpl",
+      "relative_path": "sub-14\\ses-03\\eeg\\sub-14_ses-03_task-gonogo_run-1_eeg.mpl",
       "run": "1",
-      "session": "01",
-      "subject": "15"
-    },
-    {
-      "datatype": "eeg",
-      "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-14\\ses-02\\eeg\\sub-14_ses-02_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-14\\ses-02\\eeg\\sub-14_ses-02_task-gonogo_run-1_eeg.mpl",
-      "run": "1",
-      "session": "02",
+      "session": "03",
       "subject": "14"
     },
     {
       "datatype": "eeg",
       "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-14\\ses-01\\eeg\\sub-14_ses-01_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-14\\ses-01\\eeg\\sub-14_ses-01_task-gonogo_run-1_eeg.mpl",
+      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-13\\ses-03\\eeg\\sub-13_ses-03_task-gonogo_run-1_eeg.mpl",
+      "relative_path": "sub-13\\ses-03\\eeg\\sub-13_ses-03_task-gonogo_run-1_eeg.mpl",
       "run": "1",
-      "session": "01",
-      "subject": "14"
-    },
-    {
-      "datatype": "eeg",
-      "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-13\\ses-02\\eeg\\sub-13_ses-02_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-13\\ses-02\\eeg\\sub-13_ses-02_task-gonogo_run-1_eeg.mpl",
-      "run": "1",
-      "session": "02",
-      "subject": "13"
-    },
-    {
-      "datatype": "eeg",
-      "extension": ".mpl",
-      "path": "D:\\Proyectos\\MEDUSA\\medusa-analyzer-KEOPS\\sample_data\\pruebas_bids\\sub-13\\ses-01\\eeg\\sub-13_ses-01_task-gonogo_run-1_eeg.mpl",
-      "relative_path": "sub-13\\ses-01\\eeg\\sub-13_ses-01_task-gonogo_run-1_eeg.mpl",
-      "run": "1",
-      "session": "01",
+      "session": "03",
       "subject": "13"
     }
   ]

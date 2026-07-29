@@ -246,17 +246,20 @@ class EEGReportWidget(ReportWidget):
         else:
             selection_mode = "none"
         segmentation_strategy = segmentation.get("segmentation_strategy")
-        if segmentation_strategy not in {"window", "onset"}:
-            segmentation_strategy = "window"
-        strategy_text = "Window-based" if segmentation_strategy == "window" else "Onset-based"
+        if segmentation_strategy in {"window", "window-based"}:
+            segmentation_strategy = "window-based"
+        elif segmentation_strategy in {"onset", "onset-based"}:
+            segmentation_strategy = "onset-based"
+        else:
+            segmentation_strategy = "window-based"
+        strategy_text = "Window-based" if segmentation_strategy == "window-based" else "Onset-based"
 
-        def _normalization_text(config: dict[str, Any], include_baseline: bool) -> str:
+        def _normalization_text(config: dict[str, Any], onset_config: dict[str, Any] | None = None) -> str:
             if not config.get("enabled"):
                 return "Disabled"
             text = "Z-score" if config.get("mode") == "mean_std" else "Mean"
-            baseline = config.get("baseline_window_ms", {})
-            if include_baseline:
-                text = f"{text}, baseline {baseline.get('start')} to {baseline.get('end')} ms"
+            if onset_config is not None:
+                text = f"{text}, baseline {onset_config.get('baseline_start')} to {onset_config.get('baseline_end')} ms"
             return text
 
         threshold_text = "Disabled"
@@ -270,21 +273,17 @@ class EEGReportWidget(ReportWidget):
         def _duration_epoch_text(config: dict[str, Any]) -> str:
             return (
                 f"{config.get('duration_epoch_length_ms')} ms, "
-                f"overlap {config.get('stride_percent')}%, "
-                f"average {'Yes' if config.get('average_epochs') else 'No'}"
+                f"overlap {config.get('stride_percent')}%"
             )
 
         def _onset_epoch_text(config: dict[str, Any]) -> str:
-            window = config.get("epoch_window_ms") or {}
             return (
-                f"{window.get('start')} to {window.get('end')} ms, "
-                f"stride {config.get('stride_percent')}%, "
-                f"average {'Yes' if config.get('average_epochs') else 'No'}"
+                f"{config.get('start')} to {config.get('end')} ms"
             )
 
         if selection_mode == "nested":
-            duration_epoch = epoch_parameters.get("duration") or {}
-            instant_epoch = epoch_parameters.get("instant") or {}
+            duration_epoch = epoch_parameters.get("duration_events") or {}
+            instant_epoch = epoch_parameters.get("instant_events") or {}
             nested_groups = [group for group in event_groups if group.get("base_event")]
             has_duration = any(group.get("duration_events") for group in nested_groups)
             has_instant = any(group.get("instant_events") for group in nested_groups)
@@ -298,15 +297,15 @@ class EEGReportWidget(ReportWidget):
                 epoch_text = "Mixed nested event types are not supported"
                 normalization_text = "Mixed nested event types are not supported"
             elif has_duration:
-                if segmentation_strategy == "onset":
-                    epoch_text = f"Duration onset {_onset_epoch_text(duration_epoch)}"
-                    normalization_text = f"Duration: {_normalization_text(duration_normalization, True)}"
+                if segmentation_strategy == "onset-based":
+                    epoch_text = f"Duration onset {_onset_epoch_text(instant_epoch)}"
+                    normalization_text = f"Duration: {_normalization_text(duration_normalization, instant_epoch)}"
                 else:
                     epoch_text = f"Duration window {_duration_epoch_text(duration_epoch)}"
-                    normalization_text = f"Duration: {_normalization_text(duration_normalization, False)}"
+                    normalization_text = f"Duration: {_normalization_text(duration_normalization)}"
             elif has_instant:
                 epoch_text = f"Instant onset {_onset_epoch_text(instant_epoch)}"
-                normalization_text = f"Instant: {_normalization_text(instant_normalization, True)}"
+                normalization_text = f"Instant: {_normalization_text(instant_normalization, instant_epoch)}"
                 strategy_text = "Onset-based"
             else:
                 epoch_text = "n/a"
@@ -324,20 +323,21 @@ class EEGReportWidget(ReportWidget):
         if selection_mode == "duration":
             events_text = ", ".join(selected_duration) or "None"
             mode_text = "Duration events"
-            duration_epoch = epoch_parameters.get("duration") or {}
-            if segmentation_strategy == "onset":
-                epoch_text = _onset_epoch_text(duration_epoch)
-                normalization_text = _normalization_text(duration_normalization, True)
+            duration_epoch = epoch_parameters.get("duration_events") or {}
+            instant_epoch = epoch_parameters.get("instant_events") or {}
+            if segmentation_strategy == "onset-based":
+                epoch_text = _onset_epoch_text(instant_epoch)
+                normalization_text = _normalization_text(duration_normalization, instant_epoch)
             else:
                 epoch_text = _duration_epoch_text(duration_epoch)
-                normalization_text = _normalization_text(duration_normalization, False)
+                normalization_text = _normalization_text(duration_normalization)
         elif selection_mode == "instant":
             events_text = ", ".join(selected_instant) or "None"
             mode_text = "Instant events"
             strategy_text = "Onset-based"
-            instant_epoch = epoch_parameters.get("instant") or {}
+            instant_epoch = epoch_parameters.get("instant_events") or {}
             epoch_text = _onset_epoch_text(instant_epoch)
-            normalization_text = _normalization_text(instant_normalization, True)
+            normalization_text = _normalization_text(instant_normalization, instant_epoch)
         else:
             events_text = "None"
             mode_text = "None"

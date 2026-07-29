@@ -1,4 +1,5 @@
 import json
+from math import ceil
 import unittest
 from pathlib import Path
 
@@ -68,10 +69,12 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
 
         self.assertFalse(hasattr(widget, "_epoch_parameters"))
         self.assertFalse(hasattr(widget, "_normalization_parameters"))
-        self.assertEqual(state["segmentation"]["epoch_parameters"], {"duration": {}, "instant": {}})
+        self.assertEqual(state["segmentation"]["epoch_parameters"], {"duration_events": {}, "instant_events": {}})
         self.assertEqual(state["segmentation"]["normalization"], {"duration": {}, "instant": {}})
         self.assertEqual(widget.independent_mode_button.property("role"), "segmentation-mode-button")
-        self.assertEqual(widget.epoch_duration_target_button.property("role"), "segmentation-target-button")
+        self.assertFalse(hasattr(widget, "epoch_target_panel"))
+        self.assertFalse(hasattr(widget, "epoch_start"))
+        self.assertFalse(hasattr(widget, "duration_epoch_length"))
         self.assertTrue(widget.nested_mode_button.isEnabled())
 
         widget.nested_mode_button.click()
@@ -85,7 +88,7 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         widget._sync()
         self.app.processEvents()
 
-        self.assertFalse(widget.epoch_target_panel.isVisible())
+        self.assertFalse(hasattr(widget, "epoch_target_panel"))
         self.assertFalse(widget.normalization_target_panel.isVisible())
         add_instant_buttons = [
             button
@@ -149,12 +152,10 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         )
         self.assertFalse(any(frame.objectName() == "summaryDurationChip" for frame in widget.findChildren(QFrame)))
 
-        self.assertTrue(widget.epoch_start.isVisible())
-        self.assertFalse(widget.duration_epoch_length.isVisible())
-        widget.epoch_start.setValue(-120)
-        widget.epoch_end.setValue(380)
-        widget.stride.setValue(0)
-        widget.average_epochs.setChecked(False)
+        self.assertTrue(widget.onset_segmentation_widget.isVisible())
+        self.assertFalse(widget.window_segmentation_widget.isVisible())
+        widget.onset_segmentation_widget.window_start_slider.setValue(-120)
+        widget.onset_segmentation_widget.window_end_slider.setValue(380)
         self.app.processEvents()
 
         segmentation = state["segmentation"]
@@ -168,21 +169,21 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         self.assertNotIn("epoch_window_ms", segmentation)
         self.assertNotIn("duration_epoch_length_ms", segmentation)
         self.assertNotIn("stride_percent", segmentation)
-        self.assertNotIn("average_epochs", segmentation)
-        self.assertEqual(segmentation["epoch_parameters"]["duration"], {})
+        self.assertEqual(segmentation["epoch_parameters"]["duration_events"], {})
         self.assertEqual(
-            segmentation["epoch_parameters"]["instant"]["epoch_window_ms"],
-            {"start": -120, "end": 380},
+            segmentation["epoch_parameters"]["instant_events"],
+            {"start": -120, "end": 380, "baseline_start": -300, "baseline_end": 0},
         )
-        self.assertEqual(segmentation["epoch_parameters"]["instant"]["stride_percent"], 0)
-        self.assertFalse(segmentation["epoch_parameters"]["instant"]["average_epochs"])
+        self.assertEqual(segmentation["segmentation_strategy"], "onset-based")
 
         widget.normalization_enabled.setChecked(True)
         widget.normalization_mode.setCurrentIndex(widget.normalization_mode.findData("mean_std"))
-        widget.baseline_start.setValue(-50)
-        widget.baseline_end.setValue(0)
+        widget.onset_segmentation_widget.baseline_start_slider.setValue(-50)
+        widget.onset_segmentation_widget.baseline_end_slider.setValue(0)
         self.app.processEvents()
-        self.assertTrue(widget.baseline_start.isVisible())
+        self.assertFalse(hasattr(widget, "baseline_start"))
+        self.assertFalse(hasattr(widget, "baseline_end"))
+        self.assertTrue(widget.normalization_baseline_hint.isVisible())
 
         segmentation = state["segmentation"]
         self.assertEqual(segmentation["normalization"]["duration"], {})
@@ -191,8 +192,11 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
             {
                 "enabled": True,
                 "mode": "mean_std",
-                "baseline_window_ms": {"start": -50, "end": 0},
             },
+        )
+        self.assertEqual(
+            segmentation["epoch_parameters"]["instant_events"],
+            {"start": -120, "end": 380, "baseline_start": -50, "baseline_end": 0},
         )
         self.assertEqual(widget.normalization_mode.itemText(widget.normalization_mode.findData("mean_std")), "Z-score")
         self.assertTrue(widget.can_continue())
@@ -207,7 +211,14 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
             / "widgets"
             / "eeg_segmentation_widget.py"
         )
-        self.assertNotIn("setStyleSheet", widget_path.read_text(encoding="utf-8"))
+        widget_source = widget_path.read_text(encoding="utf-8")
+        self.assertNotIn("setStyleSheet", widget_source)
+        self.assertNotIn("Minimum 250 Hz (Nyquist).", widget_source)
+        self.assertNotIn("Increasing overlap makes consecutive epochs overlap more.", widget_source)
+        self.assertNotIn("By default, the baseline ends at the onset.", widget_source)
+        self.assertIn("Duration of each window used to segment duration events.", widget_source)
+        self.assertIn("Percentage of each epoch shared with the next epoch.", widget_source)
+        self.assertIn("End of the baseline interval relative to the onset.", widget_source)
         segmentation_defaults = _eeg_defaults()["segmentation"]
         self.assertNotIn("selection_mode", segmentation_defaults)
         self.assertNotIn("selected_duration_events", segmentation_defaults)
@@ -218,7 +229,13 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         self.assertNotIn("epoch_window_ms", segmentation_defaults)
         self.assertNotIn("duration_epoch_length_ms", segmentation_defaults)
         self.assertNotIn("stride_percent", segmentation_defaults)
-        self.assertNotIn("average_epochs", segmentation_defaults)
+        self.assertEqual(segmentation_defaults["segmentation_strategy"], "window-based")
+        self.assertEqual(
+            segmentation_defaults["epoch_parameters"]["instant_events"],
+            {"start": -300, "end": 700, "baseline_start": -300, "baseline_end": 0},
+        )
+        self.assertNotIn("duration", segmentation_defaults["epoch_parameters"])
+        self.assertNotIn("instant", segmentation_defaults["epoch_parameters"])
 
     def test_independent_mode_stores_selection_as_event_group(self):
         state = _loaded_state()
@@ -231,13 +248,13 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
 
         segmentation = state["segmentation"]
         self.assertEqual(segmentation["segmentation_mode"], "independent")
-        self.assertEqual(segmentation["segmentation_strategy"], "window")
+        self.assertEqual(segmentation["segmentation_strategy"], "window-based")
         self.assertTrue(widget.strategy_panel.isVisible())
         self.assertTrue(widget.window_strategy_button.isVisible())
         self.assertTrue(widget.window_strategy_button.isChecked())
         self.assertTrue(widget.window_segmentation_widget.isVisible())
-        self.assertFalse(widget.epoch_start.isVisible())
-        self.assertTrue(widget.duration_epoch_length.isVisible())
+        self.assertFalse(hasattr(widget, "epoch_start"))
+        self.assertFalse(hasattr(widget, "duration_epoch_length"))
         self.assertEqual(
             segmentation["event_groups"],
             [{
@@ -259,47 +276,97 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         widget.duration_events_list.item(0).setSelected(True)
         self.app.processEvents()
 
-        widget.duration_epoch_length.setValue(1400)
-        widget.stride.setValue(35)
+        self.assertEqual(widget.window_segmentation_widget.epoch_slider.minimum(), 100)
+        self.assertGreater(widget.window_segmentation_widget.epoch_slider.maximum(), 1_000_000)
+        self.assertEqual(widget.window_segmentation_widget.diagram.VISUAL_FULL_WIDTH_EPOCH_MS, 60000)
+        self.assertGreaterEqual(widget.window_segmentation_widget.diagram.minimumHeight(), 315)
+        self.assertEqual(widget.window_segmentation_widget.overlap_slider.maximum(), 99)
+        self.assertFalse(hasattr(widget.window_segmentation_widget, "epoch_value"))
+        diagram = widget.window_segmentation_widget.diagram
+        self.assertEqual(diagram._epoch_width(1000, 60000), 1000 / diagram.EPOCH_COUNT)
+        self.assertLessEqual(ceil(1000 / diagram._epoch_width(1000, 1000)), 18)
+        self.assertGreater(ceil(1000 / diagram._epoch_width(1000, 1000)), diagram.EPOCH_COUNT)
+        visible_indices = diagram._visible_window_indices(1000)
+        self.assertEqual(visible_indices[-1], 999)
+        self.assertLessEqual(len(visible_indices), diagram.MAX_DRAWN_WINDOWS + 1)
+        self.assertEqual(diagram.OVERLAP_LABEL_MIN_WIDTH, 10.0)
+        visual_span = widget.onset_segmentation_widget.diagram._visual_span([250, 740], 0, 1000)
+        left_negative = 250 - widget.onset_segmentation_widget.diagram._offset_to_x(250, -300, visual_span)
+        left_positive = widget.onset_segmentation_widget.diagram._offset_to_x(250, 300, visual_span) - 250
+        right_negative = 740 - widget.onset_segmentation_widget.diagram._offset_to_x(740, -300, visual_span)
+        right_positive = widget.onset_segmentation_widget.diagram._offset_to_x(740, 300, visual_span) - 740
+        self.assertAlmostEqual(left_negative, left_positive)
+        self.assertAlmostEqual(left_negative, right_negative)
+        self.assertAlmostEqual(left_negative, right_positive)
+
+        widget.window_segmentation_widget.epoch_slider.setValue(1400)
+        widget.window_segmentation_widget.overlap_slider.setValue(35)
         self.app.processEvents()
         self.assertEqual(widget.window_segmentation_widget.epoch_slider.value(), 1400)
         self.assertEqual(widget.window_segmentation_widget.overlap_slider.value(), 35)
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"]["duration_epoch_length_ms"], 1400)
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"]["stride_percent"], 35)
 
         widget.window_segmentation_widget.epoch_slider.setValue(1800)
-        widget.window_segmentation_widget.overlap_slider.setValue(55)
+        widget.window_segmentation_widget.overlap_slider.setValue(99)
         self.app.processEvents()
-        self.assertEqual(widget.duration_epoch_length.value(), 1800)
-        self.assertEqual(widget.stride.value(), 55)
-        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration"]["duration_epoch_length_ms"], 1800)
-        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration"]["stride_percent"], 55)
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"]["duration_epoch_length_ms"], 1800)
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"]["stride_percent"], 99)
+
+        widget.window_segmentation_widget.epoch_slider.setValue(125000)
+        self.app.processEvents()
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"]["duration_epoch_length_ms"], 125000)
 
         widget.onset_strategy_button.click()
         self.app.processEvents()
-        self.assertEqual(state["segmentation"]["segmentation_strategy"], "onset")
+        self.assertEqual(state["segmentation"]["segmentation_strategy"], "onset-based")
         self.assertFalse(widget.window_segmentation_widget.isVisible())
         self.assertTrue(widget.onset_segmentation_widget.isVisible())
-        self.assertTrue(widget.epoch_start.isVisible())
-        self.assertFalse(widget.duration_epoch_length.isVisible())
+        self.assertFalse(hasattr(widget, "epoch_start"))
+        self.assertFalse(hasattr(widget, "duration_epoch_length"))
+        self.assertLess(widget.onset_segmentation_widget.window_start_slider.minimum(), -1_000_000)
+        self.assertGreater(widget.onset_segmentation_widget.window_end_slider.maximum(), 1_000_000)
+        self.assertLess(widget.onset_segmentation_widget.baseline_start_slider.minimum(), -1_000_000)
+        self.assertGreater(widget.onset_segmentation_widget.baseline_end_slider.maximum(), 1_000_000)
+        self.assertEqual(widget.onset_segmentation_widget.diagram.VISUAL_TIME_LIMIT_MS, 60000)
+        self.assertEqual(widget.onset_segmentation_widget.window_start_slider.value(), -300)
+        self.assertEqual(widget.onset_segmentation_widget.window_end_slider.value(), 700)
+        self.assertEqual(widget.onset_segmentation_widget.baseline_start_slider.value(), -300)
+        self.assertEqual(widget.onset_segmentation_widget.baseline_end_slider.value(), 0)
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"], {})
+        self.assertEqual(
+            state["segmentation"]["epoch_parameters"]["instant_events"],
+            {"start": -300, "end": 700, "baseline_start": -300, "baseline_end": 0},
+        )
 
-        widget.epoch_start.setValue(-200)
-        widget.epoch_end.setValue(600)
+        widget.onset_segmentation_widget.window_start_slider.setValue(-200)
+        widget.onset_segmentation_widget.window_end_slider.setValue(600)
         widget.normalization_enabled.setChecked(True)
-        widget.baseline_start.setValue(-100)
-        widget.baseline_end.setValue(0)
+        widget.onset_segmentation_widget.baseline_start_slider.setValue(-100)
+        widget.onset_segmentation_widget.baseline_end_slider.setValue(0)
         self.app.processEvents()
 
         self.assertEqual(
-            state["segmentation"]["epoch_parameters"]["duration"]["epoch_window_ms"],
-            {"start": -200, "end": 600},
+            state["segmentation"]["epoch_parameters"]["instant_events"],
+            {"start": -200, "end": 600, "baseline_start": -100, "baseline_end": 0},
         )
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"], {})
         self.assertEqual(
-            state["segmentation"]["normalization"]["duration"]["baseline_window_ms"],
-            {"start": -100, "end": 0},
+            state["segmentation"]["normalization"]["duration"],
+            {"enabled": True, "mode": "mean_std"},
         )
         self.assertEqual(widget.onset_segmentation_widget.window_start_slider.value(), -200)
         self.assertEqual(widget.onset_segmentation_widget.window_end_slider.value(), 600)
         self.assertEqual(widget.onset_segmentation_widget.baseline_start_slider.value(), -100)
         self.assertEqual(widget.onset_segmentation_widget.baseline_end_slider.value(), 0)
+        self.assertEqual(
+            widget.onset_segmentation_widget.baseline_start_slider.maximum(),
+            widget.onset_segmentation_widget.baseline_end_slider.value() - 1,
+        )
+        self.assertEqual(
+            widget.onset_segmentation_widget.baseline_end_slider.minimum(),
+            widget.onset_segmentation_widget.baseline_start_slider.value() + 1,
+        )
 
         widget.onset_segmentation_widget.window_start_slider.setValue(-150)
         widget.onset_segmentation_widget.window_end_slider.setValue(500)
@@ -307,19 +374,160 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         widget.onset_segmentation_widget.baseline_end_slider.setValue(-25)
         self.app.processEvents()
 
-        self.assertEqual(widget.epoch_start.value(), -150)
-        self.assertEqual(widget.epoch_end.value(), 500)
-        self.assertEqual(widget.baseline_start.value(), -125)
-        self.assertEqual(widget.baseline_end.value(), -25)
         self.assertEqual(
-            state["segmentation"]["epoch_parameters"]["duration"]["epoch_window_ms"],
-            {"start": -150, "end": 500},
+            state["segmentation"]["epoch_parameters"]["instant_events"],
+            {"start": -150, "end": 500, "baseline_start": -125, "baseline_end": -25},
+        )
+        self.assertNotIn("baseline_window_ms", state["segmentation"]["normalization"]["duration"])
+        self.assertTrue(widget.normalization_baseline_hint.isVisible())
+        self.assertTrue(widget.can_continue())
+        self.assertEqual(
+            widget.onset_segmentation_widget.window_start_slider.maximum(),
+            widget.onset_segmentation_widget.window_end_slider.value() - 1,
         )
         self.assertEqual(
-            state["segmentation"]["normalization"]["duration"]["baseline_window_ms"],
-            {"start": -125, "end": -25},
+            widget.onset_segmentation_widget.window_end_slider.minimum(),
+            widget.onset_segmentation_widget.window_start_slider.value() + 1,
         )
-        self.assertTrue(widget.baseline_start.isVisible())
+
+        widget.normalization_enabled.setChecked(False)
+        self.app.processEvents()
+        widget.onset_segmentation_widget.window_end_slider.setValue(-200)
+        self.app.processEvents()
+        self.assertEqual(widget.onset_segmentation_widget.window_end_slider.value(), -149)
+        self.assertEqual(widget.onset_segmentation_widget.diagram.window_end_ms, -149)
+        self.assertFalse(widget.onset_segmentation_widget.diagram.window_invalid)
+        self.assertEqual(widget.onset_segmentation_widget.window_end_slider.property("status"), "ok")
+        self.assertTrue(widget.can_continue())
+
+        widget.onset_segmentation_widget.window_end_slider.setValue(500)
+        widget.normalization_enabled.setChecked(True)
+        widget.onset_segmentation_widget.baseline_end_slider.setValue(-200)
+        self.app.processEvents()
+        self.assertEqual(widget.onset_segmentation_widget.baseline_end_slider.value(), -124)
+        self.assertEqual(widget.onset_segmentation_widget.diagram.baseline_end_ms, -124)
+        self.assertFalse(widget.onset_segmentation_widget.diagram.baseline_invalid)
+        self.assertEqual(widget.onset_segmentation_widget.baseline_end_slider.property("status"), "ok")
+        self.assertTrue(widget.can_continue())
+
+    def test_resampling_allows_any_target_frequency_and_updates_broadband(self):
+        state = _loaded_state()
+        state["broadband"] = {
+            "id": "broadband",
+            "title": "Broadband",
+            "enabled": True,
+            "low_cut": 0.1,
+            "high_cut": 125.0,
+        }
+        state["preprocessing"] = {
+            "selected_frequency_bands": [
+                {"id": "alpha", "title": "Alpha", "enabled": True, "low_cut": 8.0, "high_cut": 13.0},
+                {"id": "broadband", "title": "Broadband", "enabled": True, "low_cut": 0.1, "high_cut": 125.0},
+            ],
+        }
+        state["feature_params"] = {
+            "relative_band_power": {
+                "selected_frequency_bands": [
+                    {"id": "broadband", "title": "Broadband", "enabled": True, "low_cut": 0.1, "high_cut": 125.0},
+                ],
+            },
+        }
+        widget = EEGSegmentationWidget({}, _eeg_defaults(), state)
+        widget.show()
+        self.app.processEvents()
+
+        self.assertEqual(widget.target_sampling_frequency.minimum(), 1)
+        self.assertEqual(
+            widget.target_sampling_frequency.maximum(),
+            widget.MAX_TARGET_SAMPLING_FREQUENCY_HZ,
+        )
+
+        widget.duration_events_list.item(0).setSelected(True)
+        widget.resampling_enabled.setChecked(True)
+        widget.target_sampling_frequency.setValue(1000)
+        self.app.processEvents()
+
+        self.assertEqual(
+            state["segmentation"]["resampling"],
+            {"enabled": True, "target_sampling_frequency": 1000},
+        )
+        self.assertEqual(state["broadband"]["high_cut"], 500.0)
+        preprocessing_broadband = next(
+            band for band in state["preprocessing"]["selected_frequency_bands"]
+            if band["id"] == "broadband"
+        )
+        self.assertEqual(preprocessing_broadband["high_cut"], 500.0)
+        relative_broadband = state["feature_params"]["relative_band_power"]["selected_frequency_bands"][0]
+        self.assertEqual(relative_broadband["high_cut"], 500.0)
+        self.assertTrue(widget.can_continue())
+
+    def test_resampling_clamps_filters_and_removes_out_of_range_bands(self):
+        state = _loaded_state()
+        state["broadband"] = {
+            "id": "broadband",
+            "title": "Broadband",
+            "enabled": True,
+            "low_cut": 0.1,
+            "high_cut": 125.0,
+        }
+        state["preprocessing"] = {
+            "filters": {
+                "bandpass": {
+                    "enabled": True,
+                    "filter_type": "bandpass",
+                    "filter_design": "fir",
+                    "low_cut": 1.0,
+                    "high_cut": 70.0,
+                    "order": 1000,
+                    "window": "hamming",
+                },
+                "notch": {
+                    "enabled": True,
+                    "filter_type": "bandstop",
+                    "filter_design": "fir",
+                    "low_cut": 75.0,
+                    "high_cut": 77.0,
+                    "order": 1001,
+                    "window": "hamming",
+                },
+            },
+            "selected_frequency_bands": [
+                {"id": "alpha", "title": "Alpha", "enabled": True, "low_cut": 8.0, "high_cut": 13.0},
+                {"id": "high_beta", "title": "High beta", "enabled": True, "low_cut": 55.0, "high_cut": 75.0},
+                {"id": "broadband", "title": "Broadband", "enabled": True, "low_cut": 0.1, "high_cut": 125.0},
+            ],
+        }
+        state["feature_params"] = {
+            "relative_band_power": {
+                "selected_frequency_bands": [
+                    {"id": "alpha", "title": "Alpha", "enabled": True, "low_cut": 8.0, "high_cut": 13.0},
+                    {"id": "high_beta", "title": "High beta", "enabled": True, "low_cut": 55.0, "high_cut": 75.0},
+                    {"id": "broadband", "title": "Broadband", "enabled": True, "low_cut": 0.1, "high_cut": 125.0},
+                ],
+            },
+        }
+        widget = EEGSegmentationWidget({}, _eeg_defaults(), state)
+        widget.show()
+        self.app.processEvents()
+
+        widget.duration_events_list.item(0).setSelected(True)
+        widget.resampling_enabled.setChecked(True)
+        widget.target_sampling_frequency.setValue(120)
+        self.app.processEvents()
+
+        self.assertEqual(state["broadband"]["high_cut"], 60.0)
+        self.assertEqual(state["preprocessing"]["filters"]["bandpass"]["high_cut"], 60.0)
+        self.assertEqual(state["preprocessing"]["filters"]["notch"]["high_cut"], 60.0)
+        self.assertLess(state["preprocessing"]["filters"]["notch"]["low_cut"], 60.0)
+        self.assertEqual(
+            [band["id"] for band in state["preprocessing"]["selected_frequency_bands"]],
+            ["alpha", "broadband"],
+        )
+        self.assertEqual(state["preprocessing"]["selected_frequency_bands"][-1]["high_cut"], 60.0)
+        self.assertEqual(
+            [band["id"] for band in state["feature_params"]["relative_band_power"]["selected_frequency_bands"]],
+            ["alpha", "broadband"],
+        )
         self.assertTrue(widget.can_continue())
 
     def test_instant_events_force_onset_strategy_without_window_preview(self):
@@ -331,13 +539,46 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         widget.instant_events_list.item(0).setSelected(True)
         self.app.processEvents()
 
-        self.assertEqual(state["segmentation"]["segmentation_strategy"], "onset")
+        self.assertEqual(state["segmentation"]["segmentation_strategy"], "onset-based")
         self.assertFalse(widget.window_strategy_button.isVisible())
         self.assertTrue(widget.onset_strategy_button.isChecked())
         self.assertFalse(widget.window_segmentation_widget.isVisible())
         self.assertTrue(widget.onset_segmentation_widget.isVisible())
-        self.assertTrue(widget.epoch_start.isVisible())
-        self.assertFalse(widget.duration_epoch_length.isVisible())
+        self.assertFalse(hasattr(widget, "epoch_start"))
+        self.assertFalse(hasattr(widget, "duration_epoch_length"))
+        self.assertFalse(hasattr(widget, "baseline_start"))
+        self.assertFalse(hasattr(widget, "baseline_end"))
+        self.assertEqual(widget.onset_segmentation_widget.window_start_slider.value(), -300)
+        self.assertEqual(widget.onset_segmentation_widget.window_end_slider.value(), 700)
+        self.assertEqual(widget.onset_segmentation_widget.baseline_start_slider.value(), -300)
+        self.assertEqual(widget.onset_segmentation_widget.baseline_end_slider.value(), 0)
+        self.assertEqual(state["segmentation"]["epoch_parameters"]["duration_events"], {})
+        self.assertEqual(
+            state["segmentation"]["epoch_parameters"]["instant_events"],
+            {"start": -300, "end": 700, "baseline_start": -300, "baseline_end": 0},
+        )
+        self.assertFalse(hasattr(widget.onset_segmentation_widget, "window_start_value"))
+        self.assertFalse(hasattr(widget.onset_segmentation_widget, "window_end_value"))
+        self.assertFalse(hasattr(widget.onset_segmentation_widget, "baseline_start_value"))
+        self.assertFalse(hasattr(widget.onset_segmentation_widget, "baseline_end_value"))
+
+        widget.onset_segmentation_widget.window_end_slider.setValue(-350)
+        self.app.processEvents()
+        self.assertEqual(widget.onset_segmentation_widget.window_end_slider.value(), -299)
+        self.assertEqual(widget.onset_segmentation_widget.diagram.window_end_ms, -299)
+        self.assertFalse(widget.onset_segmentation_widget.diagram.window_invalid)
+        self.assertEqual(widget.onset_segmentation_widget.window_start_slider.property("status"), "ok")
+        self.assertTrue(widget.can_continue())
+
+        widget.onset_segmentation_widget.window_end_slider.setValue(700)
+        widget.normalization_enabled.setChecked(True)
+        widget.onset_segmentation_widget.baseline_end_slider.setValue(-350)
+        self.app.processEvents()
+        self.assertEqual(widget.onset_segmentation_widget.baseline_end_slider.value(), -299)
+        self.assertEqual(widget.onset_segmentation_widget.diagram.baseline_end_ms, -299)
+        self.assertFalse(widget.onset_segmentation_widget.diagram.baseline_invalid)
+        self.assertEqual(widget.onset_segmentation_widget.baseline_end_slider.property("status"), "ok")
+        self.assertTrue(widget.can_continue())
 
     def test_nested_mode_is_unavailable_only_for_single_duration_without_instant_events(self):
         invalid_state = _loaded_state_with_events(["full_recording"], [])
@@ -472,15 +713,15 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         duration_widget._sync()
         self.app.processEvents()
 
-        self.assertFalse(duration_widget.epoch_target_panel.isVisible())
+        self.assertFalse(hasattr(duration_widget, "epoch_target_panel"))
         self.assertFalse(duration_widget.normalization_target_panel.isVisible())
-        self.assertTrue(duration_widget.duration_epoch_length.isVisible())
-        self.assertFalse(duration_widget.epoch_start.isVisible())
-        self.assertEqual(duration_state["segmentation"]["segmentation_strategy"], "window")
+        self.assertTrue(duration_widget.window_segmentation_widget.isVisible())
+        self.assertFalse(duration_widget.onset_segmentation_widget.isVisible())
+        self.assertEqual(duration_state["segmentation"]["segmentation_strategy"], "window-based")
         self.assertTrue(duration_widget.window_segmentation_widget.isVisible())
         self.assertEqual(duration_widget._epoch_target, "duration")
         self.assertEqual(duration_widget._normalization_target, "duration")
-        self.assertEqual(duration_state["segmentation"]["epoch_parameters"]["instant"], {})
+        self.assertEqual(duration_state["segmentation"]["epoch_parameters"]["instant_events"], {})
         self.assertEqual(duration_state["segmentation"]["normalization"]["instant"], {})
 
         instant_events = [f"instant_child_{index}" for index in range(7)]
@@ -504,16 +745,16 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         instant_widget.normalization_enabled.setChecked(True)
         self.app.processEvents()
 
-        self.assertFalse(instant_widget.epoch_target_panel.isVisible())
+        self.assertFalse(hasattr(instant_widget, "epoch_target_panel"))
         self.assertFalse(instant_widget.normalization_target_panel.isVisible())
-        self.assertTrue(instant_widget.epoch_start.isVisible())
-        self.assertFalse(instant_widget.duration_epoch_length.isVisible())
-        self.assertTrue(instant_widget.baseline_start.isVisible())
-        self.assertEqual(instant_state["segmentation"]["segmentation_strategy"], "onset")
+        self.assertTrue(instant_widget.onset_segmentation_widget.isVisible())
+        self.assertFalse(instant_widget.window_segmentation_widget.isVisible())
+        self.assertTrue(instant_widget.normalization_baseline_hint.isVisible())
+        self.assertEqual(instant_state["segmentation"]["segmentation_strategy"], "onset-based")
         self.assertFalse(instant_widget.window_segmentation_widget.isVisible())
         self.assertEqual(instant_widget._epoch_target, "instant")
         self.assertEqual(instant_widget._normalization_target, "instant")
-        self.assertEqual(instant_state["segmentation"]["epoch_parameters"]["duration"], {})
+        self.assertEqual(instant_state["segmentation"]["epoch_parameters"]["duration_events"], {})
         self.assertEqual(instant_state["segmentation"]["normalization"]["duration"], {})
 
     def test_nested_mode_rejects_mixed_child_event_types(self):
@@ -533,7 +774,7 @@ class EEGSegmentationWidgetTests(unittest.TestCase):
         widget._sync()
         self.app.processEvents()
 
-        self.assertFalse(widget.epoch_target_panel.isVisible())
+        self.assertFalse(hasattr(widget, "epoch_target_panel"))
         self.assertFalse(widget.normalization_target_panel.isVisible())
         self.assertFalse(widget.can_continue())
         self.assertIn(

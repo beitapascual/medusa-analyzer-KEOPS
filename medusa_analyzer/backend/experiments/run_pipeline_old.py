@@ -310,10 +310,37 @@ def segment_signal(signal, times, fs, events, state, norm = None):
             signal_base = signal[:, start_idx:end_idx]
             times_base = times[:, start_idx:end_idx]
 
+            segmentation_strategy = state['segmentation'].get('segmentation_strategy', 'window-based')
+
             # If segmentation type is 'condition'
             if base_evt['duration_events']:
-                segment_length = state['segmentation']['epoch_parameters']['duration']['duration_epoch_length_ms']
-                stride = state['segmentation']['epoch_parameters']['duration']['stride_percent']
+                if segmentation_strategy in {'onset', 'onset-based'}:
+                    onset_epoch = state['segmentation']['epoch_parameters']['instant_events']
+                    epoch_window = [onset_epoch['start'], onset_epoch['end']]
+                    baseline = [onset_epoch['baseline_start'], onset_epoch['baseline_end']]
+
+                    for evt in base_evt['duration_events']:
+                        current_evts = events[events['trial_type'] == evt]
+
+                        try:
+                            epochs_tmp = segmentation.segment_signal_around_events(
+                                times_base,
+                                signal_base,
+                                current_evts.onset,
+                                fs,
+                                epoch_window,
+                                baseline,
+                                norm=norm,
+                            )
+                        except KeyError:
+                            continue
+                        if epochs_tmp is not None:
+                            epochs[base_evt['base_event']][evt](epochs_tmp)
+                            del epochs_tmp
+                    continue
+
+                segment_length = state['segmentation']['epoch_parameters']['duration_events']['duration_epoch_length_ms']
+                stride = state['segmentation']['epoch_parameters']['duration_events']['stride_percent']
 
                 for evt in base_evt['duration_events']:
                     current_evts = events[events['trial_type'] == evt]
@@ -336,16 +363,17 @@ def segment_signal(signal, times, fs, events, state, norm = None):
                             del epochs_tmp
 
             elif base_evt['instant_events']:
-                epoch_window = state['segmentation']['epoch_parameters']['instant']['epoch_window_ms']
-                baseline = state['segmentation']['epoch_parameters']['instant']['baseline']
+                onset_epoch = state['segmentation']['epoch_parameters']['instant_events']
+                epoch_window = [onset_epoch['start'], onset_epoch['end']]
+                baseline = [onset_epoch['baseline_start'], onset_epoch['baseline_end']]
 
-                for evt in base_evt['duration_events']:
+                for evt in base_evt['instant_events']:
                     current_evts = events[events['trial_type'] == evt]
 
                     try:
                         epochs_tmp = segmentation.segment_signal_around_events(times_base, signal_base, current_evts.onset, fs,
-                                                                               [epoch_window['start'], epoch_window['end']],
-                                                                               [baseline['start'], baseline['end']],
+                                                                               epoch_window,
+                                                                               baseline,
                                                                                norm=norm)
                     except KeyError:
                         continue

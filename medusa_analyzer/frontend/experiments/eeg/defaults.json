@@ -87,21 +87,18 @@
   },
   "segmentation": {
     "segmentation_mode": "independent",
-    "segmentation_strategy": "window",
+    "segmentation_strategy": "window-based",
     "event_groups": [],
     "epoch_parameters": {
-      "duration": {
+      "duration_events": {
         "duration_epoch_length_ms": 1000,
-        "stride_percent": 0,
-        "average_epochs": false
+        "stride_percent": 0
       },
-      "instant": {
-        "epoch_window_ms": {
-          "start": -300,
-          "end": 700
-        },
-        "stride_percent": 0,
-        "average_epochs": false
+      "instant_events": {
+        "start": -300,
+        "end": 700,
+        "baseline_start": -300,
+        "baseline_end": 0
       }
     },
     "normalization": {
@@ -111,11 +108,7 @@
       },
       "instant": {
         "enabled": false,
-        "mode": "mean_std",
-        "baseline_window_ms": {
-          "start": -100,
-          "end": 0
-        }
+        "mode": "mean_std"
       }
     },
     "thresholding": {
