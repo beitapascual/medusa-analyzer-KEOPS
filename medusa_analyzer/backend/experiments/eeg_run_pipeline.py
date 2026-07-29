@@ -1,0 +1,770 @@
+import numpy as np
+from copy import deepcopy
+
+from scipy.stats import kurtosis, skew
+import csv
+from pathlib import Path
+import json
+
+from medusa.core.data.recording import Recording
+from medusa.signal import frequency_filtering, spatial_filtering, artifact_removal, segmentation, transforms
+from medusa.signal.metrics import *
+import pandas as pd
+
+def run_pipeline(state):
+    """
+    Main pipeline function of the eeg features extraction that executes preprocessing, segmentation, and parameter
+    computation for all selected files based on the provided configuration.
+    """
+
+    # Get the selected files and associated variables
+    selected_recordings = state['selected_recordings']
+    total_files = len(selected_recordings)
+    error_found = False
+
+    # Store the bands if band segmentation is enabled, otherwise use broadband
+    bands = state['preprocessing']['selected_frequency_bands']
+    # Sorted bands to have broadband in the first position
+    bands = sorted(bands, key=lambda b: 0 if b['title'].lower() == 'broadband' else 1)
+
+    # To store rejection summary and execution logs
+    rejection_summary = []
+    execution_logs = []
+
+    # Loop through each selected file
+    for idx_file, file in enumerate(selected_recordings):
+        try:
+
+            #0 Load data
+            data = build_recording(file['path'], file['datatype'])
+            datatype = file['datatype']
+            subj_id = Path(file['path']).stem
+
+            # Get information from recording
+            raw_signal = data.data[datatype].signal
+            times = data.data[datatype].times
+            fs = data.data[datatype].fs
+            n_cha = data.data[datatype].channel_set.n_channels
+            channs = data.data[datatype].channel_set.labels
+            # Events
+            base_name = Path(file['path']).name.rsplit('_', 1)[0]
+            events_path = Path(file['path']).parent.parent /  f"{base_name}_events.tsv"
+            events = pd.read_table(events_path)
+
+            # Ensure consistent sampling frequency
+            if fs != state['metadata']['sampling_frequency']:
+                raise Exception(
+                    f"[{file}] Does not have the sampling frequency of the selected pipeline."
+                    f"Expected {state['metadata']['sampling_frequency']}, but got {fs}.")
+
+            ## First step: Preprocessing
+            processed_signal = raw_signal.copy()
+            if state['preprocessing']['car'] \
+                    or any(filtro['enabled'] for filtro in state['preprocessing']['filters'].values()):
+                processed_signal = apply_preprocessing(processed_signal, fs, state['preprocessing'])
+
+            ## Second step: Get indices of the thresholding
+            if state['segmentation']["thresholding"]['enabled']:
+
+                epochs,_ = segment_signal(processed_signal, times, fs, events, state)
+
+                # Get the thresholding parameters
+                thres_k = state['segmentation']['sigma']
+                thres_samples = state['segmentation']["samples"]
+                thres_channels = state['segmentation']["channels"]
+                idx_reject = dict()
+                for base_evt, epochs_base in epochs.items():
+                    idx_reject[base_evt] = {}
+                    for evt, epochs_base_evt in epochs_base.items():
+                        # Get the indices of rejected epochs
+                        thres_mean = np.nanmean(np.nanmean(epochs_base_evt, axis=1), axis=0)
+                        thres_std = np.nanmean(np.nanstd(epochs_base_evt, axis=1), axis=0)
+                        prc_rejected, _, idx_reject[base_evt][evt] = artifact_removal.reject_noisy_segments(
+                            epochs_base_evt, thres_mean, thres_std, k=thres_k, n_samp=thres_samples, n_channels=thres_channels)
+
+                        # Store rejection summary
+                        prc_rejected = np.round(prc_rejected, 2)
+                        n_rejected = int((prc_rejected * epochs[base_evt][evt].shape[0]) / 100)
+                        rejection_summary.append({
+                            'subject': subj_id,
+                            'base_event': base_evt,
+                            'event': evt,
+                            'prc_rejected': prc_rejected,
+                            'n_rejected': n_rejected
+                        })
+
+                del epochs  # Free memory
+
+            # # Update the progress bar and labels
+            # global_progress = (i * steps_per_file + 3) / total_steps * 100
+            # self.progress.emit(int(global_progress))
+
+            ## Third step: Band segmentation
+            # For each band...
+            for j, band in enumerate(bands):
+                # Band info
+                band_name = band['title']
+                low_cut, high_cut = band['low_cut'], band['high_cut']
+
+                # Workaround to allow filtering in the Nyquist frequency
+                if high_cut == fs/2:
+                    high_cut -= 1e-6
+
+                # If the band is not broadband, apply band filtering (the broadband does not require filtering)
+                if band_name.lower() != 'broadband':
+                    processed_signal_band = (frequency_filtering.FIRFilter(
+                        state['preprocessing']['filters']['bandpass']['order'], [low_cut, high_cut],
+                        'bandpass', window=state['preprocessing']['filters']['bandpass']['window'])
+                                             .fit_transform(processed_signal.copy(), fs))
+                else:
+                    processed_signal_band = processed_signal.copy()
+
+                # # Update the progress bar and labels
+                # global_progress = (i * steps_per_file + 3 + j * steps_per_band + 1) / total_steps * 100
+                # self.progress.emit(int(global_progress))
+
+                # Deepcopy the data to avoid modifying the original data object
+                save_outputs(
+                    build_output_dict(processed_signal_band, times, channs, fs),
+                    file, band_name, None, 'preprocessed', state
+                )
+
+                ## Fourth step: Segmentation
+                epochs, times_epochs = segment_signal(processed_signal_band, times, fs, events, state)
+
+                for base_evt, epochs_base in epochs.items():
+                    for evt, epochs_base_evt in epochs_base.items():
+
+                        # # Update the progress bar and labels
+                        # global_progress = (
+                        #                               i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 1) / total_steps * 100
+                        # self.progress.emit(int(global_progress))
+
+                        ## Fifth step: Apply thresholding rejection if enabled
+                        if state['segmentation']["thresholding"]['enabled']:
+                            # If all the epochs are rejected, skip this condition
+                            if np.all(idx_reject[base_evt][evt]):
+                                a = 0
+                                # _log_with_store(
+                                #     f"⚠️ All epochs corresponding to condition '{cond}' in file '{file}' have been rejected. Skipping.",
+                                #     'warning')
+                                continue
+
+                            # Remove the rejected epochs from the epochs array
+                            epochs[base_evt][evt] = np.delete(epochs[base_evt][evt], idx_reject[base_evt][evt], axis=0)
+
+                        # # Update the progress bar and labels
+                        # global_progress = (
+                        #                               i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 2) / total_steps * 100
+                        # self.progress.emit(int(global_progress))
+
+                        ## Sixth step: Apply resampling if enabled
+                        # TODO OYE MIRAR LO DEL RESAMPLING A VER SI NECESITA ANTIALIASING!!!
+                        current_fs = fs
+                        current_times_epochs = times_epochs.copy()
+                        if epochs[base_evt][evt] is not None and state['segmentation']['resampling']['enabled']:
+                            resample_fs = state['segmentation']['resampling']['target_sampling_frequency']
+                            window = [0, (epochs[base_evt][evt].shape[1] / fs) * 1000]  # Window in ms
+                            epochs[base_evt][evt] = segmentation.resample_segments(epochs[base_evt][evt], window, resample_fs)
+                            current_fs = resample_fs
+
+                            # Recalcular el vector de tiempos para que coincida con las nuevas dimensiones de las épocas
+                            current_times_epochs = (np.arange(epochs[base_evt][evt].shape[1]) / current_fs) * 1000
+
+
+                        # # Update the progress bar and labels
+                        # global_progress = (
+                        #                               i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 3) / total_steps * 100
+                        # self.progress.emit(int(global_progress))
+
+                        # Save the segmented signals (if required), separately for each event
+                        save_outputs(
+                            build_output_dict(epochs[base_evt][evt], current_times_epochs, channs, current_fs),
+                            file, band_name, base_evt + evt, 'segmented', state
+                        )
+
+                        if n_cha == 1:
+                            epochs[base_evt][evt] = epochs[base_evt][evt][:, :, None]
+
+                        ## Seventh step: Parameter computation
+                        params = compute_parameters(epochs[base_evt][evt], current_fs, band, state)
+                        save_outputs(params, file, band_name, base_evt + evt, 'parameters', state)
+
+
+                    # # Update the progress bar and labels
+                    # global_progress = (
+                    #                               i * steps_per_file + 3 + j * steps_per_band + 1 + k * steps_per_cond + 7) / total_steps * 100
+                    # self.progress.emit(int(global_progress))
+
+        # Exception handling
+        except Exception as e:
+            a = 0
+            # error_found = True
+            # print(f"Error preprocessing {file}: {e}", 'error')
+            # self.text_progress.emit("Error")
+
+    # Save logs and summary
+    try:
+        derivatives_path = state['output_derivatives_path']
+        derivatives_path.mkdir(exist_ok=True)
+
+        # Save rejection summary to CSV
+        if rejection_summary:
+            csv_path = derivatives_path / "rejection_summary.csv"
+            with open(csv_path, mode='w', newline='') as csv_file:
+                fieldnames = ['subject', 'base_event', 'event', 'prc_rejected', 'n_rejected']
+                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in rejection_summary:
+                    writer.writerow(row)
+                row = {
+                    'subject': f"K STDs: {state['segmentation']['sigma']}",
+                    'base_event': f"Samples: {state['segmentation']['samples']}",
+                    'event': f"N Channels: {state['segmentation']['channels']}"
+                }
+                writer.writerow(row)
+            # self.log.emit(f"✅ Rejection summary saved to {csv_path}", "")
+
+        # Save execution warnings/errors to TXT
+        if execution_logs:
+            log_path = derivatives_path / "error_log.txt"
+            with open(log_path, mode='w', encoding='utf-8') as txt_file:
+                for log_entry in execution_logs:
+                    txt_file.write(log_entry + "\n")
+            # self.log.emit(f"✅ Execution logs saved to {log_path}", "")
+
+    except Exception as e:
+        a = 0
+        # self.log.emit(f"⚠️ Could not save logs/summary: {e}", "warning")
+
+    # self.text_progress.emit("Completed")
+
+    return error_found
+
+
+#################### HELPER FUNCTIONS
+
+def build_recording(path, datatype):
+    from medusa.core.data import Recording, Signal, ChannelSet, BidsInfo
+
+    with open(path) as json_data:
+        data = json.load(json_data)
+
+    rec = Recording(BidsInfo(
+        subject="dummy", session="dummy", task="dummy", run=1,
+        participant={"age": 0, "sex": "F", "handedness": "right"}))
+    cs = ChannelSet()
+    cs.add_unipolar_eeg_channels(
+        data['channels'],
+        reference="DummyRef", ground="DummyGnd")
+    sig = Signal(data['signal'],
+                     fs=data['fs'], channel_set=cs)
+    rec.add_signal(datatype, sig)
+
+    return rec
+
+def _convert(obj):
+    if isinstance(obj, np.ndarray):
+        return _convert(obj.tolist()) # Se añade recursividad
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: _convert(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_convert(v) for v in obj]
+    return obj
+
+def build_output_dict(signal, times, ch_names, fs):
+
+    output_dic = {
+        "fs": fs,
+        "channels": ch_names,
+        "times": times,
+        "signal": _convert(signal)
+    }
+    return output_dic
+
+def segment_signal(signal, times, fs, events, state):
+
+    # Get segmentation params, time vector and normalization type in a medusa-compatible format
+    if state['segmentation']['segmentation_strategy'] == 'window_based':
+        segment_length = state['segmentation']['epoch_parameters']['duration']['duration_epoch_length_ms']
+        stride = state['segmentation']['epoch_parameters']['duration']['stride_percent']
+        norm = state['segmentation']['normalization']['duration']
+    else:
+        epoch_window = state['segmentation']['epoch_parameters']['instant']['epoch_window_ms']
+        baseline = state['segmentation']['normalization']['instant']['baseline_window_ms']
+        segment_length = epoch_window['end'] - epoch_window['start'] + baseline['end'] - baseline['start']
+        norm = state['segmentation']['normalization']['instant']
+    n_samples = int(np.round((segment_length / 1000.0) * fs))
+    times_epochs = (np.arange(n_samples) / fs) * 1000
+    norm = norm['mode'] if norm['enabled'] else None
+    norm = 'z' if norm == 'mean_std' else 'dc'
+
+    epochs = dict()
+    for base_evt in state['segmentation']['event_groups']:
+        if base_evt['base_event'] == None:
+            base_evt['base_event'] = 'full_recording'
+        epochs[base_evt['base_event']] = {}
+
+        # Construcción del evento base
+        if base_evt['base_event'] == 'full_recording':
+            # Se crea un evento ficticio que abarca desde la primera muestra hasta el final.
+            # Se añade un margen (+ 1.0 seg) para asegurar que searchsorted alcance el último índice.
+            total_duration = times[-1] - times[0] + 1.0
+            current_base_evt = pd.DataFrame([{'onset': times[0], 'duration': total_duration}])
+        else:
+            current_base_evt = events[events['trial_type'] == base_evt['base_event']]
+
+        for row_base in current_base_evt.itertuples(index=False):
+            start_idx = np.searchsorted(times, row_base.onset)
+            end_idx = np.searchsorted(times, row_base.onset + row_base.duration)
+            signal_base = signal[:, start_idx:end_idx]
+            times_base = times[start_idx:end_idx]
+
+            # If segmentation type is 'condition'
+            if base_evt['duration_events']:
+
+                for evt in base_evt['duration_events']:
+                    current_evts = events[events['trial_type'] == evt]
+
+                    for row_evt in current_evts.itertuples(index=False):
+                        start_idx = np.searchsorted(times_base, row_evt.onset)
+                        end_idx = np.searchsorted(times_base, row_evt.onset + row_evt.duration)
+                        # Validar que los índices están dentro del rango y forman un segmento válido
+                        if start_idx >= len(times_base) or end_idx > len(times_base):
+                            continue  # Ignorar esta iteración y pasar al siguiente evento
+
+                        signal_evt = signal_base[:, start_idx:end_idx]
+
+                        # Get epochs for the current condition
+                        epochs_tmp = segmentation.segment_signal(
+                            signal_evt, segment_length, stride, norm=norm)
+
+                        if epochs_tmp is not None:
+                            if evt in epochs[base_evt['base_event']]:
+                                epochs[base_evt['base_event']][evt] = np.concatenate(
+                                    (epochs[base_evt['base_event']][evt], epochs_tmp), axis=0)
+                            else:
+                                epochs[base_evt['base_event']][evt] = epochs_tmp
+                            del epochs_tmp
+
+            elif base_evt['instant_events']:
+
+                for evt in base_evt['instant_events']:
+                    current_evts = events[events['trial_type'] == evt]
+
+                    try:
+                        epochs_tmp = segmentation.segment_signal_around_events(times_base, signal_base, current_evts.onset, fs,
+                                                                               [epoch_window['start'], epoch_window['end']],
+                                                                               [baseline['start'], baseline['end']],
+                                                                               norm=norm)
+                    except KeyError:
+                        continue
+                    if epochs_tmp is not None:
+                        epochs[base_evt['base_event']][evt]= epochs_tmp
+                        del epochs_tmp
+
+    # # If no epochs were found for this condition, skip it
+    # if len(epochs) == 0:
+    #     print(f"⚠️ No valid epochs for '{cond}' in file '{file}'. Skipping.", 'warning')
+    #     continue
+
+    return epochs, times_epochs
+
+
+def save_outputs(data, file, band_name, evt, key, state):
+    """
+    Guarda los resultados del pipeline en estructura semi-BIDS dentro de /derivatives.
+
+    Estructura:
+    derivatives/
+        ├── preprocessed/
+        ├── segmented/
+        └── parameters/
+    """
+
+    selected_folder = Path(state["output_derivatives_path"])
+    selected_folder.mkdir(exist_ok=True)
+
+    # Obtener info del sujeto y sesión desde el nombre del archivo base
+    filename = file['relative_path']
+    # --- Saving preprocessed signals (.rec.bson) ---
+    if key == "preprocessed":
+        output_path = selected_folder / "preprocessed" / filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        output_path = output_path.with_stem(f"{output_path.stem}_band-{band_name.replace('-', '')}")
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+        # worker.log.emit(f"✅ Preprocessed saved: {output_path}", "")
+
+    # --- Saving segmented signals (.json) ---
+    elif key == "segmented":
+        output_path = selected_folder / "segmented" / filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        output_path = output_path.with_stem(f"{output_path.stem}_band-{band_name.replace('-', '')}"
+                                            f"_segment-{evt.replace('-', '').replace('_', '')}")
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+        # worker.log.emit(f"✅ Segmented saved: {output_path}", "")
+
+    # --- Saving parameters ---
+    elif key == "parameters":
+        output_path_base = selected_folder / "parameters" / filename
+        output_path_base.parent.mkdir(parents=True, exist_ok=True)
+
+        params_dict = dict(data)
+
+        # 1) Store PSDs only in broadband
+        if band_name.lower() == 'broadband':
+            output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-psd"
+                                                f"_band-{band_name.replace('-', '')}"
+                                                f"_segment-{evt.replace('-', '').replace('_', '')}")
+
+            save_struct = {
+                'psd': np.asarray(params_dict['psd']['values']),
+                'freqs': np.asarray(params_dict['psd']['freqs'])
+            }
+
+            output_dict = {'psd': _convert(save_struct)}
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(output_dict, f)
+
+            # worker.log.emit(f"✅ Parameter saved: {outpath}", "")
+
+        # 2) Other parameters
+        for k, v in list(params_dict.items()):
+            metric_label = k.replace('_', '-')
+
+            output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-{metric_label.replace('-', '')}"
+                                                f"_band-{band_name.replace('-', '')}"
+                                                f"_segment-{evt.replace('-', '').replace('_', '')}")
+
+            if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and 'band' in v[0]:
+                for entry in v:
+                    bname = entry.get('band', 'unknown')
+                    val = np.asarray(entry.get('value'))
+
+                    output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-{metric_label.replace('-', '')}"
+                                                        f"_band-{bname.replace('-', '')}"
+                                                        f"_segment-{evt.replace('-', '').replace('_', '')}")
+
+                    output_dict = {"param": _convert(val), "info": metric_label}
+                    with open(output_path, 'w', encoding='utf-8') as f:
+                        json.dump(output_dict, f)
+
+                    # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
+
+            elif isinstance(v, dict):
+                output_dict = {"param": _convert(v), "info": metric_label}
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(output_dict, f)
+
+            else:
+                output_dict = {"param": _convert(v), "info": metric_label}
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(output_dict, f)
+
+            # worker.log.emit(f"✅ Parameter saved: {output_path}", "")
+
+
+#################### PREPROCESSING
+
+def apply_preprocessing(signal, fs, state):
+    """
+    Apply bandpass, notch filtering, and Common Average Reference (CAR).
+    """
+    # Bandpass filter
+    for filter in state['preprocessing']['filters'].values():
+        if filter['enabled']:
+            if filter['filter_type'] == 'fir':
+                signal = frequency_filtering.FIRFilter(filter['order'], [filter['low_cut'], filter['high_cut']], filter['type'],
+                                          window=filter['window']).fit_transform(signal, fs)
+            else:
+                signal = frequency_filtering.IIRFilter(filter['fir_order'], [filter['low_cut'], filter['high_cut']], filter['type'],
+                                          filt_method='sosfiltfilt').fit_transform(signal, fs)
+
+    # CAR and return
+    return spatial_filtering.car(signal) if state['preprocessing']['car'] else signal
+
+##################### COMPUTE PARAMS
+
+def compute_parameters(epochs, fs, band, state):
+    # Initialize dict that will contain all the computed parameters
+    params = {}
+
+    ## BASIC STATISTICAL PARAMETERS
+    stat_funcs = {
+        'mean': np.mean,
+        'variance': np.var,
+        'median': np.median,
+        'kurtosis': kurtosis,
+        'skewness': skew
+    }
+    # Account if only one (2D array) or multiple epoch are present (3D array)
+    axis = 0 if epochs.ndim == 2 else 1
+    # For each parameter...
+    for name, func in stat_funcs.items():
+        # If selected...
+        if name in state['selected_features']:
+            # Compute it
+            val = func(epochs, axis=axis)
+            # Store in the params dict
+            params[f"{name}"] = val
+
+    ## POWER SPECTRAL DENSITY (PSD)
+    # PSD would be computed if explicitly selected
+    if 'psd' in state['selected_features']:
+        # Use user-defined parameters for segmenting and windowing
+        segment_psd = state['feature_params']['psd']['segment_percent']
+        overlap_psd = state['feature_params']['psd']['overlap_percent']
+        window_psd = state['feature_params']['psd']['window']
+
+        # Compute PSD using specified segment and window settings
+        fxx, psd = transforms.power_spectral_density(epochs, fs, segment_psd, overlap_psd, window_psd)
+
+        # Store PSD values
+        try:
+            params['psd'] = {
+                'values': psd,
+                'freqs': fxx
+            }
+        except Exception as e:
+            print(e)
+
+    ## SPECTRAL METRICS - RELATIVE POWER
+    if band['title'].lower() == 'broadband' and 'relative_power' in state['selected_features']:
+        val = []
+
+        # The bands will be different if band segmentation is enabled or not
+        selected_bands = state['feature_params']['relative_power']['selected_frequency_bands']
+
+        # Define broadband range based on the broadband limits
+        min_val = band['low_cut']
+        max_val = band['high_cut']
+
+        # Loop through each selected band
+        for band_rp in selected_bands:
+            if band_rp["title"] != 'broadband':
+                # Define band parameters
+                band_range = [band_rp["low_cut"], band_rp["high_cut"]]
+                # Compute the metric
+                val_band = spectral.band_power(psd, fs, band_range, 'relative',[min_val, max_val])
+                val.append({"band": band_rp["title"], "value": val_band})
+
+            params[f"relative_power"] = val
+
+    ## SPECTRAL METRICS - OTHERS
+    spectral_funcs = {
+        "absolute_power": spectral.band_power,
+        "median_frequency": spectral.median_frequency,
+        "spectral_entropy": nonlinear.shannon_spectral_entropy
+    }
+
+    # For each parameter...
+    for name, func in spectral_funcs.items():
+        # If selected...
+        if name in state['selected_features']:
+            # Get the current band range
+            band_range = [band['low_cut'], band['high_cut']]
+            # Compute the metric
+            if name == 'absolute_power':
+                val = func(psd, fs, band_range, 'absolute')
+            else:
+                val = func(psd, fs, band_range)
+            # Store in the params dict
+            params[f"{name}"] = val
+
+    ## NONLINEAR METRICS
+    nonlinear_funcs = {
+        'ctm': lambda: nonlinear.central_tendency_measure(epochs, state['feature_params']['ctm']['r']),
+        'sample_entropy': lambda: nonlinear.sample_entropy(epochs,
+                                                           state['feature_params']['sample_entropy']['m'],
+                                                           state['feature_params']['sample_entropy']['r']),
+        'multiscale_sample_entropy': lambda: nonlinear.multiscale_entropy(epochs,
+                                                                          state['feature_params']['multiscale_sample_entropy']['max_scale'],
+                                                                          state['feature_params']['multiscale_sample_entropy']['m'],
+                                                                          state['feature_params']['multiscale_sample_entropy']['r']),
+        'lzc': lambda: nonlinear.lempelziv_complexity(epochs),
+        'multiscale_lzc': lambda: nonlinear.multiscale_lempelziv_complexity(epochs, state['feature_params']['multiscale_lzc']['scales'])
+    }
+
+    # For each parameter...
+    for name, func in nonlinear_funcs.items():
+        # If selected...
+        if name in state['selected_features']:
+            # Compute it
+            val = func()
+            params[f"{name}"] = val
+
+    ## CONNECTIVITY METRICS
+    connectivity_funcs = {
+        'iac': lambda: connectivity.iac(epochs, state['feature_params']['iac']['orthogonalize']),
+        'aec': lambda: connectivity.aec(epochs, state['feature_params']['aec']['orthogonalize']),
+        'plv': lambda: connectivity.plv(epochs),
+        'pli': lambda: connectivity.pli(epochs),
+        'wpli': lambda: connectivity.wpli(epochs),
+    }
+
+    # For each parameter...
+    for name, func in connectivity_funcs.items():
+        # If selected...
+        if name in state['selected_features']:
+            # Compute it
+            val = func()
+            params[f"{name}"] = val
+
+    return params
+
+
+# def load_config(files_widget, data):
+#     # BIOSIGNAL INFO
+#     biosignal_txt = files_widget.biosignalBox.currentText()
+#     biosignal = biosignal_txt.split(" ")[1]
+#     files_widget.controller.biosignal_info = files_widget.controller.biosignals[biosignal]
+#
+#     # PREPROCESSING
+#     prep_cfg = data["preprocessing"]
+#     idx_preprocessing_widget = next(
+#         (i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
+#          d.get('widget') == "PreprocessingWidget"))
+#     preproc_widget = files_widget.main_window.stackedWidget.widget(
+#         idx_preprocessing_widget)  # widget(2) is the preprocessing widget
+#     preproc_widget.minbroadBox.setValue(prep_cfg['broadband_min'])
+#     preproc_widget.maxbroadBox.setValue(prep_cfg['broadband_max'])
+#     preproc_widget.preprocessingButton.setChecked(bool(prep_cfg["apply_preprocessing"]))
+#     preproc_widget.notchCBox.setChecked(bool(prep_cfg['notch']))
+#     preproc_widget.minfreqnotchBox.setValue(
+#         prep_cfg['notch_min'] if prep_cfg['notch_min'] is not None else preproc_widget.defaults["minfreqnotch"])
+#     preproc_widget.maxfreqnotchBox.setValue(
+#         prep_cfg['notch_max'] if prep_cfg['notch_max'] is not None else preproc_widget.defaults["minfreqnotch"])
+#     preproc_widget.orderNotchBox.setValue(
+#         prep_cfg['notch_order'] if prep_cfg['notch_order'] is not None else preproc_widget.defaults["ordernotch"])
+#     preproc_widget.winnotchBox.setCurrentText(prep_cfg['notch_win'])
+#     preproc_widget.bpCBox.setChecked(bool(prep_cfg['bandpass']))
+#     preproc_widget.minfreqbpBox.setValue(
+#         prep_cfg['bp_min'] if prep_cfg['bp_min'] is not None else preproc_widget.defaults["minfreqbp"])
+#     preproc_widget.maxfreqbpBox.setValue(
+#         prep_cfg['bp_max'] if prep_cfg['bp_max'] is not None else preproc_widget.defaults["maxfreqbp"])
+#     preproc_widget.orderbpBox.setValue(
+#         prep_cfg['bp_order'] if prep_cfg['bp_order'] is not None else preproc_widget.defaults["orderbp"])
+#     preproc_widget.winbpBox.setCurrentText(prep_cfg['bp_win'])
+#     preproc_widget.carCBox.setChecked(bool(prep_cfg['car']))
+#     preproc_widget.bandCBox.setChecked(bool(prep_cfg['band_segmentation']))
+#     bands_list = prep_cfg.get("selected_bands") or []
+#     bands = bands_list[1:] if len(bands_list) > 1 else []  # Exclude 'broadband' if other bands are present
+#     if bands:
+#         preproc_widget.controller.update_band_label("segmentation", bands)
+#     # Store
+#     files_widget.main_window.controller.preproc_config = prep_cfg
+#
+#     # SEGMENTATION
+#     segm_cfg = data["segmentation"]
+#     idx_segmentation_widget = next(
+#         (i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
+#          d.get('widget') == "SegmentationWidget"))
+#     segm_widget = files_widget.main_window.stackedWidget.widget(
+#         idx_segmentation_widget)  # widget(3) is the segmentation widget
+#     segm_widget.conditionRButton.setChecked(
+#         segm_cfg['segmentation_type'] == 'condition')  # RButton, so it is exclusive with eventRButton
+#     segm_widget.trialBox.setValue(
+#         segm_cfg['trial_length'] if segm_cfg['trial_length'] is not None else segm_widget.defaults['triallength'])
+#     segm_widget.trialstrideBox.setValue(
+#         segm_cfg['trial_stride'] if segm_cfg['trial_stride'] is not None else segm_widget.defaults['trialstride'])
+#     segm_widget.winBox_1.setValue(
+#         segm_cfg['window_start'] if segm_cfg['window_start'] is not None else segm_widget.defaults['windowbox1'])
+#     segm_widget.winBox_2.setValue(
+#         segm_cfg['window_end'] if segm_cfg['window_end'] is not None else segm_widget.defaults['windowbox2'])
+#     segm_widget.normCBox.setChecked(bool(segm_cfg['norm']))
+#     if segm_cfg['norm_type'] == 'z':
+#         segm_widget.zscoreRButton.setChecked(True)  # RButton, so it is exclusive with dcRButton
+#     segm_widget.baselineCBox_1.setValue(
+#         segm_cfg['baseline_start'] if segm_cfg['baseline_start'] is not None else segm_widget.defaults['baselinewin1'])
+#     segm_widget.baselineCBox_2.setValue(
+#         segm_cfg['baseline_end'] if segm_cfg['baseline_end'] is not None else segm_widget.defaults['baselinewin2'])
+#     segm_widget.averageCBox.setChecked(bool(segm_cfg['average']))
+#     segm_widget.thresCBox.setChecked(bool(segm_cfg['thresholding']))
+#     segm_widget.threskBox.setValue(
+#         segm_cfg['thres_k'] if segm_cfg['thres_k'] is not None else segm_widget.defaults['threshold'])
+#     segm_widget.thressampBox.setValue(
+#         segm_cfg['thres_samples'] if segm_cfg['thres_samples'] is not None else segm_widget.defaults['thressamples'])
+#     segm_widget.threschanBox.setValue(
+#         segm_cfg['thres_channels'] if segm_cfg['thres_channels'] is not None else segm_widget.defaults['threschannels'])
+#     segm_widget.resampleCBox.setChecked(bool(segm_cfg['resample']))
+#     segm_widget.resamplefsBox.setValue(
+#         segm_cfg['resample_fs'] if segm_cfg['resample_fs'] is not None else segm_widget.defaults['resamplefs'])
+#     # Store
+#     files_widget.main_window.controller.segmentation_config = segm_cfg
+#
+#     # PARAMETERS
+#     params_cfg = data["parameters"]
+#     idx_parameters_widget = next((i for i, d in enumerate(files_widget.main_window.controller.experiment['pipeline']) if
+#                                   d.get('widget') == "ParametersWidget"))
+#     params_widget = files_widget.main_window.stackedWidget.widget(
+#         idx_parameters_widget)  # widget(4) is the parameters widget
+#     params_widget.meanCBox.setChecked(bool(params_cfg['mean']))
+#     params_widget.medianCBox.setChecked(bool(params_cfg['median']))
+#     params_widget.varianceCBox.setChecked(bool(params_cfg['variance']))
+#     params_widget.kurtosisCBox.setChecked(bool(params_cfg['kurtosis']))
+#     params_widget.skewnessCBox.setChecked(bool(params_cfg['skewness']))
+#     params_widget.psdCBox.setChecked(bool(params_cfg['psd']))
+#     params_widget.segmentpsdBox.setValue(
+#         params_cfg['psd_segment_pct'] if params_cfg['psd_segment_pct'] is not None else params_widget.defaults[
+#             'psdsegment'])
+#     params_widget.overlappsdBox.setValue(
+#         params_cfg['psd_overlap_pct'] if params_cfg['psd_overlap_pct'] is not None else params_widget.defaults[
+#             'psdoverlap'])
+#     params_widget.psdcomboBox.setCurrentText(params_cfg['psd_window'])
+#     params_widget.controller.loading_config = True
+#     params_widget.rpCBox.setChecked(bool(params_cfg['relative_power']))
+#     params_widget.controller.update_band_label('rp', params_cfg["selected_rp_bands"])
+#     params_widget.controller.loading_config = False
+#     params_widget.apCBox.setChecked(bool(params_cfg['absolute_power']))
+#     params_widget.mfCBox.setChecked(bool(params_cfg['median_frequency']))
+#     params_widget.seCBox.setChecked(bool(params_cfg['spectral_entropy']))
+#     params_widget.ctmCBox.setChecked(bool(params_cfg['ctm']))
+#     params_widget.ctmrBox.setValue(
+#         params_cfg['ctm_r'] if params_cfg['ctm_r'] is not None else params_widget.defaults['ctmradius'])
+#     params_widget.sampenCBox.setChecked(bool(params_cfg['sample_entropy']))
+#     params_widget.sampenrBox.setValue(
+#         params_cfg['sample_entropy_r'] if params_cfg['sample_entropy_r'] is not None else params_widget.defaults[
+#             'sampradius'])
+#     params_widget.sampenmBox.setValue(
+#         params_cfg['sample_entropy_m'] if params_cfg['sample_entropy_m'] is not None else params_widget.defaults[
+#             'sampm'])
+#     params_widget.msampenCBox.setChecked(bool(params_cfg['multiscale_sample_entropy']))
+#     params_widget.msampenrBox.setValue(
+#         params_cfg['multiscale_sample_entropy_r'] if params_cfg['multiscale_sample_entropy_r'] is not None else
+#         params_widget.defaults['multisampradius'])
+#     params_widget.msampenmBox.setValue(
+#         params_cfg['multiscale_sample_entropy_m'] if params_cfg['multiscale_sample_entropy_m'] is not None else
+#         params_widget.defaults['multisampm'])
+#     params_widget.msampenscaleBox.setValue(
+#         params_cfg['multiscale_sample_entropy_scale'] if params_cfg['multiscale_sample_entropy_scale'] is not None else
+#         params_widget.defaults['multisampmaxscale'])
+#     params_widget.lzcCBox.setChecked(bool(params_cfg['lzc']))
+#     params_widget.mlzcCBox.setChecked(bool(params_cfg['multiscale_lzc']))
+#     if params_cfg['multiscale_lzc_scales'] is not None:
+#         params_widget.mlzcEdit.setText(str(params_cfg['multiscale_lzc_scales']))
+#     params_widget.iacCBox.setChecked(bool(params_cfg['iac']))
+#     params_widget.iacortButton.setChecked(bool(params_cfg['ort_iac']))
+#     params_widget.aecCBox.setChecked(bool(params_cfg['aec']))
+#     params_widget.aecortButton.setChecked(bool(params_cfg['ort_aec']))
+#     params_widget.pliCBox.setChecked(bool(params_cfg['pli']))
+#     params_widget.plvCBox.setChecked(bool(params_cfg['plv']))
+#     params_widget.wpliCBox.setChecked(bool(params_cfg['wpli']))
+#     # Store
+#     files_widget.main_window.controller.parameters_config = params_cfg
+
+if __name__ == '__main__':
+    with open(rf"C:\Users\1993_\Desktop\config_Good.json") as json_data:
+        state = json.load(json_data)
+    run_pipeline(state)
