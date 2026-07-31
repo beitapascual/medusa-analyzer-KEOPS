@@ -41,13 +41,13 @@
     },
     {
       "id": "eeg_report",
-      "title": "Report EEG feature extraction configuration",
+      "title": "Report",
       "subtitle": "Review the EEG configuration.",
       "widget": "eeg_report_widget.EEGReportWidget"
     },
     {
       "id": "run_experiment",
-      "title": "Run EEG feature extraction",
+      "title": "Run pipeline",
       "widget": "eeg_run_experiment_widget.EEGRunExperimentWidget"
     }
   ]

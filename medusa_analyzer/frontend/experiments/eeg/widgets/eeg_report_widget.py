@@ -4,9 +4,6 @@ from typing import Any
 from PySide6.QtWidgets import QFrame
 from medusa_analyzer.frontend.widgets import ReportWidget
 
-from medusa_analyzer.frontend.worker import TaskRunner, Worker
-from medusa_analyzer.backend.experiments.eeg_run_pipeline import run_eeg_feature_extraction
-
 
 # Este archivo es la parte EEG específica del report. ReportWidget genérico ya sabe crear la pantalla, meter el scroll,
 # poner título/subtítulo, y dibujar secciónes.
@@ -16,8 +13,6 @@ class EEGReportWidget(ReportWidget):
 
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         _ = experiment_info
-        self.runner = TaskRunner()
-        self.pipeline_running = False
         self.defaults = defaults
         # Guardamos la parte de features del JSON
         self._features_config = defaults.get("features", {})
@@ -379,80 +374,4 @@ class EEGReportWidget(ReportWidget):
         if self.config.get("include_selected_features", True):
             builders.append(self._features_section)
         return builders
-
-    # Run pipeline
-    def log_callback(self, message: str, role: str = "info"):
-        """Append a message to the inline conversion log."""
-        color = None
-        if role == "error":
-            color = self.log_colors.errorColor.name()
-        elif role == "warning":
-            color = self.log_colors.warningColor.name()
-        if color:
-            self.log_area.append(f'<font color="{color}">{message}</font>')
-        else:
-            self.log_area.append(message)
-        self.log_area.verticalScrollBar().setValue(self.log_area.verticalScrollBar().maximum())
-
-    def set_progress(self, value: int):
-        """Set the inline progress value."""
-        self.progress_bar.setValue(value)
-
-    def run_pipeline(self):
-        """Start the converter pipeline in a background worker."""
-        if self.pipeline_running:
-            return
-
-        self.pipeline_running = True
-        self.state["completion_status"] = "incompleted"
-        self.changed.emit()
-
-        self.status_label.setText("Running conversion...")
-        self.clear_logs()
-        self.log_callback("Starting conversion...")
-        self.set_progress(0)
-
-        kwargs = {"input_data": self.state['input_data'],
-                  "output_path": self.state['output_path'],
-                  "extensions": self.defaults.get("load_data",{}).get("allowed_extensions",{}),
-                  "progress_callback": self.set_progress,
-                  "log_callback": self.log_callback}
-
-        worker = Worker(run_eeg_feature_extraction, **kwargs)
-        worker.signals.progress.connect(self.set_progress)
-        worker.signals.logging.connect(self.log_callback)
-        worker.signals.result.connect(self._pipeline_completed)
-        worker.signals.error.connect(self._pipeline_failed)
-        worker.signals.finished.connect(self._pipeline_finished)
-        self.runner.start(worker)
-
-    def _pipeline_completed(self, result: Any) -> None:
-        if isinstance(result, dict) and result.get("valid") is False:
-            errors = result.get("errors") or ["Conversion finished with errors."]
-            self._mark_pipeline_failed("\n".join(str(error) for error in errors))
-            return
-
-        self.state["completion_status"] = "completed"
-        self.status_label.setText("Conversion finished successfully.")
-        self.set_progress(100)
-
-    def _pipeline_failed(self, error: str) -> None:
-        self._mark_pipeline_failed(error)
-
-    def _mark_pipeline_failed(self, error: str) -> None:
-        self.state["completion_status"] = "incompleted"
-        self.log_callback(error, "error")
-        self.status_label.setText("Conversion failed. Fix the issue and run again.")
-
-    def _pipeline_finished(self) -> None:
-        self.pipeline_running = False
-        self.changed.emit()
-
-    def can_continue(self) -> bool:
-        return not self.pipeline_running
-
-    def run_conversion_process(self):
-        self.run_pipeline()
-
-
 

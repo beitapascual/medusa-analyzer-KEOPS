@@ -104,6 +104,9 @@ class WorkflowShell(QWidget):
         # Primero comprueba si se puede continuar. Si no se puede, no hace nada.
         if not self._current_step_can_continue():
             return
+        if not self._run_before_next_hook():
+            self._refresh_navigation()
+            return
         # Si estamos en el último paso, verificamos si el experimento está completado o no.
         if self.navigator.current_index() == self.navigator.count() - 1:
             # Si está completado, podremos pulsar en finish y volver al dashboard
@@ -122,6 +125,13 @@ class WorkflowShell(QWidget):
         self.navigator.next() # Para realmente avanzar, usamos la función del navigator.
         self._activate_current_step()
         self._refresh_navigation()
+
+    def _run_before_next_hook(self) -> bool:
+        widget = self.navigator.current_widget()
+        before_next = getattr(widget, "before_next", None)
+        if callable(before_next):
+            return before_next() is not False
+        return True
 
     def _current_step_can_continue(self) -> bool:
         # Mira si el widget tiene métoodo de validación. Si el widget no tiene can_continue, entonces deja

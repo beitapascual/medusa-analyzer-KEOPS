@@ -229,24 +229,35 @@ class ReportWidget(QScrollArea):
         valid, _ = self._output_path_validation()
         return valid and not self.pipeline_running
 
+    def before_next(self) -> bool:
+        return self._save_config_json(mark_completed=False)
+
     def run_pipeline(self) -> None:
+        self._save_config_json(mark_completed=True)
+
+    def _save_config_json(self, mark_completed: bool) -> bool:
         if self.pipeline_running or not self.can_continue():
-            return
+            return False
 
         self.pipeline_running = True
-        self.state["completion_status"] = "incompleted"
         self.state.pop("pipeline_config_error", None)
+        if mark_completed:
+            self.state["completion_status"] = "incompleted"
         self.changed.emit()
 
         try:
             output_path = self.state[self._output_path_state_key()]
             config_path = Path(output_path) / "config.json"
             self.state["pipeline_config_path"] = str(config_path)
-            self.state["completion_status"] = "completed"
             save_pipeline_config(self.state, output_path)
+            if mark_completed:
+                self.state["completion_status"] = "completed"
+            return True
         except Exception as exc:
-            self.state["completion_status"] = "incompleted"
+            if mark_completed:
+                self.state["completion_status"] = "incompleted"
             self.state["pipeline_config_error"] = str(exc)
+            return False
         finally:
             self.pipeline_running = False
             self.refresh()
