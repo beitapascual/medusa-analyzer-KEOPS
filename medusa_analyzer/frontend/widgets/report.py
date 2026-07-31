@@ -177,7 +177,7 @@ class ReportWidget(QScrollArea):
 
     def _select_output_root(self) -> None:
         current_root = str(self.state.get("output_root_path") or self._default_output_root() or "")
-        selected_root = QFileDialog.getExistingDirectory(self, "Select output folder", current_root)
+        selected_root = QFileDialog.getExistingDirectory(self, "Change output folder", current_root)
         if not selected_root:
             return
 

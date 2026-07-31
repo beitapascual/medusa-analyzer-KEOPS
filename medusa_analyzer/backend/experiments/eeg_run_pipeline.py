@@ -23,19 +23,23 @@ def run_eeg_feature_extraction(state,
     selected_recordings = state['selected_recordings']
     total_files = len(selected_recordings)
 
+    # To store rejection summary and execution logs
+    rejection_summary = []
+    execution_logs = []
+
     # Logs
     progress_callback(0)
-    log_callback(f"MEDUSA EEG FEATURES EXTRACTION started", "")
-    log_callback(f"{total_files} will be processed...", "")
+    msg = f"MEDUSA EEG FEATURES EXTRACTION started"
+    log_callback(msg, "")
+    execution_logs.append(msg)
+    msg = f"{total_files} will be processed..."
+    log_callback(msg, "")
+    execution_logs.append(msg)
 
     # Store the bands if band segmentation is enabled, otherwise use broadband
     bands = state['preprocessing']['selected_frequency_bands']
     # Sorted bands to have broadband in the first position
     bands = sorted(bands, key=lambda b: 0 if b['id'].lower() == 'broadband' else 1)
-
-    # To store rejection summary and execution logs
-    rejection_summary = []
-    execution_logs = []
 
     # Calculate total steps
     total_events = sum(
@@ -51,6 +55,8 @@ def run_eeg_feature_extraction(state,
     steps_per_file = offset_file + (len(bands) * steps_per_band)  # Offset de archivo + lo que ocupan sus bandas
     total_steps = total_files * steps_per_file
 
+    error_found = False
+
     # Loop through each selected file
     for idx_file, file in enumerate(selected_recordings):
         try:
@@ -61,7 +67,9 @@ def run_eeg_feature_extraction(state,
             subj_id = Path(file['path']).stem
 
             # Logs
-            log_callback(f"Processing file {idx_file + 1}/{total_files}: {subj_id}","")
+            msg = f"Processing file {idx_file + 1}/{total_files}: {subj_id}"
+            log_callback(msg,"")
+            execution_logs.append(msg)
 
             # Get information from recording
             raw_signal = data.data[datatype].signal
@@ -76,12 +84,19 @@ def run_eeg_feature_extraction(state,
 
             # Ensure consistent sampling frequency
             if fs != state['metadata']['sampling_frequency']:
-                log_callback(f"[{subj_id}] Does not have the sampling frequency of the selected pipeline.","error")
-                log_callback(f"[{subj_id}] Expected {state['metadata']['sampling_frequency']}, but got {fs}.","error")
+                error_found = True
+                msg = f"[{subj_id}] Does not have the sampling frequency of the selected pipeline."
+                log_callback(msg, "error")
+                execution_logs.append(msg)
+                msg = f"[{subj_id}] Expected {state['metadata']['sampling_frequency']}, but got {fs}."
+                log_callback(msg, "error")
+                execution_logs.append(msg)
                 continue
 
             # Logs
-            log_callback(f"[{subj_id}] File loaded. Data successfully extracted", "")
+            msg = f"[{subj_id}] File loaded. Data successfully extracted"
+            log_callback(msg, "")
+            execution_logs.append(msg)
 
             ## First step: Preprocessing
             processed_signal = raw_signal.copy()
@@ -99,8 +114,12 @@ def run_eeg_feature_extraction(state,
             # Logs
             progress = int(((idx_file * steps_per_file) + offset_file) / total_steps * 100)
             progress_callback(progress)
-            log_callback(f"[{subj_id}] File successfully preprocessed.", "")
-            log_callback(f"[{subj_id}] Continuing process...", "")
+            msg = f"[{subj_id}] File successfully preprocessed."
+            log_callback(msg, "")
+            execution_logs.append(msg)
+            msg = f"[{subj_id}] Continuing process..."
+            log_callback(msg, "")
+            execution_logs.append(msg)
 
 
             ## Second step: Get indices of the thresholding
@@ -157,23 +176,25 @@ def run_eeg_feature_extraction(state,
                     processed_signal_band = processed_signal.copy()
 
                 ## Fourth step: Segmentation
-                epochs, times_epochs = segment_signal(processed_signal_band, times, fs, events, state['segmentation'])
+                epochs, times_epochs = segment_signal(processed_signal_band, times, fs, events, state['segmentation'], log_callback, execution_logs, subj_id)
 
                 evt_counter = 0
                 for base_evt, epochs_base in epochs.items():
                     for evt, epochs_base_evt in epochs_base.items():
                         # Logs
                         evt_counter += 1
-                        log_callback(f"[{subj_id}] Starting segmentation for event combination '{base_evt}' and"
-                                     f" '{evt}'...", "")
+                        msg = f"[{subj_id}] Starting segmentation for event combination '{base_evt}' and '{evt}'..."
+                        log_callback(msg, "")
+                        execution_logs.append(msg)
 
                         ## Fifth step: Apply thresholding rejection if enabled
                         if state['segmentation']["thresholding"]['enabled']:
                             # If all the epochs are rejected, skip this condition
                             if np.all(idx_reject[base_evt][evt]):
                                 # Logs
-                                log_callback(f"[{file}] All epochs corresponding to event combination '{base_evt}' and"
-                                             f" '{evt}' have been rejected. Skipping.", "warning")
+                                msg = f"[{subj_id}] All epochs corresponding to event combination '{base_evt}' and '{evt}' have been rejected. Skipping."
+                                log_callback(msg, "warning")
+                                execution_logs.append(msg)
                                 continue
 
                             # Remove the rejected epochs from the epochs array
@@ -195,9 +216,12 @@ def run_eeg_feature_extraction(state,
                         # Logs
                         progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a / total_steps * 100)
                         progress_callback(progress)
-                        log_callback(f"[{file}] Segmentation successfully computed for event combination '{base_evt}'"
-                                     f" and '{evt}' in band {band_name}.", "")
-                        log_callback(f"[{file}] Starting parameter computation...", "")
+                        msg = f"[{subj_id}] Segmentation successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
+                        log_callback(msg, "")
+                        execution_logs.append(msg)
+                        msg = f"[{subj_id}] Starting parameter computation..."
+                        log_callback(msg, "")
+                        execution_logs.append(msg)
 
                         # Save the segmented signals (if required), separately for each event
                         save_outputs(
@@ -215,16 +239,21 @@ def run_eeg_feature_extraction(state,
                         # Logs
                         progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b / total_steps * 100)
                         progress_callback(progress)
-                        log_callback(f"[{file}] Parameters successfully computed for event combination '{base_evt}'"
-                                     f" and '{evt}' in band {band_name}.", "")
+                        msg = f"[{subj_id}] Parameters successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
+                        log_callback(msg, "")
+                        execution_logs.append(msg)
 
         # Exception handling
         except Exception as e:
-            log_callback(f"[{file}] Error found during processing: {e}.", "error")
-
+            error_found = True
+            msg = f"[{subj_id}] Error found during processing: {e}."
+            log_callback(msg, "error")
+            execution_logs.append(msg)
     # Save logs and summary
     try:
-        log_callback(f"Saving logs...", "")
+        msg = f"Saving logs..."
+        log_callback(msg, "")
+        execution_logs.append(msg)
 
         derivatives_path = Path(state['output_derivatives_path'])
         derivatives_path.mkdir(exist_ok=True)
@@ -244,7 +273,9 @@ def run_eeg_feature_extraction(state,
                     'event': f"N Channels: {state['segmentation']['channels']}"
                 }
                 writer.writerow(row)
-            log_callback(f"Rejection summary saved to {csv_path}.", "")
+            msg = f"Rejection summary saved to {csv_path}."
+            log_callback(msg, "")
+            execution_logs.append(msg)
 
         # Save execution warnings/errors to TXT
         if execution_logs:
@@ -252,15 +283,29 @@ def run_eeg_feature_extraction(state,
             with open(log_path, mode='w', encoding='utf-8') as txt_file:
                 for log_entry in execution_logs:
                     txt_file.write(log_entry + "\n")
-            log_callback(f"Execution logs saved to {log_path}.", "")
+            msg = f"Execution logs saved to {log_path}."
+            log_callback(msg, "")
+            execution_logs.append(msg)
 
-        log_callback(f"Logs successfully saved.", "")
+        msg = f"Logs successfully saved."
+        log_callback(msg, "")
+        execution_logs.append(msg)
+
     except Exception as e:
-        log_callback(f"Error saving logs: {e}", "warning")
+        msg = f"Error saving logs: {e}"
+        log_callback(msg, "warning")
+        execution_logs.append(msg)
 
-    log_callback(f"MEDUSA EEG FEATURES EXTRACTION successfully finished", "")
+    msg = f"MEDUSA EEG FEATURES EXTRACTION successfully finished"
+    log_callback(msg, "")
+    execution_logs.append(msg)
+
+    if error_found:
+        msg = f"Error(s) found during processing, please check logs"
+        log_callback(msg, "warning")
+        execution_logs.append(msg)
+
     return
-
 
 #################### HELPER FUNCTIONS
 
@@ -308,15 +353,17 @@ def build_output_dict(signal, times, ch_names, fs):
     }
     return output_dic
 
-def segment_signal(signal, times, fs, events, state):
+def segment_signal(signal, times, fs, events, state,
+                   log_callback = None, execution_logs = None, subj_id = None):
 
     # Get segmentation params, time vector and normalization type in a medusa-compatible format
     if state['segmentation_strategy'] == 'window-based':
         segment_length = state['epoch_parameters']['duration_events']['duration_epoch_length_ms']
-        stride = state['epoch_parameters']['duration_events']['stride_percent']
         norm = state['normalization']['duration_events']['mode'] if state['normalization']['duration']['enabled'] else None
         n_samples = int(np.round((segment_length / 1000.0) * fs))
         times_epochs = (np.arange(n_samples) / fs)
+        stride = state['epoch_parameters']['duration_events']['stride_percent']
+        stride = None if stride == 0 else int((stride/100) * n_samples)
 
     else:
         epoch_window = [state['epoch_parameters']['instant_events']['start'],
@@ -387,14 +434,14 @@ def segment_signal(signal, times, fs, events, state):
                             norm=norm)
                     except KeyError:
                         continue
-                    if epochs_tmp is not None:
+
+                    if epochs_tmp:
                         epochs[base_evt['base_event']][evt]= epochs_tmp
                         del epochs_tmp
-
-    # # If no epochs were found for this condition, skip it
-    # if len(epochs) == 0:
-    #     print(f"⚠️ No valid epochs for '{cond}' in file '{file}'. Skipping.", 'warning')
-    #     continue
+                    elif log_callback is not None:
+                        msg = f"[{subj_id}] No epochs were found for event combination '{base_evt}' and '{evt}' have been rejected. Skipping."
+                        log_callback(msg, "warning")
+                        execution_logs.append(msg)
 
     return epochs, times_epochs
 
