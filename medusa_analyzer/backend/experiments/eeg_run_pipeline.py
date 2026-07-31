@@ -11,7 +11,7 @@ import warnings
 from typing import Callable
 
 
-def run_pipeline(state,
+def run_eeg_feature_extraction(state,
                  progress_callback: Callable[[int], None] | None = None,
                  log_callback: Callable[[str, str], None] | None = None) -> None:
     """

@@ -1,75 +1,167 @@
-from PySide6.QtWidgets import QFrame, QTextEdit, QProgressBar, QVBoxLayout, QWidget, QLabel
 from typing import Any
 
-class RunExperimentWidget(QWidget):
-    """
-    A widget to display the progress and logs of a running experiment.
-    """
-    def __init__(self, title: str, description: str):
-        super().__init__()
-        self.setObjectName("runExperimentWidget")
+from PySide6.QtCore import Property, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QFrame, QLabel, QProgressBar, QTextEdit, QVBoxLayout, QWidget
 
-        # Main layout
+from medusa_analyzer.frontend.worker import TaskRunner, Worker
+
+
+class _ProgressLogColors(QFrame):
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self._error_color = QColor("#FFB6C2")
+        self._warning_color = QColor("#F6C177")
+        self.setObjectName("progressOverlay")
+        self.hide()
+
+    def get_error_color(self) -> QColor:
+        return QColor(self._error_color)
+
+    def set_error_color(self, color: QColor) -> None:
+        if color.isValid():
+            self._error_color = QColor(color)
+
+    def get_warning_color(self) -> QColor:
+        return QColor(self._warning_color)
+
+    def set_warning_color(self, color: QColor) -> None:
+        if color.isValid():
+            self._warning_color = QColor(color)
+
+    errorColor = Property(QColor, get_error_color, set_error_color)
+    warningColor = Property(QColor, get_warning_color, set_warning_color)
+
+
+class RunExperimentWidget(QWidget):
+    """Run step for the converter experiment."""
+
+    changed = Signal()
+
+    def __init__(self, experiment_info: dict, defaults: dict, state: dict):
+        super().__init__()
+        self.experiment_info = experiment_info
+        self.defaults = defaults
+        self.state = state
+        self.runner = TaskRunner()
+        self.pipeline_running = False
+        self.setObjectName("runExperimentWidget")
+        self.log_colors = _ProgressLogColors(self)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
-        # Title and Description
-        title_label = QLabel(title)
+        title_label = QLabel("Run " + self.experiment_info['title'])
         title_label.setObjectName("pageTitle")
-        description_label = QLabel(description)
+        description_label = QLabel(self.experiment_info['subtitle'])
         description_label.setObjectName("muted")
         description_label.setWordWrap(True)
+
         layout.addWidget(title_label)
         layout.addWidget(description_label)
         layout.addSpacing(18)
 
-        # Central panel for content
-        panel = QFrame()
-        panel.setProperty("role", "surface-panel")
-        panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(24, 22, 24, 22)
+        progress_panel = QFrame()
+        progress_panel.setProperty("role", "surface-panel")
+        progress_layout = QVBoxLayout(progress_panel)
+        progress_layout.setContentsMargins(24, 22, 24, 22)
 
-        # Log area
-        self.log_area = QTextEdit()
-        self.log_area.setReadOnly(True)
-        self.log_area.setObjectName("logArea")
-        self.log_area.setMinimumHeight(250)
+        self.status_label = QLabel("Ready to run pipeline.")
+        self.status_label.setObjectName("progressTitle")
+        self.status_label.setWordWrap(True)
 
-        # Progress bar
         self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("overlayProgressBar")
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setObjectName("progressBar")
 
-        # Add widgets to the panel layout
-        panel_layout.addWidget(self.log_area)
-        panel_layout.addSpacing(15)
-        panel_layout.addWidget(self.progress_bar)
+        self.log_area = QTextEdit()
+        self.log_area.setObjectName("progressLogArea")
+        self.log_area.setReadOnly(True)
+        self.log_area.setMinimumHeight(180)
 
-        # Add panel to the main layout
-        layout.addWidget(panel)
+        progress_layout.addWidget(self.status_label)
+        progress_layout.addSpacing(14)
+        progress_layout.addWidget(self.progress_bar)
+        progress_layout.addSpacing(16)
+        progress_layout.addWidget(self.log_area)
+
+        layout.addWidget(progress_panel)
         layout.addStretch()
 
-    def add_log_message(self, message: str, role: str = "info"):
-        """Appends a styled message to the log area."""
+    def log_callback(self, message: str, role: str = "info"):
+        """Append a message to the inline conversion log."""
         color = None
         if role == "error":
-            color = "#FFB6C2" # A light red
+            color = self.log_colors.errorColor.name()
         elif role == "warning":
-            color = "#F6C177" # A light yellow/orange
-
+            color = self.log_colors.warningColor.name()
         if color:
             self.log_area.append(f'<font color="{color}">{message}</font>')
         else:
             self.log_area.append(message)
-        
-        # Auto-scroll to the bottom
         self.log_area.verticalScrollBar().setValue(self.log_area.verticalScrollBar().maximum())
 
     def set_progress(self, value: int):
-        """Sets the value of the progress bar (0-100)."""
+        """Set the inline progress value."""
         self.progress_bar.setValue(value)
 
     def clear_logs(self):
-        """Clears all messages from the log area."""
+        """Clear the inline conversion log."""
         self.log_area.clear()
+
+    # def run_pipeline(self):
+    #     """Start the converter pipeline in a background worker."""
+    #     if self.pipeline_running:
+    #         return
+    #
+    #     self.pipeline_running = True
+    #     self.state["completion_status"] = "incompleted"
+    #     self.changed.emit()
+    #
+    #     self.status_label.setText("Running...")
+    #     self.clear_logs()
+    #     self.log_callback("Starting...")
+    #     self.set_progress(0)
+    #
+    #     kwargs = {"input_data": self.state['input_data'],
+    #               "output_path": self.state['output_path'],
+    #               "extensions": self.defaults.get("load_data",{}).get("allowed_extensions",{}),
+    #               "progress_callback": self.set_progress,
+    #               "log_callback": self.log_callback}
+    #
+    #     worker = Worker(run_conversion, **kwargs)
+    #     worker.signals.progress.connect(self.set_progress)
+    #     worker.signals.logging.connect(self.log_callback)
+    #     worker.signals.result.connect(self._pipeline_completed)
+    #     worker.signals.error.connect(self._pipeline_failed)
+    #     worker.signals.finished.connect(self._pipeline_finished)
+    #     self.runner.start(worker)
+
+    def _pipeline_completed(self, result: Any) -> None:
+        if isinstance(result, dict) and result.get("valid") is False:
+            errors = result.get("errors") or [f"Pipeline {self.experiment_info['title']} finished with errors."]
+            self._mark_pipeline_failed("\n".join(str(error) for error in errors))
+            return
+
+        self.state["completion_status"] = "completed"
+        self.status_label.setText(f"Pipeline {self.experiment_info['title']} finished successfully.")
+        self.set_progress(100)
+
+    def _pipeline_failed(self, error: str) -> None:
+        self._mark_pipeline_failed(error)
+
+    def _mark_pipeline_failed(self, error: str) -> None:
+        self.state["completion_status"] = "incompleted"
+        self.log_callback(error, "error")
+        self.status_label.setText(f"The pipeline {self.experiment_info['title']} failed. Fix the issue and run it again.")
+
+    def _pipeline_finished(self) -> None:
+        self.pipeline_running = False
+        self.changed.emit()
+
+    def can_continue(self) -> bool:
+        return not self.pipeline_running
+
+    def run_conversion_process(self):
+        self.run_pipeline()

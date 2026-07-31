@@ -231,10 +231,10 @@ def run_conversion(input_data: List[str], output_path: str, extensions: Tuple[st
             file_to_bids(file, output_path)
 
             progress_callback(int(idx_callback * (files.index(file) + 1) - 0.5 * idx_callback + 5))
-            log_callback(f"[{file.name}] Successfully converted", "")
+            log_callback(f"[{file.stem}] Successfully converted", "")
             time.sleep(1)
         except Exception as e:
-            error_msg = f"[{file.name}] Exception {e} during conversion"
+            error_msg = f"[{file.stem}] Exception {e} during conversion"
             log_callback(error_msg, "error")
             valid_files.remove(file)
 
