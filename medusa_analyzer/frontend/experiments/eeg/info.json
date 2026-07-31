@@ -40,10 +40,15 @@
       "widget": "eeg_features_widget.EEGFeaturesWidget"
     },
     {
-      "id": "run_pipeline",
-      "title": "Run pipeline",
-      "subtitle": "Review the EEG configuration and run the processing pipeline.",
+      "id": "eeg_report",
+      "title": "Report EEG feature extraction configuration",
+      "subtitle": "Review the EEG configuration.",
       "widget": "eeg_report_widget.EEGReportWidget"
+    },
+    {
+      "id": "run_experiment",
+      "title": "Run EEG feature extraction",
+      "widget": "eeg_run_experiment_widget.EEGRunExperimentWidget"
     }
   ]
 }
