@@ -1,0 +1,95 @@
+{
+  "load_features": {
+    "allowed_extensions": [
+      ".json",
+      ".csv",
+      ".tsv",
+      ".mat"
+    ],
+    "required_folder_name": "derivatives",
+    "required_config_file": "config.json",
+    "default_analysis_mode": "within",
+    "analysis_modes": [
+      {
+        "id": "within",
+        "title": "Within subject",
+        "description": "Compare repeated conditions or sessions from the same participants. Each participant acts as their own control."
+      },
+      {
+        "id": "between",
+        "title": "Between subjects",
+        "description": "Compare independent participant groups. Differences reflect variation between groups."
+      },
+      {
+        "id": "nocomparison",
+        "title": "No comparison",
+        "description": "Inspect one participant or recording descriptively, without group or condition comparisons."
+      }
+    ]
+  },
+  "group_definition": {
+    "min_groups": 1,
+    "max_groups": 12,
+    "default_group_count": 2,
+    "default_color_hue_offset": 345,
+    "default_color_saturation": 175,
+    "default_color_value": 235
+  },
+  "group_assignment": {
+    "within_target": "recordings",
+    "between_target": "subjects"
+  },
+  "data_assignment": {
+    "within_target": "subjects",
+    "between_target": "recordings",
+    "nocomparison_target": "recordings"
+  },
+  "plots": {
+    "default_plot_type": "boxplot",
+    "available_plot_types": [
+      {
+        "id": "boxplot",
+        "title": "Box plot"
+      },
+      {
+        "id": "violin",
+        "title": "Violin plot"
+      },
+      {
+        "id": "histogram",
+        "title": "Histogram"
+      },
+      {
+        "id": "bar",
+        "title": "Bar plot"
+      },
+      {
+        "id": "scatter",
+        "title": "Scatter plot"
+      },
+      {
+        "id": "heatmap",
+        "title": "Heatmap"
+      }
+    ],
+    "default_group_by": [],
+    "default_color_by": null
+  },
+  "statistics": {
+    "enabled": true,
+    "descriptive_metrics": [
+      "count",
+      "mean",
+      "median",
+      "std",
+      "min",
+      "max",
+      "iqr"
+    ],
+    "default_group_by": [
+      "feature",
+      "band",
+      "event"
+    ]
+  }
+}

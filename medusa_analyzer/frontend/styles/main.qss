@@ -720,6 +720,101 @@ QCheckBox#controlTitle {
     font-weight: 650;
 }
 
+QFrame[role="analysis-mode-option"] {
+    background: #1F171B;
+    border: 1px solid #3E3036;
+    border-radius: 9px;
+}
+
+QFrame[role="analysis-mode-option"][selected="true"] {
+    background: #2A1D23;
+    border: 1px solid #E35A82;
+}
+
+QRadioButton[role="analysis-mode-radio"] {
+    spacing: 9px;
+    color: #F8EEF2;
+    font-weight: 650;
+}
+
+QRadioButton[role="analysis-mode-radio"]::indicator {
+    width: 17px;
+    height: 17px;
+    border: 1px solid #6E5A63;
+    border-radius: 9px;
+    background: #120D10;
+}
+
+QRadioButton[role="analysis-mode-radio"]::indicator:checked {
+    background: #A61E4D;
+    border: 2px solid #FF9DB7;
+}
+
+QLabel#analysisModeDescription {
+    color: #B8A7AF;
+}
+
+QFrame[role="group-definition-chip"] {
+    background: #1F171B;
+    border: 1px solid #3E3036;
+    border-radius: 10px;
+}
+
+QFrame[role="group-definition-chip"]:hover {
+    background: #241A1F;
+    border-color: #6A3142;
+}
+
+QWidget[role="group-color-swatch"] {
+    background: transparent;
+}
+
+QPushButton[role="group-color-button"] {
+    min-width: 88px;
+}
+
+QTableWidget[role="assignment-table"] {
+    color: #F4E9ED;
+    background: #1F171B;
+    border: 1px solid #3E3036;
+    border-radius: 9px;
+    gridline-color: #3E3036;
+    outline: none;
+}
+
+QTableWidget[role="assignment-table"] QHeaderView::section {
+    color: #B8A7AF;
+    background: #241A1F;
+    border: none;
+    border-right: 1px solid #3E3036;
+    border-bottom: 1px solid #3E3036;
+    padding: 7px 9px;
+    font-weight: 650;
+}
+
+QTableWidget[role="assignment-table"]::item {
+    padding: 7px;
+    border: none;
+}
+
+QTableWidget[role="assignment-table"]::item:selected {
+    color: #FFD6E1;
+    background: #4A2030;
+}
+
+QLabel#assignmentInstruction {
+    color: #B8A7AF;
+}
+
+QLabel#assignmentSummary {
+    color: #F8EEF2;
+    background: #241A1F;
+    border: 1px solid #3E3036;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-weight: 650;
+}
+
 QListWidget[role="file-list"] {
     color: #F4E9ED;
     background: #1F171B;
