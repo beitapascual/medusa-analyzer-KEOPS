@@ -125,7 +125,7 @@ class ConverterLoadDataWidget(LoadDataWidget):
         self.state.pop("dataset_name", None)
 
     def _update_state(self):
-        self.state["output_path"] = self.output_path_display.text().strip() + '/' + self.dataset_name_input.text().strip()
+        self.state["output_path"] = self.output_path_display.text().strip()
         self.state["dataset_name"] = self.dataset_name_input.text().strip()
 
     def can_continue(self) -> bool:

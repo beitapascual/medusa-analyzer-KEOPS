@@ -1,9 +1,0 @@
-name	type	units	sensor	reference	reference_method
-Fp1	EEG	uV	Fp1	GND	common
-Fp2	EEG	uV	Fp2	GND	common
-F3	EEG	uV	F3	GND	common
-F4	EEG	uV	F4	GND	common
-C3	EEG	uV	C3	GND	common
-C4	EEG	uV	C4	GND	common
-P3	EEG	uV	P3	GND	common
-P4	EEG	uV	P4	GND	common
