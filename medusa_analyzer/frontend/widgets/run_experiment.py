@@ -110,34 +110,6 @@ class RunExperimentWidget(QWidget):
         """Clear the inline conversion log."""
         self.log_area.clear()
 
-    # def run_pipeline(self):
-    #     """Start the converter pipeline in a background worker."""
-    #     if self.pipeline_running:
-    #         return
-    #
-    #     self.pipeline_running = True
-    #     self.state["completion_status"] = "incompleted"
-    #     self.changed.emit()
-    #
-    #     self.status_label.setText("Running...")
-    #     self.clear_logs()
-    #     self.log_callback("Starting...")
-    #     self.set_progress(0)
-    #
-    #     kwargs = {"input_data": self.state['input_data'],
-    #               "output_path": self.state['output_path'],
-    #               "extensions": self.defaults.get("load_data",{}).get("allowed_extensions",{}),
-    #               "progress_callback": self.set_progress,
-    #               "log_callback": self.log_callback}
-    #
-    #     worker = Worker(run_conversion, **kwargs)
-    #     worker.signals.progress.connect(self.set_progress)
-    #     worker.signals.logging.connect(self.log_callback)
-    #     worker.signals.result.connect(self._pipeline_completed)
-    #     worker.signals.error.connect(self._pipeline_failed)
-    #     worker.signals.finished.connect(self._pipeline_finished)
-    #     self.runner.start(worker)
-
     def _pipeline_completed(self, result: Any) -> None:
         if isinstance(result, dict) and result.get("valid") is False:
             errors = result.get("errors") or [f"Pipeline {self.experiment_info['title']} finished with errors."]

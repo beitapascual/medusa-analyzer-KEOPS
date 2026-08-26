@@ -68,8 +68,15 @@ def validate_bids_dataset(root: str | Path, allowed_datatypes: list[str] | None 
         errors.append("No sub-* folders found at BIDS root.")
 
     # Recolección de archivos
-    # Buscamos recursivamente todos los archivos dentro de root y filtramos los json y los tsv.
-    files = [path for path in root.rglob("*") if path.is_file()]
+    # Buscamos recursivamente todos los archivos dentro de root y filtramos los json y los tsv. Vamos a descartar los
+    # ficheros que no estén en el root o en carpeta que empiecen por sub
+    files = [
+        path for path in root.rglob("*")
+        if path.is_file() and (
+            path.parent == root or
+            path.relative_to(root).parts[0].startswith("sub")
+        )
+    ]
     json_files = [path for path in files if path.suffix.lower() == ".json"]
     tsv_files = [path for path in files if path.suffix.lower() == ".tsv"]
     # Creamos una lista para guardar los registros raw encontrados
