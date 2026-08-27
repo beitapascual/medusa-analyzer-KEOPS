@@ -1,4 +1,4 @@
 __pycache__/
 *.py[cod]
-/sample_data/bids_bd_pre_converter/
-/sample_data/bids_db_post_converter/
+/sample_data/*
+!/sample_data/create_bids_recordings.py

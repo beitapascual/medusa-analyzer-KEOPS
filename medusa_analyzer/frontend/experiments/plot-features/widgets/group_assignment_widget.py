@@ -302,7 +302,7 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
                 group["files"] = assigned_items
             elif target == "subjects":
                 group["subjects"] = assigned_items
-        self.state["grupos"] = groups
+        self.state["groups"] = groups
 
     def _validate_assignment(self) -> list[str]:
         target = self.current_target
@@ -415,7 +415,7 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         return [str(value) for value in values] if isinstance(values, list) else []
 
     def _groups(self) -> dict[str, dict[str, Any]]:
-        groups = self.state.get("grupos")
+        groups = self.state.get("groups")
         if isinstance(groups, dict):
             return {str(group_id): dict(group) for group_id, group in groups.items() if isinstance(group, dict)}
         if isinstance(groups, list):

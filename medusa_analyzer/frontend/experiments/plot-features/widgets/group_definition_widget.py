@@ -187,16 +187,16 @@ class GroupDefinitionWidget(QScrollArea):
         self._sync() # sincronizamos para guardar en state
 
     def _sync(self, *_: Any, emit_changed: bool = True) -> None:
-        previous_groups = self._stored_groups() # TODO: cambair nombre porque es lioso con los grupos que se hacen aqui
+        stored_groups = self._stored_groups()
         groups: dict[str, dict[str, Any]] = {}
         for group_id, row in self.group_rows.items():
-            previous_group = previous_groups.get(group_id, {})
+            stored_group = stored_groups.get(group_id, {})
             groups[group_id] = {"group_name": row["name_input"].text().strip(),
                 "group_color": str(row["color"]).upper(),
-                "subjects": list(previous_group.get("subjects") or []), # viene del widget anterior
-                "files": list(previous_group.get("files") or [])} # viene del widget anterior
+                "subjects": list(stored_group.get("subjects") or []), # viene del widget anterior
+                "files": list(stored_group.get("files") or [])} # viene del widget anterior
 
-        self.state["grupos"] = groups # TODO: grupos en ingles. Revisar que no rompa con los widgets que vienen a continuación
+        self.state["groups"] = groups
         self.validation_errors = self._validate_groups()
         self._update_status_label() # actualizamos mensaje de la pantalla
 
@@ -205,7 +205,7 @@ class GroupDefinitionWidget(QScrollArea):
 
     def _validate_groups(self) -> list[str]:
         errors: list[str] = []
-        groups = self.state.get("grupos", {}) # Obtenemos grupos
+        groups = self._stored_groups() # Obtenemos grupos
         # Validamos que haya al menos un grupo mínimo de grupos (definido en defaults) en los grupos creados.
         errors.extend(self.validation.validate_many(groups, [("minimum_length", {"minimum": self.min_groups,
             "item_name": "group", "action": "contain"})], label="Groups"))
@@ -220,13 +220,13 @@ class GroupDefinitionWidget(QScrollArea):
             self.status_label.setText(self.validation_errors[0])
             self.status_label.setProperty("status", "error")
         else: # formato OK
-            self.status_label.setText(f"{len(self.state.get('grupos', {}))} group(s) configured.")
+            self.status_label.setText(f"{len(self._stored_groups())} group(s) configured.")
             self.status_label.setProperty("status", "ready")
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
     def _stored_groups(self) -> dict[str, dict[str, Any]]:
-        groups = self.state.get("grupos") # TODO: en inglés
+        groups = self.state.get("groups")
         if isinstance(groups, dict):
             return {str(group_id): dict(group) for group_id, group in groups.items() if isinstance(group, dict)}
         return {}

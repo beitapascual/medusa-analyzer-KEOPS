@@ -97,7 +97,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
 
         self.analysis_group = QButtonGroup(self)
         self.analysis_group.setExclusive(True) # agrupamos Rbuttons para que solo uno pueda estar seleccionado a la vez
-        self.analysis_group.buttonToggled.connect(self._sync_analysis_mode())
+        self.analysis_group.buttonToggled.connect(lambda _button, checked: self._sync_analysis_mode() if checked else None)
 
         for mode in self.analysis_modes: # Creamos una opción para cada modo
             option = QFrame()
@@ -186,15 +186,23 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
             except (OSError, json.JSONDecodeError) as exc:
                 raise ValueError(f"{self.required_config_file} could not be read.") from exc
 
-            channel_names = self._extract_channel_names(config_data) # Extraemos canales
-            if not channel_names:
+            # Extraemos canales
+            metadata = config_data.get("metadata")
+            if not isinstance(metadata, dict):
+                channel_set = []
+            channel_set = metadata.get("channel_set")
+            if isinstance(channel_set, list):
+                channel_set = [str(channel) for channel in channel_set]
+            else:
+                channel_set = []
+            if not channel_set:
                 raise ValueError(f"{self.required_config_file} does not contain channel names.")
 
             feature_files = self._discover_feature_files(derivatives_path) # Buscamos archivos correspondientes a features
             # Construimos el resumen de metadatos:
-            metadata = self._build_metadata(derivatives_path, config_path, config_data, channel_names, feature_files)
+            metadata = self._build_metadata(derivatives_path, config_path, config_data, channel_set, feature_files)
             # Guardamos all
-            self._apply_loaded_state(derivatives_path, config_path, config_data, channel_names, feature_files, metadata)
+            self._apply_loaded_state(derivatives_path, config_path, config_data, channel_set, feature_files, metadata)
         except ValueError as exc:
             self._clear_loaded_state()
             self._set_status(str(exc), "error")
@@ -312,13 +320,6 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
 
         self.state["plot_features_subjects"] = sorted({subject for subject in subjects if subject})
         self.state["plot_features_recordings"] = sorted({recording for recording in recordings if recording})
-
-    @staticmethod
-    def _extract_channel_names(config_data: dict[str, Any]) -> list[str]:
-        channels = config_data.get("channels")
-        if isinstance(channels, list):
-            return [str(channel) for channel in channels]
-        return []
 
     @staticmethod
     def _format_value(value: Any) -> str:

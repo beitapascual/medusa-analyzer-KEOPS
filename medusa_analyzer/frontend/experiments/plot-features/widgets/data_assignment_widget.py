@@ -258,7 +258,13 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
         if item_name is None:
             return None
 
-        groups = self.state.get("grupos")
+        groups = self.state.get("groups")
+        if isinstance(groups, list):
+            groups = {
+                f"group_{index + 1}": dict(group)
+                for index, group in enumerate(groups)
+                if isinstance(group, dict)
+            }
         if not isinstance(groups, dict):
             return None
 
