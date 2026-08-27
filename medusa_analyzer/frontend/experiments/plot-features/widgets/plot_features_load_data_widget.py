@@ -187,16 +187,11 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
                 raise ValueError(f"{self.required_config_file} could not be read.") from exc
 
             # Extraemos canales
-            metadata = config_data.get("metadata")
-            if not isinstance(metadata, dict):
-                channel_set = []
-            channel_set = metadata.get("channel_set")
-            if isinstance(channel_set, list):
-                channel_set = [str(channel) for channel in channel_set]
-            else:
-                channel_set = []
+            metadata = config_data.get("metadata", {})
+            channel_set = metadata.get("channel_set", []) if isinstance(metadata, dict) else []
             if not channel_set:
                 raise ValueError(f"{self.required_config_file} does not contain channel names.")
+            channel_set = [str(channel) for channel in channel_set]
 
             feature_files = self._discover_feature_files(derivatives_path) # Buscamos archivos correspondientes a features
             # Construimos el resumen de metadatos:
@@ -304,6 +299,15 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         return sorted(files)
 
     def _store_subjects_and_recordings_from_config(self, config_data: dict[str, Any]) -> None:
+        def subject_name(recording: dict[str, Any]) -> str:
+            """Función para poner bien los nombres de los sujetos. """
+            subject = str(recording.get("subject", "")).strip()
+            if not subject:
+                return ""
+            if subject.startswith("sub-"):
+                return subject
+            return f"sub-{subject}"
+
         def recording_name(path: str) -> str:
             """Función para sacar el nombre del recording"""
             stem = Path(path).stem
@@ -314,7 +318,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
             return "_".join(cleaned) or stem
 
         selected_recordings = config_data.get("selected_recordings", [])
-        subjects = [str(recording.get("subject", "")).strip() for recording in selected_recordings]
+        subjects = [subject_name(recording) for recording in selected_recordings]
         recordings = [recording_name(str(recording.get("relative_path") or recording.get("path") or ""))
             for recording in selected_recordings]
 
