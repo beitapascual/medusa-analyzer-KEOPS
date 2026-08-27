@@ -6,44 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QButtonGroup,
-    QFileDialog,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QRadioButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
-
-
-_DEFAULT_ANALYSIS_MODES = [
-    {
-        "id": "within",
-        "title": "Within subject",
-        "description": "Compare repeated conditions or sessions from the same participants. Each participant acts as their own control.",
-    },
-    {
-        "id": "between",
-        "title": "Between subjects",
-        "description": "Compare independent participant groups. Differences reflect variation between groups.",
-    },
-    {
-        "id": "nocomparison",
-        "title": "No comparison",
-        "description": "Inspect one participant or recording descriptively, without group or condition comparisons.",
-    },
-]
+from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QLineEdit, QPushButton, QRadioButton, QScrollArea, QVBoxLayout, QWidget)
 
 
 class PlotFeaturesLoadDataWidget(QScrollArea):
     changed = Signal()
 
+    # Incializamos el constructor
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         del experiment_info
         super().__init__()
@@ -52,9 +22,10 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         self.config = defaults.get("load_features", {})
         self.required_folder_name = str(self.config.get("required_folder_name", "derivatives"))
         self.required_config_file = str(self.config.get("required_config_file", "config.json"))
-        self.analysis_modes = self._analysis_mode_definitions()
+        self.analysis_modes = self.config["analysis_modes"]
         self.option_frames: dict[str, QFrame] = {}
 
+        # Configuración del área del scroll
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
 
@@ -72,15 +43,18 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         root.addWidget(title)
         root.addWidget(description)
 
+        # Cada uno de estos métodos construye una sección diferente de la pantalla
         root.addWidget(self._build_folder_panel())
         root.addWidget(self._build_analysis_panel())
         root.addWidget(self._build_metadata_panel())
         root.addStretch()
 
+        # Recuperamos lo que ya hubiese seleccionado el usuario previamente (si ha ido a otra pantalla, etc.)
         self._restore_analysis_mode()
         self._restore_loaded_state()
 
     def _build_folder_panel(self) -> QFrame:
+        """Función para crear la zona en la que eliges derivatives"""
         panel = QFrame()
         panel.setProperty("role", "surface-panel")
         layout = QVBoxLayout(panel)
@@ -102,7 +76,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         row.addWidget(self.path_display, 1)
         row.addWidget(browse_button)
         layout.addLayout(row)
-
+        # Label que se va actualizando
         self.status_label = QLabel("Select a derivatives folder that contains config.json.")
         self.status_label.setObjectName("selectionStatus")
         self.status_label.setProperty("status", "idle")
@@ -112,6 +86,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         return panel
 
     def _build_analysis_panel(self) -> QFrame:
+        """Función para construir el panel con los tipos de análisis."""
         panel = QFrame()
         panel.setProperty("role", "surface-panel")
         layout = QVBoxLayout(panel)
@@ -123,10 +98,10 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         layout.addWidget(heading)
 
         self.analysis_group = QButtonGroup(self)
-        self.analysis_group.setExclusive(True)
+        self.analysis_group.setExclusive(True) # agrupamos Rbuttons para que solo uno pueda estar seleccionado a la vez
         self.analysis_group.buttonToggled.connect(self._analysis_mode_changed)
 
-        for mode in self.analysis_modes:
+        for mode in self.analysis_modes: # Creamos una opción para cada modo
             option = QFrame()
             option.setProperty("role", "analysis-mode-option")
             option_layout = QVBoxLayout(option)
@@ -151,30 +126,19 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         return panel
 
     def _build_metadata_panel(self) -> QFrame:
+        """Función para crear el panel donde se muestran los metadados"""
         self.metadata_panel = QFrame()
         self.metadata_panel.setProperty("role", "surface-panel")
         self.metadata_layout = QGridLayout(self.metadata_panel)
         self.metadata_layout.setContentsMargins(24, 20, 24, 20)
         self.metadata_layout.setHorizontalSpacing(18)
         self.metadata_layout.setVerticalSpacing(8)
-        self.metadata_panel.hide()
+        self.metadata_panel.hide() # inicialmente está oculto (no se ha cargado ninguna carpeta)
         return self.metadata_panel
 
-    def _analysis_mode_definitions(self) -> list[dict[str, str]]:
-        configured_modes = self.config.get("analysis_modes") or _DEFAULT_ANALYSIS_MODES
-        modes: list[dict[str, str]] = []
-        for mode in configured_modes:
-            mode_id = str(mode.get("id", "")).strip()
-            if not mode_id:
-                continue
-            modes.append({
-                "id": mode_id,
-                "title": str(mode.get("title", mode_id)),
-                "description": str(mode.get("description", "")),
-            })
-        return modes or list(_DEFAULT_ANALYSIS_MODES)
-
     def _restore_analysis_mode(self) -> None:
+        """Función para restaurar el modo de análisis seleccionado. Para ello se busca en el estado si
+        ya había uno seleccionado y sino establece el por defecto."""
         default_mode = str(self.config.get("default_analysis_mode", "within"))
         selected_mode = str(self.state.get("analysis_mode") or default_mode)
         selected_button = None
