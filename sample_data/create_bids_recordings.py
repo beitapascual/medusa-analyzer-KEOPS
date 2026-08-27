@@ -4,13 +4,13 @@ from pathlib import Path
 from medusa.core.data import BidsInfo, Recording, Signal, Channel, Sensor, ChannelSet, Events
 
 
-def generate_medusa_bids_test_batch(out_dir="sample_data/medusa_source_records", n_subjects=20, n_sessions=3):
+def generate_medusa_bids_test_batch(out_dir="bids_bd_pre_converter", n_subjects=20, n_sessions=3):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(0)
 
-    # Duración aumentada a 5 segundos
-    DURATION = 5.0
+    # Duración mantenida en 300 segundos (5 minutos) para alojar eventos de larga duración
+    DURATION = 300.0
 
     for sub in range(1, n_subjects + 1):
         for ses in range(1, n_sessions + 1):
@@ -37,18 +37,14 @@ def generate_medusa_bids_test_batch(out_dir="sample_data/medusa_source_records",
                 manufacturer = "Brain Products"
                 model = "actiCHamp Plus"
                 ref = "GND"
-
                 if sub == 1 and ses == 3: ref = "Fz"  # Excepción
-
             elif 13 <= sub <= 18:
                 # GRUPO 2: Minoría Global / Mayoría por Sujeto
                 fs_eeg = 500.0
                 manufacturer = "Delsys"
                 model = "Unknown"
                 ref = "Mastoids"
-
                 if ses == 3: fs_eeg = 1000.0  # Excepción
-
             else:
                 # GRUPO 3: Aleatorio
                 fs_eeg = random.choice([128.0, 256.0, 512.0])
@@ -92,14 +88,57 @@ def generate_medusa_bids_test_batch(out_dir="sample_data/medusa_source_records",
             # 4. EVENTOS (Todos los sujetos)
             # ==========================================
             events = Events(optional_columns={"trial_type": str, "value": int},
-                            descriptions={"trial_type": "go or nogo", "value": "stimulus code"})
+                            descriptions={"trial_type": "event condition or type", "value": "stimulus code"})
 
-            # Tres eventos distribuidos a lo largo de los 5 segundos
-            events.append([
-                {"onset": 1.00, "duration": 0.20, "trial_type": "go", "value": 1},
-                {"onset": 2.50, "duration": 0.20, "trial_type": "nogo", "value": 2},
-                {"onset": 4.10, "duration": 0.20, "trial_type": "go", "value": 1}
-            ])
+            event_list = []
+
+            # Bloque 1: Resting state inicial (Duración 60s)
+            # Se aplica un jitter (variación aleatoria) per-sesión para que los onsets difieran ligeramente
+            start_rest1 = 5.0 + rng.uniform(-0.5, 0.5)
+            event_list.append({"onset": start_rest1, "duration": 60.0, "trial_type": "resting_state", "value": 10})
+
+            # Estímulos auditivos superpuestos durante el resting state 1 (Instantáneos, duración 0)
+            for offset in [10.0, 25.5, 42.0, 55.0]:
+                sound_onset = start_rest1 + offset + rng.uniform(-0.2, 0.2)
+                event_list.append({"onset": sound_onset, "duration": 0.0, "trial_type": "sound_stim", "value": 11})
+
+            # Bloque 2: Instrucciones (Duración 10s)
+            start_inst = 70.0 + rng.uniform(-0.5, 0.5)
+            event_list.append({"onset": start_inst, "duration": 10.0, "trial_type": "instruction", "value": 20})
+
+            # Bloque 3: Tarea Go/No-Go (Duración 60s)
+            start_task1 = 85.0 + rng.uniform(-0.5, 0.5)
+            event_list.append({"onset": start_task1, "duration": 60.0, "trial_type": "task_block", "value": 30})
+
+            # Estímulos de la tarea superpuestos al bloque (Instantáneos)
+            for i, offset in enumerate([5.0, 12.5, 23.0, 31.5, 45.0, 52.5]):
+                stim_onset = start_task1 + offset + rng.uniform(-0.1, 0.1)
+                ttype = "go" if i % 2 == 0 else "nogo"
+                val = 1 if ttype == "go" else 2
+                event_list.append({"onset": stim_onset, "duration": 0.0, "trial_type": ttype, "value": val})
+
+            # Bloque 4: Resting state 2 (Duración 60s)
+            start_rest2 = 160.0 + rng.uniform(-0.5, 0.5)
+            event_list.append({"onset": start_rest2, "duration": 60.0, "trial_type": "resting_state", "value": 10})
+
+            # Estímulos auditivos superpuestos durante el resting state 2
+            for offset in [15.0, 30.0, 48.0]:
+                sound_onset = start_rest2 + offset + rng.uniform(-0.2, 0.2)
+                event_list.append({"onset": sound_onset, "duration": 0.0, "trial_type": "sound_stim", "value": 11})
+
+            # Bloque 5: Tarea Go/No-Go 2 (Duración 60s)
+            start_task2 = 230.0 + rng.uniform(-0.5, 0.5)
+            event_list.append({"onset": start_task2, "duration": 60.0, "trial_type": "task_block", "value": 30})
+
+            # Estímulos de la tarea 2 superpuestos
+            for i, offset in enumerate([8.0, 15.0, 28.0, 35.0, 41.5, 50.0]):
+                stim_onset = start_task2 + offset + rng.uniform(-0.1, 0.1)
+                # Alternancia diferente para añadir variabilidad en los bloques
+                ttype = "nogo" if i % 3 == 0 else "go"
+                val = 2 if ttype == "nogo" else 1
+                event_list.append({"onset": stim_onset, "duration": 0.0, "trial_type": ttype, "value": val})
+
+            events.append(event_list)
             rec.set_events(events)
 
             # ==========================================
@@ -108,8 +147,8 @@ def generate_medusa_bids_test_batch(out_dir="sample_data/medusa_source_records",
             rec.set_experiment({
                 "TaskInformation": {
                     "TaskName": "gonogo",
-                    "TaskDescription": "Standard go/no-go task with 5 seconds duration",
-                    "Instructions": "Press button when green, hold when red"
+                    "TaskDescription": "Standard go/no-go task with overlapping blocks and resting states",
+                    "Instructions": "Relax during resting state. Press button when green, hold when red during task."
                 }
             })
 
