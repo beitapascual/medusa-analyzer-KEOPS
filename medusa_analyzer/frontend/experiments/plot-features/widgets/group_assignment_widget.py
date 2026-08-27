@@ -4,7 +4,7 @@ from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
-from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+from PySide6.QtWidgets import (QAbstractItemView, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMenu, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.validation import Validation
 
@@ -43,19 +43,34 @@ def _filter_table_items(table: QTableWidget, text: str) -> None:
         table.setRowHidden(row, bool(needle) and needle not in item_name.lower())
 
 def _group_color_brush(group: dict[str, Any] | None) -> QBrush:
+    """Crea el pincel con el color del grupo para pintar filas asignadas."""
     brush = QBrush()
     if group:
         color = QColor(str(group.get("group_color") or ""))
         if color.isValid():
-            color.setAlpha(72)
             brush = QBrush(color)
     return brush
 
-def _set_table_row_background(table: QTableWidget, row: int, brush: QBrush) -> None:
+def _group_text_brush(group: dict[str, Any] | None) -> QBrush:
+    """Elige texto claro u oscuro para que se lea encima del color del grupo."""
+    if not group:
+        return QBrush()
+
+    color = QColor(str(group.get("group_color") or ""))
+    if not color.isValid():
+        return QBrush()
+
+    brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
+    return QBrush(QColor("#1F171B" if brightness > 150 else "#FFF7FA"))
+
+def _set_table_row_background(table: QTableWidget, row: int, background: QBrush, foreground: QBrush | None = None) -> None:
+    """Aplica el fondo a todas las celdas de una fila de tabla."""
     for col in range(table.columnCount()):
         table_item = table.item(row, col)
         if table_item is not None:
-            table_item.setBackground(brush)
+            table_item.setBackground(background)
+            table_item.setForeground(foreground or QBrush())
+    table.viewport().update()
 
 def _group_for_item(state: dict[str, Any], target: str, item_name: str | None) -> dict[str, Any] | None:
     if item_name is None:
@@ -137,6 +152,12 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.table.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self.table)
 
+        self.summary_grid = QGridLayout()
+        self.summary_grid.setContentsMargins(0, 2, 0, 0)
+        self.summary_grid.setHorizontalSpacing(10)
+        self.summary_grid.setVerticalSpacing(10)
+        layout.addLayout(self.summary_grid)
+
         self.instruction_label = QLabel("")
         self.instruction_label.setObjectName("assignmentInstruction")
         self.instruction_label.setWordWrap(True)
@@ -161,6 +182,7 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             self.description.setText("No group assignment is required for no-comparison analysis.")
             self.instruction_label.setText("")
             self.state["group_assignment"] = {"target": None, "items_by_group": {}, "group_by_item": {}}
+            self._refresh_assignment_summary()
             self._update_status_label()
             self.changed.emit()
             return
@@ -228,6 +250,11 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self._sync()
         self.table.clearSelection()
 
+    def _render_all_assignments(self) -> None:
+        """Repinta todas las filas segun la asignacion guardada en memoria."""
+        for row in range(self.table.rowCount()):
+            self._render_assignment_for_row(row)
+
     def _render_assignment_for_row(self, row: int) -> None:
         """Función que dibuja la asignación."""
         item_name = self._item_name_for_row(row) # obtiene el elemento
@@ -246,6 +273,43 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             self.table.setItem(row, 1, group_item)
         group_item.setText(group_name) # ponemos nombre del grupo
         _set_table_row_background(self.table, row, brush) # pintamos toda la fila del color del grupo
+
+    def _refresh_assignment_summary(self) -> None:
+        """Reconstruye las chips con el numero de elementos asignados a cada grupo."""
+        while self.summary_grid.count():
+            item = self.summary_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if self.current_target is None:
+            return
+
+        groups = self._groups()
+        item_name = _target_item_name(self.current_target)
+        for index, (group_id, group) in enumerate(groups.items()):
+            assigned_count = sum(1 for assigned_group_id in self.assignment_by_item.values()
+                if assigned_group_id == group_id)
+            chip = self._build_group_summary_chip(group, assigned_count, item_name)
+            self.summary_grid.addWidget(chip, index // 3, index % 3)
+
+    def _build_group_summary_chip(self, group: dict[str, Any], assigned_count: int, item_name: str) -> QFrame:
+        """Crea una chip coloreada con el contador de elementos asignados."""
+        chip = QFrame()
+        chip.setProperty("role", "group-assignment-summary-chip")
+
+        color = QColor(str(group.get("group_color") or ""))
+        if not color.isValid():
+            color = QColor("#3E3036")
+        text_color = _group_text_brush({"group_color": color.name()}).color().name()
+        border_color = color.darker(120).name()
+        chip.setStyleSheet(f"background: {color.name()}; border: 1px solid {border_color}; border-radius: 7px;")
+
+        layout = QHBoxLayout(chip)
+        layout.setContentsMargins(12, 8, 12, 8)
+        label = QLabel(f"{group.get('group_name') or 'Group'}: {assigned_count} {item_name}(s)")
+        label.setStyleSheet(f"color: {text_color}; font-weight: 700;")
+        layout.addWidget(label)
+        return chip
 
     def _sync(self, emit_changed: bool = True) -> None:
         target = self.current_target # obtiene qué estamos asignando
@@ -268,6 +332,8 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             "items_by_group": assignment_by_group,
             "group_by_item": group_by_item}
         self._sync_groups_state(target, assignment_by_group)
+        self._render_all_assignments()
+        self._refresh_assignment_summary()
         self.validation_errors = self._validate_assignment()
         self._update_status_label()
 

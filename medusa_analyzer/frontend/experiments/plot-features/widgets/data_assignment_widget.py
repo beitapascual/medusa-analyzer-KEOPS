@@ -6,8 +6,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
-from .group_assignment_widget import (_available_items_for_target, _filter_table_items, _group_color_brush,
-    _group_for_item, _item_name_for_table_row, _set_table_row_background, _target_item_name, _target_title)
+from .group_assignment_widget import (_available_items_for_target, _filter_table_items, _item_name_for_table_row,
+    _target_item_name, _target_title)
 from medusa_analyzer.frontend.validation import Validation
 
 class PlotFeaturesDataAssignmentWidget(QScrollArea):
@@ -95,6 +95,7 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
         return panel
 
     def _refresh_from_state(self) -> None:
+        """Actualiza la pantalla según toodo lo que haya en el state"""
         analysis_mode = str(self.state.get("analysis_mode") or "within")
         self.current_target = "subjects" if analysis_mode == "within" else "recordings"
         target_title = _target_title(self.current_target)
@@ -107,6 +108,7 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
         self._sync(emit_changed=False)
 
     def _populate_table(self) -> None:
+        """Rellena la tabla"""
         self.table.blockSignals(True)
         try:
             self.table.clearSelection()
@@ -116,17 +118,12 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
                 item = QTableWidgetItem(item_name)
                 item.setData(Qt.ItemDataRole.UserRole, item_name)
                 self.table.setItem(row, 0, item)
-                self._render_group_color_for_row(row)
         finally:
             self.table.blockSignals(False)
         _filter_table_items(self.table, self.search_input.text())
 
-    def _render_group_color_for_row(self, row: int) -> None:
-        item_name = _item_name_for_table_row(self.table, row)
-        group = _group_for_item(self.state, self.current_target, item_name)
-        _set_table_row_background(self.table, row, _group_color_brush(group))
-
     def _restore_selection(self) -> None:
+        """Recupera una selección anterior"""
         stored_selection = self._stored_selection_for_target()
         if not stored_selection:
             return
