@@ -40,6 +40,12 @@
       "title": "Data assignment",
       "subtitle": "Select the remaining subjects or recordings for the analysis.",
       "widget": "data_assignment_widget.PlotFeaturesDataAssignmentWidget"
+    },
+    {
+      "id": "feature_selection",
+      "title": "Feature selection",
+      "subtitle": "Select the computed features to plot.",
+      "widget": "feature_selection_widget.PlotFeaturesFeatureSelectionWidget"
     }
   ]
 }

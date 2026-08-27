@@ -12,6 +12,62 @@ _target_titles = {"subjects": "Subjects", "recordings": "Files"}
 _target_item_names = {"subjects": "subject", "recordings": "file"}
 _target_by_analysis_mode = {"within": "recordings", "between": "subjects"}
 
+def _target_title(target: str) -> str:
+    return _target_titles[target]
+
+def _target_item_name(target: str) -> str:
+    return _target_item_names[target]
+
+def _available_items_for_target(state: dict[str, Any], target: str | None) -> list[str]:
+    key = "plot_features_subjects" if target == "subjects" else "plot_features_recordings"
+    values = state.get(key)
+    return [str(value) for value in values] if isinstance(values, list) else []
+
+def _groups_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    groups = state.get("groups")
+    if isinstance(groups, dict):
+        return {str(group_id): dict(group) for group_id, group in groups.items() if isinstance(group, dict)}
+    return {}
+
+def _item_name_for_table_row(table: QTableWidget, row: int) -> str | None:
+    item = table.item(row, 0)
+    if item is None:
+        return None
+    value = item.data(Qt.ItemDataRole.UserRole)
+    return str(value) if value is not None else item.text()
+
+def _filter_table_items(table: QTableWidget, text: str) -> None:
+    needle = text.lower().strip()
+    for row in range(table.rowCount()):
+        item_name = _item_name_for_table_row(table, row) or ""
+        table.setRowHidden(row, bool(needle) and needle not in item_name.lower())
+
+def _group_color_brush(group: dict[str, Any] | None) -> QBrush:
+    brush = QBrush()
+    if group:
+        color = QColor(str(group.get("group_color") or ""))
+        if color.isValid():
+            color.setAlpha(72)
+            brush = QBrush(color)
+    return brush
+
+def _set_table_row_background(table: QTableWidget, row: int, brush: QBrush) -> None:
+    for col in range(table.columnCount()):
+        table_item = table.item(row, col)
+        if table_item is not None:
+            table_item.setBackground(brush)
+
+def _group_for_item(state: dict[str, Any], target: str, item_name: str | None) -> dict[str, Any] | None:
+    if item_name is None:
+        return None
+
+    group_item_key = "subjects" if target == "subjects" else "files"
+    for group in _groups_from_state(state).values():
+        values = group.get(group_item_key)
+        if isinstance(values, (list, tuple, set)) and item_name in {str(value) for value in values}:
+            return group
+    return None
+
 class PlotFeaturesGroupAssignmentWidget(QScrollArea):
     changed = Signal()
 
@@ -109,8 +165,8 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             self.changed.emit()
             return
 
-        target_title = _target_titles[target]
-        item_name = _target_item_names[target]
+        target_title = _target_title(target)
+        item_name = _target_item_name(target)
         self.items = self._available_items() # Buscamos sujetos o recordings disponibles
         self.description.setText(f"Assign {target_title.lower()} to the groups defined in the previous step.")
         self.instruction_label.setText(f"Select one or more {item_name}s, then right-click to assign them to a group.")
@@ -122,7 +178,7 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.table.blockSignals(True)
         try:
             self.table.setRowCount(len(self.items)) # tantas filas como elementos existan
-            target_title = _target_titles[self.current_target or "recordings"]
+            target_title = _target_title(self.current_target or "recordings")
             self.table.setHorizontalHeaderLabels([target_title[:-1], "Group"]) # título
             for row, item_name in enumerate(self.items): # recorremos cada sujeto/recording y su índice de fila
                 item = QTableWidgetItem(item_name) # celda del nombre
@@ -182,22 +238,14 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         groups = self._groups()
         group = groups.get(group_id or "")
         group_name = str(group.get("group_name") or "") if group else "" # nombre del grupo
-        brush = QBrush() # fondo vacío
-        if group:
-            color = QColor(str(group.get("group_color") or ""))
-            if color.isValid():
-                color.setAlpha(72)
-                brush = QBrush(color)
+        brush = _group_color_brush(group) # fondo vacío
 
         group_item = self.table.item(row, 1) # obtenemos la celda de la columna group
         if group_item is None:
             group_item = QTableWidgetItem("")
             self.table.setItem(row, 1, group_item)
         group_item.setText(group_name) # ponemos nombre del grupo
-        for col in range(self.table.columnCount()): # recorremos ambas columnas
-            table_item = self.table.item(row, col)
-            if table_item is not None:
-                table_item.setBackground(brush) # pintamos toda la fila del color del grupo
+        _set_table_row_background(self.table, row, brush) # pintamos toda la fila del color del grupo
 
     def _sync(self, emit_changed: bool = True) -> None:
         target = self.current_target # obtiene qué estamos asignando
@@ -245,11 +293,11 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             "item_name": "group", "action": "contain"})], label="Groups"))
         # Comprueba que haya al menos un sujeto o archivo disponible
         errors.extend(self.validation.validate_many(self.items, [("minimum_length", {"minimum": 1,
-            "item_name": _target_item_names[target], "action": "contain"})], label=_target_titles[target]))
+            "item_name": _target_item_name(target), "action": "contain"})], label=_target_title(target)))
         # Mira si queda algún elemento sin asignar
         if [item_name for item_name in self.items if item_name not in self.assignment_by_item]:
-            item_name = _target_item_names[target]
-            errors.append(f"{_target_titles[target]}: assign every {item_name} before continuing.")
+            item_name = _target_item_name(target)
+            errors.append(f"{_target_title(target)}: assign every {item_name} before continuing.")
         return errors
 
     def _update_status_label(self) -> None:
@@ -260,24 +308,17 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             self.status_label.setText(self.validation_errors[0])
             self.status_label.setProperty("status", "error")
         else:
-            self.status_label.setText(f"All {_target_item_names[self.current_target]}s assigned.")
+            self.status_label.setText(f"All {_target_item_name(self.current_target)}s assigned.")
             self.status_label.setProperty("status", "ready")
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
     def _filter_items(self, text: str) -> None:
-        needle = text.lower().strip()
-        for row in range(self.table.rowCount()):
-            item_name = self._item_name_for_row(row) or ""
-            self.table.setRowHidden(row, bool(needle) and needle not in item_name.lower())
+        _filter_table_items(self.table, text)
 
     def _item_name_for_row(self, row: int) -> str | None:
         """Función para averiguar qué sujeto/archivo corresponde a una fila."""
-        item = self.table.item(row, 0)
-        if item is None:
-            return None
-        value = item.data(Qt.ItemDataRole.UserRole)
-        return str(value) if value is not None else item.text()
+        return _item_name_for_table_row(self.table, row)
 
     def _stored_assignment_for_target(self, target: str) -> dict[str, str]:
         """Función para recuperar asignaciones antiguas."""
@@ -294,15 +335,10 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             if str(item) in self.items and str(group_id) in groups}
 
     def _available_items(self) -> list[str]:
-        key = "plot_features_subjects" if self.current_target == "subjects" else "plot_features_recordings"
-        values = self.state.get(key)
-        return [str(value) for value in values] if isinstance(values, list) else []
+        return _available_items_for_target(self.state, self.current_target)
 
     def _groups(self) -> dict[str, dict[str, Any]]:
-        groups = self.state.get("groups")
-        if isinstance(groups, dict):
-            return {str(group_id): dict(group) for group_id, group in groups.items() if isinstance(group, dict)}
-        return {}
+        return _groups_from_state(self.state)
 
     def on_step_activated(self) -> None:
         self._refresh_from_state()
