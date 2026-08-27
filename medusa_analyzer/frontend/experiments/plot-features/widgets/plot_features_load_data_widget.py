@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -212,8 +211,8 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         self.state["channel_names"] = channel_names
         self.state["feature_files"] = feature_files
         self.state["plot_features_metadata"] = metadata
-        # Averiguamos qué sujetos existen y qué recordings/tareas existen
-        self._populate_plot_feature_items(config_data, feature_files)
+        # Guardamos los sujetos y recordings que vienen en el config
+        self._store_subjects_and_recordings_from_config(config_data)
         self._sync_analysis_mode(emit_changed=False)
         self._show_metadata(metadata)
         self._set_status("Derivatives folder loaded.", "ready")
@@ -296,19 +295,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
             files.append(str(file_path))
         return sorted(files)
 
-    def _populate_plot_feature_items(self, config_data: dict[str, Any], feature_files: list[str]) -> None:
-        def subjects_from_path(path: str) -> list[str]:
-            """Función que busca los sujetos dentro de una ruta."""
-            subjects: list[str] = []
-            for part in Path(path).parts:
-                if part.startswith("sub-") and "." not in part:
-                    subjects.append(part)
-
-            stem = Path(path).stem
-            for match in re.finditer(r"(?:^|_)sub-([^_]+)", stem):
-                subjects.append((match.group(1)))
-            return subjects
-
+    def _store_subjects_and_recordings_from_config(self, config_data: dict[str, Any]) -> None:
         def recording_name(path: str) -> str:
             """Función para sacar el nombre del recording"""
             stem = Path(path).stem
@@ -318,50 +305,13 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
                 if part and not any(part.startswith(f"{prefix}-") for prefix in ignored_prefixes)]
             return "_".join(cleaned) or stem
 
-        def natural_key(value: str) -> list[Any]:
-            """Función auxiliar para ordenar de forma numérica creciente los strings."""
-            return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", value)]
+        selected_recordings = config_data.get("selected_recordings", [])
+        subjects = [str(recording.get("subject", "")).strip() for recording in selected_recordings]
+        recordings = [recording_name(str(recording.get("relative_path") or recording.get("path") or ""))
+            for recording in selected_recordings]
 
-        # todo: no entiendo bien esto
-        subjects: list[str] = []
-        recordings: list[str] = [recording_name(str(file_path)) for file_path in feature_files]
-
-        # Buscamos sujetos en los propios features files del derivatives path, pero también en los selected_recordings
-        # del config.
-        selected_recordings = config_data.get("selected_recordings")
-        if isinstance(selected_recordings, list):
-            for recording in selected_recordings:
-                if isinstance(recording, dict):
-                    subject = recording.get("subject")
-                    if subject:
-                        subjects.append(str(subject))
-                    source = recording.get("relative_path") or recording.get("path")
-                    if source:
-                        recordings.append(recording_name(str(source)))
-                    for key in ("relative_path", "path"):
-                        value = recording.get(key)
-                        if value:
-                            subjects.extend(subjects_from_path(str(value)))
-                elif isinstance(recording, str):
-                    recordings.append(recording_name(recording))
-                    subjects.extend(subjects_from_path(recording))
-
-        metadata = config_data.get("metadata")
-        if isinstance(metadata, dict):
-            metadata_subjects = metadata.get("subjects")
-            if isinstance(metadata_subjects, list):
-                subjects.extend(str(subject) for subject in metadata_subjects)
-            if not recordings and metadata.get("task"):
-                task = str(metadata["task"])
-                recordings.append(task if task.startswith("task-") else f"task-{task}")
-
-        for file_path in feature_files:
-            subjects.extend(subjects_from_path(str(file_path)))
-
-        self.state["plot_features_subjects"] = sorted({subject for subject in subjects if subject.strip()},
-            key=natural_key)
-        self.state["plot_features_recordings"] = sorted({recording for recording in recordings if recording.strip()},
-            key=natural_key)
+        self.state["plot_features_subjects"] = sorted({subject for subject in subjects if subject})
+        self.state["plot_features_recordings"] = sorted({recording for recording in recordings if recording})
 
     @staticmethod
     def _extract_channel_names(config_data: dict[str, Any]) -> list[str]:
