@@ -5,26 +5,13 @@ from typing import Any
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (
-    QColorDialog,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QSpinBox,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.validation import Validation
 
 
 class GroupDefinitionWidget(QScrollArea):
-    changed = Signal()
+    changed = Signal() # cada vez que cambie algo emitimos señal
 
     def __init__(self, experiment_info: dict, defaults: dict, state: dict):
         del experiment_info
@@ -34,12 +21,11 @@ class GroupDefinitionWidget(QScrollArea):
         self.config = defaults.get("group_definition", {})
         self.validation = Validation()
         self.validation_errors: list[str] = []
+        # Creamos una variable para guardar la info del widget asociado a cada grupo; la interfaz visual de cada grupo
         self.group_rows: dict[str, dict[str, Any]] = {}
-        self.custom_colors: dict[str, bool] = {}
-        self._syncing = False
 
         self.min_groups = int(self.config.get("min_groups", 1))
-        self.max_groups = int(self.config.get("max_groups", 12))
+        self.max_groups = int(self.config.get("max_groups", 20))
         self.default_group_count = int(self.config.get("default_group_count", 2))
 
         self.setWidgetResizable(True)
@@ -59,14 +45,15 @@ class GroupDefinitionWidget(QScrollArea):
         root.addWidget(title)
         root.addWidget(description)
 
-        root.addWidget(self._build_controls_panel())
-        root.addWidget(self._build_groups_panel())
+        root.addWidget(self._build_controls_panel()) # panel para elegir nº de grupos
+        root.addWidget(self._build_groups_panel()) # # panel donde aparecen los grupos
         root.addStretch()
 
-        self._restore_group_count()
+        self._restore_group_count() # Intentamos restaurar los grupos que hubiera guardados en state
         self._sync(emit_changed=False)
 
     def _build_controls_panel(self) -> QFrame:
+        """Panel para elegir el número de grupos"""
         panel = QFrame()
         panel.setProperty("role", "surface-panel")
         layout = QHBoxLayout(panel)
@@ -86,6 +73,7 @@ class GroupDefinitionWidget(QScrollArea):
         return panel
 
     def _build_groups_panel(self) -> QFrame:
+        """Construye el panel donde aparecerán los grupos."""
         panel = QFrame()
         panel.setProperty("role", "surface-panel")
         layout = QVBoxLayout(panel)
@@ -110,53 +98,40 @@ class GroupDefinitionWidget(QScrollArea):
         return panel
 
     def _restore_group_count(self) -> None:
+        """Intenta recuperar grupos previamente creados."""
         stored_groups = self._stored_groups()
         if stored_groups:
-            group_count = len(stored_groups)
+            group_count = len(stored_groups) # Vemos el nº de grupos que hay
         else:
             group_count = self.default_group_count
-        custom_colors = self.state.get("_group_definition_custom_colors", {})
-        if isinstance(custom_colors, dict):
-            self.custom_colors = {str(group_id): bool(value) for group_id, value in custom_colors.items()}
-        else:
-            self.custom_colors = {
-                group_id: bool(group.get("color_is_custom", False))
-                for group_id, group in stored_groups.items()
-            }
 
         self.group_count.blockSignals(True)
-        self.group_count.setValue(max(self.min_groups, min(self.max_groups, group_count)))
+        self.group_count.setValue(max(self.min_groups, min(self.max_groups, group_count))) # limitamos rango
         self.group_count.blockSignals(False)
-        self._rebuild_group_chips()
+        self._rebuild_group_chips() # Creamos visualmente los grupos
 
     def _group_count_changed(self) -> None:
-        self._rebuild_group_chips()
-        self._sync()
+        self._rebuild_group_chips() # Reconstruimos las chips
+        self._sync() # Actualizamos la interfaz
 
     def _rebuild_group_chips(self) -> None:
-        self._clear_groups_grid()
-        self.group_rows = {}
+        while self.groups_grid.count(): # borramos widgets actuales
+            item = self.groups_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.group_rows = {} # vacíamos dic que gaurdaba los widgets
 
-        group_count = self.group_count.value()
-        stored_groups = self._stored_groups()
-        default_colors = self._default_colors(group_count)
-        active_group_ids = {self._group_id(index) for index in range(group_count)}
-        self.custom_colors = {
-            group_id: custom
-            for group_id, custom in self.custom_colors.items()
-            if group_id in active_group_ids and group_id in stored_groups
-        }
+        group_count = self.group_count.value() # obtenemos cuántos grupos queremos
+        stored_groups = self._stored_groups() # recuperamos configuraciones de grupos previas
+        default_colors = self._default_colors(group_count) # generamos color diferente para cada grupo
 
         for index in range(group_count):
-            group_id = self._group_id(index)
-            stored_group = stored_groups.get(group_id, {})
-            group_name = str(stored_group.get("group_name") or f"Group {index + 1}")
-            if self.custom_colors.get(group_id, False):
-                group_color = str(stored_group.get("group_color") or default_colors[index])
-            else:
-                group_color = default_colors[index]
+            group_id = f"group_{index + 1}"
+            stored_group = stored_groups.get(group_id, {}) # buscamos si ese grupo existía
+            group_name = str(stored_group.get("group_name") or f"Group {index + 1}") # si tenía nombre, lo reutiliza
+            group_color = str(stored_group.get("group_color") or default_colors[index]) # si tenía color, lo reutiliza
 
-            chip = self._create_group_chip(group_id, group_name, group_color)
+            chip = self._create_group_chip(group_id, group_name, group_color) # creamos visualmente el grupo
             self.groups_grid.addWidget(chip, index // 2, index % 2)
 
         self.groups_grid.setColumnStretch(0, 1)
@@ -171,15 +146,15 @@ class GroupDefinitionWidget(QScrollArea):
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(10)
 
-        swatch = QFrame()
+        swatch = QFrame() # circulito/cuadradito de color
         swatch.setProperty("role", "group-color-swatch")
         swatch.setFixedSize(22, 22)
         swatch.setStyleSheet(f"background: {group_color}; border-radius: 11px;")
 
-        name_input = QLineEdit()
+        name_input = QLineEdit() # campo editable de nombre
         name_input.setText(group_name)
         name_input.setPlaceholderText("Group name")
-        name_input.textChanged.connect(self._sync)
+        name_input.textChanged.connect(self._sync) # cada vez que el usuario escriba el nombre, sincroniza state
 
         color_button = QPushButton(group_color.upper())
         color_button.setProperty("variant", "secondary")
@@ -190,16 +165,14 @@ class GroupDefinitionWidget(QScrollArea):
         layout.addWidget(name_input, 1)
         layout.addWidget(color_button)
 
-        self.group_rows[group_id] = {
-            "name_input": name_input,
-            "color": group_color.upper(),
-            "color_button": color_button,
-            "swatch": swatch,
-        }
+        # Actualizamos la información de los widgets
+        self.group_rows[group_id] = {"name_input": name_input, "color": group_color.upper(),
+            "color_button": color_button, "swatch": swatch}
         return chip
 
     def _select_group_color(self, group_id: str) -> None:
-        row = self.group_rows.get(group_id)
+        """Función para seleccionar el color de cada grupo. """
+        row = self.group_rows.get(group_id) # buscamos el widget correspondiente a ese grupo
         if row is None:
             return
 
@@ -207,96 +180,65 @@ class GroupDefinitionWidget(QScrollArea):
         if not selected_color.isValid():
             return
 
-        color = selected_color.name().upper()
+        color = selected_color.name().upper() # convertimos el color a hexadecimal
         row["color"] = color
-        self.custom_colors[group_id] = True
-        row["color_button"].setText(color)
-        row["swatch"].setStyleSheet(f"background: {color}; border-radius: 11px;")
-        self._sync()
+        row["color_button"].setText(color) # texto del botón
+        row["swatch"].setStyleSheet(f"background: {color}; border-radius: 11px;") # círculo visual
+        self._sync() # sincronizamos para guardar en state
 
     def _sync(self, *_: Any, emit_changed: bool = True) -> None:
-        if self._syncing:
-            return
+        previous_groups = self._stored_groups() # TODO: cambair nombre porque es lioso con los grupos que se hacen aqui
+        groups: dict[str, dict[str, Any]] = {}
+        for group_id, row in self.group_rows.items():
+            previous_group = previous_groups.get(group_id, {})
+            groups[group_id] = {"group_name": row["name_input"].text().strip(),
+                "group_color": str(row["color"]).upper(),
+                "subjects": list(previous_group.get("subjects") or []), # viene del widget anterior
+                "files": list(previous_group.get("files") or [])} # viene del widget anterior
 
-        self._syncing = True
-        try:
-            self.state["grupos"] = self._groups_state()
-            self.state["_group_definition_custom_colors"] = {
-                group_id: bool(self.custom_colors.get(group_id, False))
-                for group_id in self.group_rows
-            }
-            self.validation_errors = self._validate_groups()
-            self._update_status_label()
-        finally:
-            self._syncing = False
+        self.state["grupos"] = groups # TODO: grupos en ingles. Revisar que no rompa con los widgets que vienen a continuación
+        self.validation_errors = self._validate_groups()
+        self._update_status_label() # actualizamos mensaje de la pantalla
 
         if emit_changed:
             self.changed.emit()
 
-    def _groups_state(self) -> dict[str, dict[str, Any]]:
-        groups: dict[str, dict[str, Any]] = {}
-        previous_groups = self._stored_groups()
-        for index, (group_id, row) in enumerate(self.group_rows.items()):
-            previous_group = previous_groups.get(group_id, {})
-            groups[group_id] = {
-                "group_name": row["name_input"].text().strip(),
-                "group_color": str(row["color"]).upper(),
-                "subjects": list(previous_group.get("subjects") or []),
-                "files": list(previous_group.get("files") or []),
-            }
-        return groups
-
     def _validate_groups(self) -> list[str]:
         errors: list[str] = []
-        groups = self.state.get("grupos", {})
-        errors.extend(self.validation.validate_many(groups, [("minimum_length", {
-            "minimum": self.min_groups,
-            "item_name": "group",
-            "action": "contain",
-        })], label="Groups"))
-
+        groups = self.state.get("grupos", {}) # Obtenemos grupos
+        # Validamos que haya al menos un grupo mínimo de grupos (definido en defaults) en los grupos creados.
+        errors.extend(self.validation.validate_many(groups, [("minimum_length", {"minimum": self.min_groups,
+            "item_name": "group", "action": "contain"})], label="Groups"))
+        # Validamos que ninguno de los nombres de grupo esté vacío
         for index, group in enumerate(groups.values(), start=1):
-            errors.extend(self.validation.validate_many(
-                group.get("group_name", ""),
-                ["required_text"],
-                label=f"Group {index} name",
-            ))
+            errors.extend(self.validation.validate_many(group.get("group_name", ""), ["required_text"],
+                label=f"Group {index} name"))
         return errors
 
     def _update_status_label(self) -> None:
-        if self.validation_errors:
+        if self.validation_errors: # formato error
             self.status_label.setText(self.validation_errors[0])
             self.status_label.setProperty("status", "error")
-        else:
+        else: # formato OK
             self.status_label.setText(f"{len(self.state.get('grupos', {}))} group(s) configured.")
             self.status_label.setProperty("status", "ready")
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
 
-    def _clear_groups_grid(self) -> None:
-        while self.groups_grid.count():
-            item = self.groups_grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
     def _stored_groups(self) -> dict[str, dict[str, Any]]:
-        groups = self.state.get("grupos")
+        groups = self.state.get("grupos") # TODO: en inglés
         if isinstance(groups, dict):
             return {str(group_id): dict(group) for group_id, group in groups.items() if isinstance(group, dict)}
-        if isinstance(groups, list):
-            return {self._group_id(index): dict(group) for index, group in enumerate(groups) if isinstance(group, dict)}
         return {}
 
-    @staticmethod
-    def _group_id(index: int) -> str:
-        return f"group_{index + 1}"
-
     def _default_colors(self, group_count: int) -> list[str]:
+        """Genera automáticamente colores diferentes para cada grupo."""
         saturation = int(self.config.get("default_color_saturation", 175))
         value = int(self.config.get("default_color_value", 235))
         hue_offset = int(self.config.get("default_color_hue_offset", 345))
         colors: list[str] = []
-        for index in range(group_count):
+        for index in range(group_count): # Creamos un color por grupo
+            # Distribuimos los colores alrededor de all el círculo cromático
             hue = int((hue_offset + (360 * index / max(1, group_count))) % 360)
             colors.append(QColor.fromHsv(hue, saturation, value).name().upper())
         return colors
@@ -307,6 +249,5 @@ class GroupDefinitionWidget(QScrollArea):
     def can_continue(self) -> bool:
         self.validation_errors = self._validate_groups()
         return not self.validation_errors
-
 
 __all__ = ["GroupDefinitionWidget"]

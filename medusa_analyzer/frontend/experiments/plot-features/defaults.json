@@ -29,7 +29,7 @@
   },
   "group_definition": {
     "min_groups": 1,
-    "max_groups": 12,
+    "max_groups": 20,
     "default_group_count": 2,
     "default_color_hue_offset": 345,
     "default_color_saturation": 175,
