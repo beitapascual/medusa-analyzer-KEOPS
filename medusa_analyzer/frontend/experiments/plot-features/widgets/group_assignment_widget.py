@@ -3,62 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QFrame,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QLineEdit,
-    QMenu,
-    QScrollArea,
-    QStyle,
-    QStyledItemDelegate,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
-
+from PySide6.QtGui import QBrush, QColor
+from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QMenu, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.validation import Validation
 
-
-_TARGET_TITLES = {
-    "subjects": "Subjects",
-    "recordings": "Files",
-}
-_TARGET_ITEM_NAMES = {
-    "subjects": "subject",
-    "recordings": "file",
-}
-_GROUP_COLOR_ROLE = Qt.ItemDataRole.UserRole + 1
-
-
-class GroupAssignmentRowDelegate(QStyledItemDelegate):
-    def paint(self, painter: QPainter, option: Any, index: Any) -> None:
-        painter.save()
-
-        painter.fillRect(option.rect, QColor("#1F171B"))
-        group_color = QColor(str(index.data(_GROUP_COLOR_ROLE) or ""))
-        if group_color.isValid():
-            group_color.setAlpha(135)
-            painter.fillRect(option.rect, group_color)
-
-        selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        if selected:
-            selection_color = QColor("#4A2030")
-            selection_color.setAlpha(170)
-            painter.fillRect(option.rect, selection_color)
-
-        painter.setPen(QColor("#FFD6E1" if selected else "#F4E9ED"))
-        painter.drawText(
-            option.rect.adjusted(7, 0, -7, 0),
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            str(index.data(Qt.ItemDataRole.DisplayRole) or ""),
-        )
-        painter.restore()
-
+_target_titles = {"subjects": "Subjects", "recordings": "Files"}
+_target_item_names = {"subjects": "subject", "recordings": "file"}
+_target_by_analysis_mode = {"within": "recordings", "between": "subjects"}
 
 class PlotFeaturesGroupAssignmentWidget(QScrollArea):
     changed = Signal()
@@ -70,9 +22,9 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.state = state
         self.validation = Validation()
         self.validation_errors: list[str] = []
-        self.items: list[str] = []
-        self.assignment_by_item: dict[str, str] = {}
-        self.current_target: str | None = None
+        self.items: list[str] = [] # guarda elementos que hay que asignar
+        self.assignment_by_item: dict[str, str] = {} # guarda a qué grupo se asigna cada elemento
+        self.current_target: str | None = None # guarda si se están asignando subjects o recordings
 
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -91,31 +43,32 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         root.addWidget(self.title)
         root.addWidget(self.description)
 
-        root.addWidget(self._build_assignment_panel())
+        root.addWidget(self._build_assignment_panel()) # panel principal
         root.addStretch()
 
-        self._refresh_from_state()
+        self._refresh_from_state() # lee estado y refresca la pantalla a lo que exista de antes
 
     def _build_assignment_panel(self) -> QFrame:
+        # Bloque de asignación
         panel = QFrame()
         panel.setProperty("role", "surface-panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(24, 22, 24, 22)
         layout.setSpacing(12)
 
-        search_row = QHBoxLayout()
+        search_row = QHBoxLayout() # Barra de búsqueda
         search_row.setContentsMargins(0, 0, 0, 0)
         search_label = QLabel("Search")
         search_label.setObjectName("panelTitle")
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Find items...")
-        self.search_input.setClearButtonEnabled(True)
-        self.search_input.textChanged.connect(self._filter_items)
+        self.search_input = QLineEdit() # Crea el cuadro de búsqueda
+        self.search_input.setPlaceholderText("Find items...") # Texto guía
+        self.search_input.setClearButtonEnabled(True) # Añade 'x' para borrar el texto
+        self.search_input.textChanged.connect(self._filter_items) # Oculta filas que no coinciden con la búsqueda
         search_row.addWidget(search_label)
         search_row.addWidget(self.search_input, 1)
         layout.addLayout(search_row)
 
-        self.table = QTableWidget()
+        self.table = QTableWidget() # Tabla de asignación
         self.table.setProperty("role", "assignment-table")
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["Item", "Group"])
@@ -125,7 +78,6 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table.setItemDelegate(GroupAssignmentRowDelegate(self.table))
         self.table.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self.table)
 
@@ -139,169 +91,146 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.status_label.setProperty("status", "idle")
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
-
-        self.summary_layout = QHBoxLayout()
-        self.summary_layout.setContentsMargins(0, 0, 0, 0)
-        self.summary_layout.setSpacing(8)
-        layout.addLayout(self.summary_layout)
         return panel
 
     def _refresh_from_state(self) -> None:
-        analysis_mode = str(self.state.get("analysis_mode") or "within")
-        if analysis_mode == "within":
-            target = "recordings"
-        elif analysis_mode == "between":
-            target = "subjects"
-        else:
-            target = None
+        analysis_mode = str(self.state.get("analysis_mode") or "within") # modo de análisis
+        target = _target_by_analysis_mode.get(analysis_mode)
         self.current_target = target
+        # Caso nocomparisons. TODO: va a haber que modificarlo creo
         if target is None:
             self.items = []
             self.assignment_by_item = {}
             self.table.setRowCount(0)
             self.description.setText("No group assignment is required for no-comparison analysis.")
             self.instruction_label.setText("")
-            self.state["group_assignment"] = {
-                "target": None,
-                "items_by_group": {},
-                "group_by_item": {},
-            }
-            self._clear_layout(self.summary_layout)
+            self.state["group_assignment"] = {"target": None, "items_by_group": {}, "group_by_item": {}}
             self._update_status_label()
             self.changed.emit()
             return
 
-        target_title = _TARGET_TITLES[target]
-        item_name = _TARGET_ITEM_NAMES[target]
-        self.items = self._available_items()
+        target_title = _target_titles[target]
+        item_name = _target_item_names[target]
+        self.items = self._available_items() # Buscamos sujetos o recordings disponibles
         self.description.setText(f"Assign {target_title.lower()} to the groups defined in the previous step.")
-        self.instruction_label.setText(
-            f"Select one or more {item_name}s, then right-click to assign them to a group."
-        )
-        self.assignment_by_item = self._stored_assignment_for_target(target)
-        self._populate_table()
+        self.instruction_label.setText(f"Select one or more {item_name}s, then right-click to assign them to a group.")
+        self.assignment_by_item = self._stored_assignment_for_target(target) # recupera asignaciones previas
+        self._populate_table() # rellena la tabla
         self._sync(emit_changed=False)
 
     def _populate_table(self) -> None:
         self.table.blockSignals(True)
         try:
-            self.table.setRowCount(len(self.items))
-            target_title = _TARGET_TITLES[self.current_target or "recordings"]
-            self.table.setHorizontalHeaderLabels([target_title[:-1], "Group"])
-            for row, item_name in enumerate(self.items):
-                item = QTableWidgetItem(item_name)
+            self.table.setRowCount(len(self.items)) # tantas filas como elementos existan
+            target_title = _target_titles[self.current_target or "recordings"]
+            self.table.setHorizontalHeaderLabels([target_title[:-1], "Group"]) # título
+            for row, item_name in enumerate(self.items): # recorremos cada sujeto/recording y su índice de fila
+                item = QTableWidgetItem(item_name) # celda del nombre
                 item.setData(Qt.ItemDataRole.UserRole, item_name)
-                group_item = QTableWidgetItem("")
+                group_item = QTableWidgetItem("") # celda del grupo
                 self.table.setItem(row, 0, item)
                 self.table.setItem(row, 1, group_item)
-                self._render_assignment_for_row(row)
+                self._render_assignment_for_row(row) # si el elemento ya tenía el grupo asignado, lo dibuja
         finally:
             self.table.blockSignals(False)
         self._filter_items(self.search_input.text())
 
     def _show_context_menu(self, pos: Any) -> None:
+        """Función que maneja el botón derecho"""
         if self.current_target is None:
             return
-
-        index = self.table.indexAt(pos)
+        index = self.table.indexAt(pos) # fila sobre la que se hace click
         if index.isValid() and not self.table.selectionModel().isRowSelected(index.row()):
             self.table.selectRow(index.row())
-
-        selected_rows = self._selected_rows()
+        # Vemos cuales son todas las filas seleccionadas
+        selected_rows = sorted({index.row() for index in self.table.selectionModel().selectedRows()})
         if not selected_rows:
             return
-
         groups = self._groups()
         if not groups:
             return
-
-        menu = QMenu(self)
-        for group_id, group in groups.items():
+        menu = QMenu(self) # creamos menú conceptual
+        for group_id, group in groups.items():# recorremos todos los grupos
+            # Añadimos una opción por grupo
             action = menu.addAction(str(group.get("group_name") or group_id))
             action.triggered.connect(lambda checked=False, selected_group_id=group_id: self._assign_selected(selected_group_id))
         menu.addSeparator()
-        reset_action = menu.addAction("Reset assignment")
+        reset_action = menu.addAction("Reset assignment") # opción de quitar asignación
         reset_action.triggered.connect(lambda checked=False: self._assign_selected(None))
-        menu.exec(self.table.viewport().mapToGlobal(pos))
+        menu.exec(self.table.viewport().mapToGlobal(pos)) # muestra el menú en la posición del ratón
 
     def _assign_selected(self, group_id: str | None) -> None:
-        for row in self._selected_rows():
-            item_name = self._item_name_for_row(row)
+        for row in sorted({index.row() for index in self.table.selectionModel().selectedRows()}): # recorremos filas seleccionadas
+            item_name = self._item_name_for_row(row) # obtiene el sujeto/archivo de esa fila
             if item_name is None:
                 continue
             if group_id is None:
-                self.assignment_by_item.pop(item_name, None)
+                self.assignment_by_item.pop(item_name, None) # elimina la asignación
             else:
-                self.assignment_by_item[item_name] = group_id
-            self._render_assignment_for_row(row)
+                self.assignment_by_item[item_name] = group_id # guardamos la asignación de cada elemento
+            self._render_assignment_for_row(row) # actualiza visualmente la fila
         self._sync()
         self.table.clearSelection()
 
     def _render_assignment_for_row(self, row: int) -> None:
-        item_name = self._item_name_for_row(row)
+        """Función que dibuja la asignación."""
+        item_name = self._item_name_for_row(row) # obtiene el elemento
         if item_name is None:
             return
 
-        group_id = self.assignment_by_item.get(item_name)
+        group_id = self.assignment_by_item.get(item_name) # mira qué grupo tiene asignado
         groups = self._groups()
         group = groups.get(group_id or "")
-        group_name = str(group.get("group_name") or "") if group else ""
-        group_color = ""
+        group_name = str(group.get("group_name") or "") if group else "" # nombre del grupo
+        brush = QBrush() # fondo vacío
         if group:
             color = QColor(str(group.get("group_color") or ""))
             if color.isValid():
-                group_color = color.name().upper()
+                color.setAlpha(72)
+                brush = QBrush(color)
 
-        group_item = self.table.item(row, 1)
+        group_item = self.table.item(row, 1) # obtenemos la celda de la columna group
         if group_item is None:
             group_item = QTableWidgetItem("")
             self.table.setItem(row, 1, group_item)
-        group_item.setText(group_name)
-        for col in range(self.table.columnCount()):
+        group_item.setText(group_name) # ponemos nombre del grupo
+        for col in range(self.table.columnCount()): # recorremos ambas columnas
             table_item = self.table.item(row, col)
             if table_item is not None:
-                table_item.setData(_GROUP_COLOR_ROLE, group_color)
-        self.table.viewport().update()
+                table_item.setBackground(brush) # pintamos toda la fila del color del grupo
 
     def _sync(self, emit_changed: bool = True) -> None:
-        target = self.current_target
+        target = self.current_target # obtiene qué estamos asignando
         if target is None:
             self.validation_errors = []
             self._update_status_label()
             return
 
         groups = self._groups()
-        assignment_by_group = {group_id: [] for group_id in groups}
-        group_by_item: dict[str, str] = {}
-        for item_name in self.items:
-            group_id = self.assignment_by_item.get(item_name)
+        assignment_by_group = {group_id: [] for group_id in groups} # dic grupo - elemento
+        group_by_item: dict[str, str] = {} # dic elemento - grupo
+        for item_name in self.items: # recorremos todos los elementos
+            group_id = self.assignment_by_item.get(item_name) # mira su grupo
             if group_id in groups:
                 assignment_by_group[group_id].append(item_name)
                 group_by_item[item_name] = group_id
 
         self.assignment_by_item = dict(group_by_item)
-        self.state["group_assignment"] = {
-            "target": target,
+        self.state["group_assignment"] = {"target": target,
             "items_by_group": assignment_by_group,
-            "group_by_item": group_by_item,
-        }
+            "group_by_item": group_by_item}
         self._sync_groups_state(target, assignment_by_group)
         self.validation_errors = self._validate_assignment()
         self._update_status_label()
-        self._refresh_summary(assignment_by_group)
 
         if emit_changed:
             self.changed.emit()
 
     def _sync_groups_state(self, target: str, assignment_by_group: dict[str, list[str]]) -> None:
         groups = self._groups()
+        group_assignment_key = "files" if target == "recordings" else "subjects"
         for group_id, group in groups.items():
-            assigned_items = list(assignment_by_group.get(group_id) or [])
-            group[target] = assigned_items
-            if target == "recordings":
-                group["files"] = assigned_items
-            elif target == "subjects":
-                group["subjects"] = assigned_items
+            group[group_assignment_key] = list(assignment_by_group.get(group_id) or [])
         self.state["groups"] = groups
 
     def _validate_assignment(self) -> list[str]:
@@ -311,32 +240,17 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
 
         errors: list[str] = []
         groups = self._groups()
-        errors.extend(self.validation.validate_many(groups, [("minimum_length", {
-            "minimum": 1,
-            "item_name": "group",
-            "action": "contain",
-        })], label="Groups"))
-        errors.extend(self.validation.validate_many(self.items, [("minimum_length", {
-            "minimum": 1,
-            "item_name": _TARGET_ITEM_NAMES[target],
-            "action": "contain",
-        })], label=_TARGET_TITLES[target]))
-        errors.extend(self.validation.validate_errors(
-            self._unassigned_items(),
-            "custom",
-            label=_TARGET_TITLES[target],
-            validator=self._unassigned_items_error,
-        ))
+        # Comprueba que haya al menos un grupo
+        errors.extend(self.validation.validate_many(groups, [("minimum_length", {"minimum": 1,
+            "item_name": "group", "action": "contain"})], label="Groups"))
+        # Comprueba que haya al menos un sujeto o archivo disponible
+        errors.extend(self.validation.validate_many(self.items, [("minimum_length", {"minimum": 1,
+            "item_name": _target_item_names[target], "action": "contain"})], label=_target_titles[target]))
+        # Mira si queda algún elemento sin asignar
+        if [item_name for item_name in self.items if item_name not in self.assignment_by_item]:
+            item_name = _target_item_names[target]
+            errors.append(f"{_target_titles[target]}: assign every {item_name} before continuing.")
         return errors
-
-    def _unassigned_items_error(self, value: list[str], *, label: str) -> str | None:
-        if not value:
-            return None
-        item_name = _TARGET_ITEM_NAMES[self.current_target or "recordings"]
-        return f"{label}: assign every {item_name} before continuing."
-
-    def _unassigned_items(self) -> list[str]:
-        return [item_name for item_name in self.items if item_name not in self.assignment_by_item]
 
     def _update_status_label(self) -> None:
         if self.current_target is None:
@@ -346,32 +260,10 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             self.status_label.setText(self.validation_errors[0])
             self.status_label.setProperty("status", "error")
         else:
-            self.status_label.setText(f"All {_TARGET_ITEM_NAMES[self.current_target]}s assigned.")
+            self.status_label.setText(f"All {_target_item_names[self.current_target]}s assigned.")
             self.status_label.setProperty("status", "ready")
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)
-
-    def _refresh_summary(self, assignment_by_group: dict[str, list[str]]) -> None:
-        self._clear_layout(self.summary_layout)
-        groups = self._groups()
-        for group_id, group in groups.items():
-            count = len(assignment_by_group.get(group_id) or [])
-            label = QLabel(f"{group.get('group_name', group_id)}: {count}")
-            label.setObjectName("assignmentSummary")
-            color = QColor(str(group.get("group_color") or ""))
-            if color.isValid():
-                label.setStyleSheet(
-                    "QLabel#assignmentSummary {"
-                    "color: #F8EEF2;"
-                    f"background: rgba({color.red()}, {color.green()}, {color.blue()}, 70);"
-                    f"border: 1px solid {color.name().upper()};"
-                    "border-radius: 8px;"
-                    "padding: 6px 10px;"
-                    "font-weight: 650;"
-                    "}"
-                )
-            self.summary_layout.addWidget(label)
-        self.summary_layout.addStretch()
 
     def _filter_items(self, text: str) -> None:
         needle = text.lower().strip()
@@ -379,10 +271,8 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             item_name = self._item_name_for_row(row) or ""
             self.table.setRowHidden(row, bool(needle) and needle not in item_name.lower())
 
-    def _selected_rows(self) -> list[int]:
-        return sorted({index.row() for index in self.table.selectionModel().selectedRows()})
-
     def _item_name_for_row(self, row: int) -> str | None:
+        """Función para averiguar qué sujeto/archivo corresponde a una fila."""
         item = self.table.item(row, 0)
         if item is None:
             return None
@@ -390,24 +280,18 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         return str(value) if value is not None else item.text()
 
     def _stored_assignment_for_target(self, target: str) -> dict[str, str]:
+        """Función para recuperar asignaciones antiguas."""
         assignment = self.state.get("group_assignment")
-        if isinstance(assignment, dict) and assignment.get("target") == target:
-            group_by_item = assignment.get("group_by_item")
-            if isinstance(group_by_item, dict):
-                groups = self._groups()
-                return {
-                    str(item): str(group_id)
-                    for item, group_id in group_by_item.items()
-                    if str(item) in self.items and str(group_id) in groups
-                }
+        if not isinstance(assignment, dict) or assignment.get("target") != target:
+            return {}
+
+        group_by_item = assignment.get("group_by_item")
+        if not isinstance(group_by_item, dict):
+            return {}
 
         groups = self._groups()
-        restored: dict[str, str] = {}
-        for group_id, group in groups.items():
-            for item_name in group.get(target, []) or []:
-                if str(item_name) in self.items:
-                    restored[str(item_name)] = group_id
-        return restored
+        return {str(item): str(group_id) for item, group_id in group_by_item.items()
+            if str(item) in self.items and str(group_id) in groups}
 
     def _available_items(self) -> list[str]:
         key = "plot_features_subjects" if self.current_target == "subjects" else "plot_features_recordings"
@@ -418,16 +302,7 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         groups = self.state.get("groups")
         if isinstance(groups, dict):
             return {str(group_id): dict(group) for group_id, group in groups.items() if isinstance(group, dict)}
-        if isinstance(groups, list):
-            return {f"group_{index + 1}": dict(group) for index, group in enumerate(groups) if isinstance(group, dict)}
         return {}
-
-    @staticmethod
-    def _clear_layout(layout: QHBoxLayout) -> None:
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
 
     def on_step_activated(self) -> None:
         self._refresh_from_state()
@@ -436,6 +311,5 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.validation_errors = self._validate_assignment()
         self._update_status_label()
         return not self.validation_errors
-
 
 __all__ = ["PlotFeaturesGroupAssignmentWidget"]
