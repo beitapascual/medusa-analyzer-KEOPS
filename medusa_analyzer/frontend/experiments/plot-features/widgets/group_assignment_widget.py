@@ -3,14 +3,37 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor
-from PySide6.QtWidgets import (QAbstractItemView, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-    QMenu, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtGui import QBrush, QColor, QPainter
+from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QMenu, QScrollArea, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.validation import Validation
 
 _target_titles = {"subjects": "Subjects", "recordings": "Files"}
 _target_item_names = {"subjects": "subject", "recordings": "file"}
 _target_by_analysis_mode = {"within": "recordings", "between": "subjects"}
+
+
+class _GroupAssignmentDelegate(QStyledItemDelegate):
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: Any) -> None:
+        """Pinta con el color del grupo cuando la celda tiene fondo asignado."""
+        background = index.data(Qt.ItemDataRole.BackgroundRole)
+        if not isinstance(background, QBrush) or background.style() == Qt.BrushStyle.NoBrush:
+            super().paint(painter, option, index)
+            return
+
+        cell_option = QStyleOptionViewItem(option)
+        self.initStyleOption(cell_option, index)
+        foreground = index.data(Qt.ItemDataRole.ForegroundRole)
+
+        painter.save()
+        painter.fillRect(cell_option.rect, background)
+        if isinstance(foreground, QBrush) and foreground.style() != Qt.BrushStyle.NoBrush:
+            painter.setPen(foreground.color())
+        else:
+            painter.setPen(cell_option.palette.text().color())
+        text_rect = cell_option.rect.adjusted(7, 0, -7, 0)
+        painter.drawText(text_rect, cell_option.displayAlignment | Qt.AlignmentFlag.AlignVCenter, cell_option.text)
+        painter.restore()
 
 def _target_title(target: str) -> str:
     return _target_titles[target]
@@ -64,7 +87,7 @@ def _group_text_brush(group: dict[str, Any] | None) -> QBrush:
     return QBrush(QColor("#1F171B" if brightness > 150 else "#FFF7FA"))
 
 def _set_table_row_background(table: QTableWidget, row: int, background: QBrush, foreground: QBrush | None = None) -> None:
-    """Aplica el fondo a todas las celdas de una fila de tabla."""
+    """Aplica el fondo y el texto directamente sobre los items de una fila."""
     for col in range(table.columnCount()):
         table_item = table.item(row, col)
         if table_item is not None:
@@ -150,13 +173,13 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
+        self.table.setItemDelegate(_GroupAssignmentDelegate(self.table))
         layout.addWidget(self.table)
 
-        self.summary_grid = QGridLayout()
-        self.summary_grid.setContentsMargins(0, 2, 0, 0)
-        self.summary_grid.setHorizontalSpacing(10)
-        self.summary_grid.setVerticalSpacing(10)
-        layout.addLayout(self.summary_grid)
+        self.summary_layout = QHBoxLayout()
+        self.summary_layout.setContentsMargins(0, 2, 0, 0)
+        self.summary_layout.setSpacing(10)
+        layout.addLayout(self.summary_layout)
 
         self.instruction_label = QLabel("")
         self.instruction_label.setObjectName("assignmentInstruction")
@@ -249,6 +272,7 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
             self._render_assignment_for_row(row) # actualiza visualmente la fila
         self._sync()
         self.table.clearSelection()
+        self._render_all_assignments()
 
     def _render_all_assignments(self) -> None:
         """Repinta todas las filas segun la asignacion guardada en memoria."""
@@ -265,19 +289,20 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         groups = self._groups()
         group = groups.get(group_id or "")
         group_name = str(group.get("group_name") or "") if group else "" # nombre del grupo
-        brush = _group_color_brush(group) # fondo vacío
+        background = _group_color_brush(group)
+        foreground = _group_text_brush(group)
 
         group_item = self.table.item(row, 1) # obtenemos la celda de la columna group
         if group_item is None:
             group_item = QTableWidgetItem("")
             self.table.setItem(row, 1, group_item)
         group_item.setText(group_name) # ponemos nombre del grupo
-        _set_table_row_background(self.table, row, brush) # pintamos toda la fila del color del grupo
+        _set_table_row_background(self.table, row, background, foreground) # pintamos toda la fila del color del grupo
 
     def _refresh_assignment_summary(self) -> None:
         """Reconstruye las chips con el numero de elementos asignados a cada grupo."""
-        while self.summary_grid.count():
-            item = self.summary_grid.takeAt(0)
+        while self.summary_layout.count():
+            item = self.summary_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
@@ -286,11 +311,12 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
 
         groups = self._groups()
         item_name = _target_item_name(self.current_target)
-        for index, (group_id, group) in enumerate(groups.items()):
+        for group_id, group in groups.items():
             assigned_count = sum(1 for assigned_group_id in self.assignment_by_item.values()
                 if assigned_group_id == group_id)
             chip = self._build_group_summary_chip(group, assigned_count, item_name)
-            self.summary_grid.addWidget(chip, index // 3, index % 3)
+            self.summary_layout.addWidget(chip)
+        self.summary_layout.addStretch()
 
     def _build_group_summary_chip(self, group: dict[str, Any], assigned_count: int, item_name: str) -> QFrame:
         """Crea una chip coloreada con el contador de elementos asignados."""
