@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QHeaderVi
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from .group_assignment_widget import (_available_items_for_target, _filter_table_items, _item_name_for_table_row,
-    _target_item_name, _target_title)
+    _target_item_names, _target_titles)
 from medusa_analyzer.frontend.validation import Validation
 
 class PlotFeaturesDataAssignmentWidget(QScrollArea):
@@ -98,8 +98,8 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
         """Actualiza la pantalla según toodo lo que haya en el state"""
         analysis_mode = str(self.state.get("analysis_mode") or "within")
         self.current_target = "subjects" if analysis_mode == "within" else "recordings"
-        target_title = _target_title(self.current_target)
-        item_name = _target_item_name(self.current_target)
+        target_title = _target_titles[self.current_target]
+        item_name = _target_item_names[self.current_target]
         self.items = _available_items_for_target(self.state, self.current_target)
         self.description.setText(f"Select the {target_title.lower()} to include in the analysis.")
         self.instruction_label.setText(f"Select one or more {item_name}s to include.")
@@ -113,7 +113,7 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
         try:
             self.table.clearSelection()
             self.table.setRowCount(len(self.items))
-            self.table.setHorizontalHeaderLabels([_target_title(self.current_target)[:-1]])
+            self.table.setHorizontalHeaderLabels([_target_titles[self.current_target][:-1]])
             for row, item_name in enumerate(self.items):
                 item = QTableWidgetItem(item_name)
                 item.setData(Qt.ItemDataRole.UserRole, item_name)
@@ -161,11 +161,11 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
 
     def _validate_selection(self, selected_items: list[str]) -> list[str]:
         errors: list[str] = []
-        item_name = _target_item_name(self.current_target)
+        item_name = _target_item_names[self.current_target]
         errors.extend(self.validation.validate_many(self.items, [("minimum_length", {"minimum": 1,
-            "item_name": item_name, "action": "contain"})], label=_target_title(self.current_target)))
+            "item_name": item_name, "action": "contain"})], label=_target_titles[self.current_target]))
         errors.extend(self.validation.validate_many(selected_items, [("minimum_length", {"minimum": 1,
-            "item_name": item_name, "action": "select"})], label=_target_title(self.current_target)))
+            "item_name": item_name, "action": "select"})], label=_target_titles[self.current_target]))
         return errors
 
     def _update_status_label(self, selected_items: list[str]) -> None:
@@ -173,7 +173,7 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
             self.status_label.setText(self.validation_errors[0])
             self.status_label.setProperty("status", "error")
         else:
-            self.status_label.setText(f"{len(selected_items)} {_target_item_name(self.current_target)}(s) selected.")
+            self.status_label.setText(f"{len(selected_items)} {_target_item_names[self.current_target]}(s) selected.")
             self.status_label.setProperty("status", "ready")
         self.status_label.style().unpolish(self.status_label)
         self.status_label.style().polish(self.status_label)

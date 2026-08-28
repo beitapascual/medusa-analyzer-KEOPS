@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QRadioButton, QScrollArea, QVBoxLayout, QWidget)
+    QInputDialog, QLineEdit, QMessageBox, QPushButton, QRadioButton, QScrollArea, QVBoxLayout, QWidget)
 
 
 class PlotFeaturesLoadDataWidget(QScrollArea):
@@ -19,6 +20,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
 
         self.state = state
         self.config = defaults.get("load_features", {})
+        self.group_definition_config = defaults.get("group_definition", {})
         self.required_folder_name = str(self.config.get("required_folder_name", "derivatives"))
         self.required_config_file = str(self.config.get("required_config_file", "config.json"))
         self.analysis_modes = self.config["analysis_modes"]
@@ -239,6 +241,10 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
             mode_id = str(button.property("analysis_mode"))
 
         self.state["analysis_mode"] = mode_id # lo guardamos en el estado
+        if mode_id == "nocomparison":
+            self.state["workflow_skip_steps"] = ["group_definition", "group_assignment", "data_assignment"]
+        else:
+            self.state["workflow_skip_steps"] = []
         for option_mode, frame in self.option_frames.items(): # recalculamos estilo tras selección
             frame.setProperty("selected", option_mode == mode_id)
             frame.style().unpolish(frame)
@@ -324,6 +330,47 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
 
         self.state["plot_features_subjects"] = sorted({subject for subject in subjects if subject})
         self.state["plot_features_recordings"] = sorted({recording for recording in recordings if recording})
+
+    def before_next(self) -> bool:
+        if str(self.state.get("analysis_mode") or "") != "nocomparison":
+            return True
+
+        recordings = self.state.get("plot_features_recordings")
+        available_recordings = [str(recording) for recording in recordings] if isinstance(recordings, list) else []
+        if not available_recordings:
+            QMessageBox.warning(self, "No recordings available",
+                f"No recordings were found in {self.required_config_file}.")
+            return False
+
+        selected_recording = available_recordings[0]
+        if len(available_recordings) > 1:
+            stored_recording = str(self.state.get("plot_features_nocomparison_recording") or "")
+            current_index = available_recordings.index(stored_recording) if stored_recording in available_recordings else 0
+            selected_recording, accepted = QInputDialog.getItem(self, "Select recording",
+                "Recording:", available_recordings, current_index, False)
+            if not accepted:
+                return False
+            selected_recording = str(selected_recording)
+
+        saturation = int(self.group_definition_config.get("default_color_saturation", 175))
+        value = int(self.group_definition_config.get("default_color_value", 235))
+        hue_offset = int(self.group_definition_config.get("default_color_hue_offset", 345))
+        group_color = QColor.fromHsv(hue_offset % 360, saturation, value).name().upper()
+        group_id = "group_1"
+
+        self.state["plot_features_nocomparison_recording"] = selected_recording
+        self.state["groups"] = {group_id: {"group_name": selected_recording,
+            "group_color": group_color,
+            "subjects": [],
+            "files": [selected_recording]}}
+        self.state["group_assignment"] = {"target": "recordings",
+            "items_by_group": {group_id: [selected_recording]},
+            "group_by_item": {selected_recording: group_id}}
+        self.state["data_assignment"] = {"target": "recordings",
+            "selected_items": [selected_recording]}
+        self.state["plot_selected_recordings"] = [selected_recording]
+        self.state.pop("plot_selected_subjects", None)
+        return True
 
     @staticmethod
     def _format_value(value: Any) -> str:

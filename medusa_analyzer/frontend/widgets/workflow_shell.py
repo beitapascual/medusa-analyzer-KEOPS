@@ -89,13 +89,20 @@ class WorkflowShell(QWidget):
         self._activate_current_step()
         self._refresh_navigation()
 
+    def _visible_step_indices(self) -> list[int]:
+        skipped_steps = self.state.get("workflow_skip_steps")
+        skipped_ids = {str(step_id) for step_id in skipped_steps} if isinstance(skipped_steps, (list, tuple, set)) else set()
+        visible_indices = [index for index, step in enumerate(self.steps) if str(step.get("id")) not in skipped_ids]
+        return visible_indices or [self.navigator.current_index()]
+
     def _go_back(self) -> None:
         # Si estamos en el primer paso, pulsar Back te lleva al dashboard
-        if self.navigator.current_index() == 0:
+        previous_steps = [index for index in self._visible_step_indices() if index < self.navigator.current_index()]
+        if not previous_steps:
             self.dashboard_requested.emit()
             return
         # Si no estamos en el primer paso, vamos al paso anterior
-        self.navigator.back()
+        self.navigator.go_to(previous_steps[-1])
         # Después, actualizamos el paso actual y los botones
         self._activate_current_step()
         self._refresh_navigation()
@@ -107,8 +114,10 @@ class WorkflowShell(QWidget):
         if not self._run_before_next_hook():
             self._refresh_navigation()
             return
+        visible_steps = self._visible_step_indices()
+        current = self.navigator.current_index()
         # Si estamos en el último paso, verificamos si el experimento está completado o no.
-        if self.navigator.current_index() == self.navigator.count() - 1:
+        if current == visible_steps[-1]:
             # Si está completado, podremos pulsar en finish y volver al dashboard
             if self.state.get("completion_status") == "completed":
                 self.dashboard_requested.emit()
@@ -122,7 +131,8 @@ class WorkflowShell(QWidget):
                 return
             return
         # Si no estamos en el último paso, avanza al siguiente y actualiza la interfaz.
-        self.navigator.next() # Para realmente avanzar, usamos la función del navigator.
+        next_steps = [index for index in visible_steps if index > current]
+        self.navigator.go_to(next_steps[0]) # Para realmente avanzar, usamos la función del navigator.
         self._activate_current_step()
         self._refresh_navigation()
 
@@ -156,19 +166,29 @@ class WorkflowShell(QWidget):
     def _refresh_navigation(self) -> None:
         # Función para actualizar la interfaz en función del paso
 
+        visible_steps = self._visible_step_indices()
         current = self.navigator.current_index()
+        if current not in visible_steps:
+            next_steps = [index for index in visible_steps if index > current]
+            self.navigator.go_to(next_steps[0] if next_steps else visible_steps[-1])
+            current = self.navigator.current_index()
+
+        current_visible_index = visible_steps.index(current)
+        stepper_labels = [self.steps[index]["title"] for index in visible_steps]
+        if self.stepper.labels != stepper_labels:
+            self.stepper.labels = stepper_labels
         states = []
-        for index in range(len(self.steps)):
-            if index < current:
+        for index in range(len(visible_steps)):
+            if index < current_visible_index:
                 states.append("completed")
-            elif index == current:
+            elif index == current_visible_index:
                 states.append("active")
             else:
                 states.append("locked")
         # Le pasa a la barra el estado de cada uno de los pasos para que pueda actualizarse
         self.stepper.set_states(states)
-        self.back_button.setText("Back" if current > 0 else "Dashboard")
-        if current == len(self.steps) - 1:
+        self.back_button.setText("Back" if current_visible_index > 0 else "Dashboard")
+        if current == visible_steps[-1]:
             current_widget = self.navigator.current_widget()
             if bool(getattr(current_widget, "pipeline_running", False)):
                 self.next_button.setText("Running...")

@@ -41,8 +41,7 @@
   },
   "data_assignment": {
     "within_target": "subjects",
-    "between_target": "recordings",
-    "nocomparison_target": "recordings"
+    "between_target": "recordings"
   },
   "plots": {
     "default_plot_type": "boxplot",
