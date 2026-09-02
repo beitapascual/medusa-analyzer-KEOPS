@@ -44,51 +44,168 @@
     "between_target": "recordings"
   },
   "plots": {
-    "default_plot_type": "boxplot",
     "available_plot_types": [
       {
-        "id": "boxplot",
-        "title": "Box plot"
-      },
-      {
         "id": "violin",
-        "title": "Violin plot"
-      },
-      {
-        "id": "histogram",
-        "title": "Histogram"
-      },
-      {
-        "id": "bar",
-        "title": "Bar plot"
+        "title": "Violin plot",
+        "plot_class": "ViolinPlot",
+        "compatible_experiments": ["eeg"],
+        "allowed_features": [
+          "absolute_band_power",
+          "relative_band_power",
+          "median_frequency",
+          "spectral_entropy",
+          "mean",
+          "median",
+          "variance",
+          "kurtosis",
+          "skewness",
+          "sample_entropy",
+          "ctm",
+          "multiscale_sample_entropy",
+          "lempel_ziv_complexity",
+          "multiscale_lempel_ziv_complexity",
+          "aec",
+          "iac",
+          "plv",
+          "wpli",
+          "pli"
+        ],
+        "default_params": {
+          "visualization": [
+            {"id": "title", "title": "Title", "type": "text", "default": "{feature_title}"},
+            {"id": "title_size", "title": "Title size", "type": "int", "default": 14, "min": 6, "max": 36},
+            {"id": "title_weight", "title": "Title weight", "type": "combo", "default": "normal", "options": [
+              {"id": "normal", "title": "Normal"},
+              {"id": "bold", "title": "Bold"}
+            ]},
+            {"id": "x_label", "title": "X label", "type": "text", "default": "Time (ms)"},
+            {"id": "y_label", "title": "Y label", "type": "text", "default": "Amplitude (µV)"},
+            {"id": "font_size", "title": "Axis font size", "type": "int", "default": 10, "min": 6, "max": 28},
+            {"id": "font_weight", "title": "Axis font weight", "type": "combo", "default": "normal", "options": [
+              {"id": "normal", "title": "Normal"},
+              {"id": "bold", "title": "Bold"}
+            ]},
+            {"id": "ylim", "title": "Y limits", "type": "range", "default": [null, null]},
+            {"id": "violin_transparency", "title": "Transparency", "type": "float", "default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05},
+            {"id": "plot_mean_line", "title": "Show mean", "type": "checkbox", "default": false},
+            {"id": "plot_median_line", "title": "Show median", "type": "checkbox", "default": true},
+            {"id": "plot_boxplot", "title": "Plot boxplot", "type": "checkbox", "default": true},
+            {"id": "plot_strip", "title": "Plot strip", "type": "checkbox", "default": true}
+          ]
+        }
       },
       {
         "id": "scatter",
-        "title": "Scatter plot"
+        "title": "Scatter plot",
+        "plot_class": "ScatterPlot",
+        "compatible_experiments": ["eeg"],
+        "allowed_features": [
+          "absolute_band_power",
+          "relative_band_power",
+          "median_frequency",
+          "spectral_entropy",
+          "mean",
+          "median",
+          "variance",
+          "kurtosis",
+          "skewness",
+          "sample_entropy",
+          "ctm",
+          "multiscale_sample_entropy",
+          "lempel_ziv_complexity",
+          "multiscale_lempel_ziv_complexity",
+          "aec",
+          "iac",
+          "plv",
+          "wpli",
+          "pli"
+        ],
+        "default_params": {
+          "visualization": [
+            {"id": "x_feature", "title": "X parameter", "type": "feature_band_combo", "default": null},
+            {"id": "show_line", "title": "Show regression line", "type": "checkbox", "default": true},
+            {"id": "title", "title": "Title", "type": "text", "default": "{feature_title} - {band_title} vs. {x_parameter}"},
+            {"id": "x_label", "title": "X label", "type": "text", "default": "{x_parameter}"},
+            {"id": "y_label", "title": "Y label", "type": "text", "default": "{feature_title} - {band_title}"},
+            {"id": "font_size", "title": "Axis font size", "type": "int", "default": 10, "min": 6, "max": 28},
+            {"id": "marker_size", "title": "Marker size", "type": "int", "default": 60, "min": 1, "max": 300},
+            {"id": "alpha", "title": "Transparency", "type": "float", "default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05},
+            {"id": "xlim", "title": "X limits", "type": "range", "default": [null, null]},
+            {"id": "ylim", "title": "Y limits", "type": "range", "default": [null, null]}
+          ]
+        }
       },
       {
-        "id": "heatmap",
-        "title": "Heatmap"
+        "id": "psd",
+        "title": "PSD Plot",
+        "plot_class": "PSDPlot",
+        "compatible_experiments": ["eeg"],
+        "allowed_features": ["psd"],
+        "default_params": {
+          "visualization": [
+            {"id": "plot_error", "title": "Plot error (95% CI)", "type": "checkbox", "default": true},
+            {"id": "title", "title": "Title", "type": "text", "default": "{feature_title}"},
+            {"id": "title_size", "title": "Title size", "type": "int", "default": 14, "min": 6, "max": 36},
+            {"id": "title_weight", "title": "Title weight", "type": "combo", "default": "normal", "options": [
+              {"id": "normal", "title": "Normal"},
+              {"id": "bold", "title": "Bold"}
+            ]},
+            {"id": "x_label", "title": "X label", "type": "text", "default": "Frequency (Hz)"},
+            {"id": "y_label", "title": "Y label", "type": "text", "default": "Power (µV²/Hz)"},
+            {"id": "font_size", "title": "Axis font size", "type": "int", "default": 10, "min": 6, "max": 28},
+            {"id": "font_weight", "title": "Axis font weight", "type": "combo", "default": "normal", "options": [
+              {"id": "normal", "title": "Normal"},
+              {"id": "bold", "title": "Bold"}
+            ]},
+            {"id": "xlim", "title": "X limits", "type": "range", "default": [null, null]},
+            {"id": "ylim", "title": "Y limits", "type": "range", "default": [null, null]},
+            {"id": "line_width", "title": "Line width", "type": "float", "default": 2.0, "min": 0.1, "max": 10.0, "step": 0.1},
+            {"id": "line_style", "title": "Line style", "type": "combo", "default": "solid", "options": [
+              {"id": "solid", "title": "Solid"},
+              {"id": "dashed", "title": "Dashed"},
+              {"id": "dotted", "title": "Dotted"},
+              {"id": "dashdot", "title": "Dash-dot"}
+            ]}
+          ]
+        }
+      },
+      {
+        "id": "erp",
+        "title": "ERP Plot",
+        "plot_class": "ERPPlot",
+        "compatible_experiments": ["eeg"],
+        "allowed_features": ["erp"],
+        "default_params": {
+          "visualization": [
+            {"id": "title", "title": "Title", "type": "text", "default": "{feature_title}"},
+            {"id": "title_size", "title": "Title size", "type": "int", "default": 14, "min": 6, "max": 36},
+            {"id": "title_weight", "title": "Title weight", "type": "combo", "default": "normal", "options": [
+              {"id": "normal", "title": "Normal"},
+              {"id": "bold", "title": "Bold"}
+            ]},
+            {"id": "x_label", "title": "X label", "type": "text", "default": "Time (ms)"},
+            {"id": "y_label", "title": "Y label", "type": "text", "default": "Amplitude (µV)"},
+            {"id": "font_size", "title": "Axis font size", "type": "int", "default": 10, "min": 6, "max": 28},
+            {"id": "font_weight", "title": "Axis font weight", "type": "combo", "default": "normal", "options": [
+              {"id": "normal", "title": "Normal"},
+              {"id": "bold", "title": "Bold"}
+            ]},
+            {"id": "xlim", "title": "X limits", "type": "range", "default": [null, null]},
+            {"id": "ylim", "title": "Y limits", "type": "range", "default": [null, null]},
+            {"id": "line_width", "title": "Line width", "type": "float", "default": 2.0, "min": 0.1, "max": 10.0, "step": 0.1},
+            {"id": "line_style", "title": "Line style", "type": "combo", "default": "solid", "options": [
+              {"id": "solid", "title": "Solid"},
+              {"id": "dashed", "title": "Dashed"},
+              {"id": "dotted", "title": "Dotted"},
+              {"id": "dashdot", "title": "Dash-dot"}
+            ]},
+            {"id": "plot_error", "title": "Plot error (95% CI)", "type": "checkbox", "default": false}
+          ]
+        }
       }
     ],
     "default_group_by": [],
     "default_color_by": null
-  },
-  "statistics": {
-    "enabled": true,
-    "descriptive_metrics": [
-      "count",
-      "mean",
-      "median",
-      "std",
-      "min",
-      "max",
-      "iqr"
-    ],
-    "default_group_by": [
-      "feature",
-      "band",
-      "event"
-    ]
   }
 }

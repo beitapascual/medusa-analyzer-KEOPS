@@ -3,6 +3,7 @@ from .feature_selection_widget import PlotFeaturesFeatureSelectionWidget
 from .group_definition_widget import GroupDefinitionWidget
 from .group_assignment_widget import PlotFeaturesGroupAssignmentWidget
 from .plot_features_load_data_widget import PlotFeaturesLoadDataWidget
+from .plot_visualization_widget import PlotFeaturesVisualizationWidget
 
 __all__ = [
     "GroupDefinitionWidget",
@@ -10,4 +11,5 @@ __all__ = [
     "PlotFeaturesFeatureSelectionWidget",
     "PlotFeaturesGroupAssignmentWidget",
     "PlotFeaturesLoadDataWidget",
+    "PlotFeaturesVisualizationWidget",
 ]

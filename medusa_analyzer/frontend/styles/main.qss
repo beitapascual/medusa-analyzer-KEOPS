@@ -124,6 +124,76 @@ QFrame[role="feature-tab-page"] {
     border: none;
 }
 
+QFrame[role="plot-type-panel"] {
+    background: #2A1D23;
+    border: 1px solid #A61E4D;
+    border-radius: 10px;
+}
+
+QLabel#plotTypeTitle {
+    color: #FFF7FA;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QComboBox[role="plot-type-combo"] {
+    min-height: 40px;
+    color: #FFF7FA;
+    background: #160F13;
+    border: 2px solid #E35A82;
+    font-weight: 650;
+}
+
+QComboBox[role="plot-type-combo"]:focus {
+    border: 2px solid #39B8C1;
+}
+
+QFrame[role="plot-preview-panel"] {
+    background: #22181D;
+    border: 1px solid #3A2931;
+    border-radius: 12px;
+}
+
+QPushButton[role="plot-export-button"] {
+    min-width: 110px;
+}
+
+QTabWidget[role="plot-control-tabs"] {
+    background: transparent;
+    border: none;
+}
+
+QTabWidget[role="plot-control-tabs"]::pane {
+    background: #1F171B;
+    border: 1px solid #3E3036;
+    border-radius: 9px;
+    top: -1px;
+}
+
+QTabWidget[role="plot-control-tabs"] QTabBar::tab {
+    color: #B8A7AF;
+    background: #181215;
+    border: 1px solid #3E3036;
+    border-bottom: none;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+    min-height: 28px;
+    padding: 7px 12px;
+    margin-right: 3px;
+}
+
+QTabWidget[role="plot-control-tabs"] QTabBar::tab:hover {
+    color: #F8EEF2;
+    background: #241A1F;
+    border-color: #6A3142;
+}
+
+QTabWidget[role="plot-control-tabs"] QTabBar::tab:selected {
+    color: #FFF7FA;
+    background: #3A1D28;
+    border-color: #A61E4D;
+}
+
 QFrame[role="editable-table"],
 QFrame[role="table-header"] {
     background: transparent;
