@@ -153,7 +153,7 @@ def generate_medusa_bids_test_batch(out_dir="bids_bd_pre_converter", n_subjects=
             })
 
             # 6. Volcado al disco
-            file_name = f"sub-{sub_str}_ses-{ses_str}_task-gonogo_recording.json"
+            file_name = f"sub-{sub_str}_ses-{ses_str}_task-gonogo_rec.json"
             rec.save(str(out / file_name))
 
     print(f"Generados {n_subjects * n_sessions} registros multimodales MEDUSA en: {out_dir}")

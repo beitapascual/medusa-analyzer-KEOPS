@@ -363,10 +363,10 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         # Comprueba que haya al menos un sujeto o archivo disponible
         errors.extend(self.validation.validate_many(self.items, [("minimum_length", {"minimum": 1,
             "item_name": _target_item_names[target], "action": "contain"})], label=_target_titles[target]))
-        # Mira si queda algún elemento sin asignar
-        if [item_name for item_name in self.items if item_name not in self.assignment_by_item]:
-            item_name = _target_item_names[target]
-            errors.append(f"{_target_titles[target]}: assign every {item_name} before continuing.")
+        # # Mira si queda algún elemento sin asignar
+        # if [item_name for item_name in self.items if item_name not in self.assignment_by_item]:
+        #     item_name = _target_item_names[target]
+        #     errors.append(f"{_target_titles[target]}: assign every {item_name} before continuing.")
         return errors
 
     def _update_status_label(self) -> None:

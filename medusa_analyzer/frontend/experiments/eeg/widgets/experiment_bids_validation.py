@@ -66,8 +66,8 @@ def load_eeg_bids_dataset(root: str | Path, config: dict[str, Any] | None = None
         task = entities.get("task") or metadata.get("TaskName") or task_info.get("TaskName") or task_info.get("Taskname")
         task = task or task_nested.get("TaskName") or task_nested.get("Taskname") or "n/a"
         # Obtenemos información de los canales
-        channel_names = tuple(str(row.get("name", "")).strip() for row in signal_rows if row.get("name"))
-        channel_types = tuple(str(row.get("type", "")).strip().upper() for row in signal_rows if row.get("name"))
+        channel_names = tuple(str(row.get("label", "")).strip() for row in signal_rows if row.get("label"))
+        channel_types = tuple(str(row.get("type", "")).strip().upper() for row in signal_rows if row.get("label"))
         reference = str(metadata.get("EEGReference") or "n/a")
         # Obtenemos información de los eventos
         events = recording["tables"].get("events") or []

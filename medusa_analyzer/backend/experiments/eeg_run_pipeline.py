@@ -833,7 +833,7 @@ def compute_parameters(epochs, fs, band, state):
 #     # Store
 #     files_widget.main_window.controller.parameters_config = params_cfg
 
-if __name__ == '__main__':
-    with open(rf"C:\Users\1993_\Desktop\config.json") as json_data:
-        state = json.load(json_data)
-    # run_pipeline(state)
+# if __name__ == '__main__':
+#     with open(rf"C:\Users\1993_\Desktop\config.json") as json_data:
+#         state = json.load(json_data)
+#     # run_pipeline(state)

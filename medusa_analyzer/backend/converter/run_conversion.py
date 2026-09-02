@@ -124,7 +124,7 @@ def file_to_bids(input_path: Path, output_path: Path):
         # 3.5 Exportación de la señal cruda a formato EDF
         component_data = content.get('component_data', {})
         # Extracción de nombres de canales
-        ch_names = [str(ch.get('uid')) for ch in component_data.get('channel_set', {}).get('channels', [])]
+        ch_names = [str(ch.get('label')) for ch in component_data.get('channel_set', {}).get('channels', [])]
         # Estructuración del diccionario de salida
         signal_export = {
             "fs": component_data['fs'],
