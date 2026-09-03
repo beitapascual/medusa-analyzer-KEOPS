@@ -2,3 +2,5 @@ __pycache__/
 *.py[cod]
 /sample_data/*
 !/sample_data/create_bids_recordings.py
+/build/
+/dist/
