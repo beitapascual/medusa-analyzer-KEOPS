@@ -75,7 +75,7 @@ def run() -> int:
     app.setStyleSheet(_load_stylesheet()) # Carga el QSS y se lo aplicamos a toda la aplicación
 
     # 1. Crear y mostrar el Splash Screen
-    pixmap = QPixmap("medusa_analyzer/frontend/styles/splash.png")
+    pixmap = QPixmap("medusa_analyzer/frontend/styles/splash_2.png")
     pixmap = pixmap.scaled(
         400, 400,
         Qt.AspectRatioMode.KeepAspectRatio,
