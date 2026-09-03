@@ -5,7 +5,8 @@ from typing import Any
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-    QMenu, QScrollArea, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+                               QMenu, QScrollArea, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout, QWidget)
 from medusa_analyzer.frontend.validation import Validation
 
 _target_titles = {"subjects": "Subjects", "recordings": "Files"}
@@ -35,16 +36,19 @@ class _GroupAssignmentDelegate(QStyledItemDelegate):
         painter.drawText(text_rect, cell_option.displayAlignment | Qt.AlignmentFlag.AlignVCenter, cell_option.text)
         painter.restore()
 
+
 def _available_items_for_target(state: dict[str, Any], target: str) -> list[str]:
     key = "plot_features_subjects" if target == "subjects" else "plot_features_recordings"
     values = state.get(key)
     return [str(value) for value in values] if isinstance(values, list) else []
+
 
 def _groups_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     groups = state.get("groups")
     if isinstance(groups, dict):
         return {str(group_id): dict(group) for group_id, group in groups.items() if isinstance(group, dict)}
     return {}
+
 
 def _item_name_for_table_row(table: QTableWidget, row: int) -> str | None:
     item = table.item(row, 0)
@@ -53,11 +57,13 @@ def _item_name_for_table_row(table: QTableWidget, row: int) -> str | None:
     value = item.data(Qt.ItemDataRole.UserRole)
     return str(value) if value is not None else item.text()
 
+
 def _filter_table_items(table: QTableWidget, text: str) -> None:
     needle = text.lower().strip()
     for row in range(table.rowCount()):
         item_name = _item_name_for_table_row(table, row) or ""
         table.setRowHidden(row, bool(needle) and needle not in item_name.lower())
+
 
 def _group_color_brush(group: dict[str, Any] | None) -> QBrush:
     """Crea el pincel con el color del grupo para pintar filas asignadas."""
@@ -67,6 +73,7 @@ def _group_color_brush(group: dict[str, Any] | None) -> QBrush:
         if color.isValid():
             brush = QBrush(color)
     return brush
+
 
 def _group_text_brush(group: dict[str, Any] | None) -> QBrush:
     """Elige texto claro u oscuro para que se lea encima del color del grupo."""
@@ -80,7 +87,9 @@ def _group_text_brush(group: dict[str, Any] | None) -> QBrush:
     brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
     return QBrush(QColor("#1F171B" if brightness > 150 else "#FFF7FA"))
 
-def _set_table_row_background(table: QTableWidget, row: int, background: QBrush, foreground: QBrush | None = None) -> None:
+
+def _set_table_row_background(table: QTableWidget, row: int, background: QBrush,
+                              foreground: QBrush | None = None) -> None:
     """Aplica el fondo y el texto directamente sobre los items de una fila."""
     for col in range(table.columnCount()):
         table_item = table.item(row, col)
@@ -88,6 +97,7 @@ def _set_table_row_background(table: QTableWidget, row: int, background: QBrush,
             table_item.setBackground(background)
             table_item.setForeground(foreground or QBrush())
     table.viewport().update()
+
 
 def _group_for_item(state: dict[str, Any], target: str, item_name: str | None) -> dict[str, Any] | None:
     if item_name is None:
@@ -100,6 +110,7 @@ def _group_for_item(state: dict[str, Any], target: str, item_name: str | None) -
             return group
     return None
 
+
 class PlotFeaturesGroupAssignmentWidget(QScrollArea):
     changed = Signal()
 
@@ -110,9 +121,9 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         self.state = state
         self.validation = Validation()
         self.validation_errors: list[str] = []
-        self.items: list[str] = [] # guarda elementos que hay que asignar
-        self.assignment_by_item: dict[str, str] = {} # guarda a qué grupo se asigna cada elemento
-        self.current_target = "recordings" # guarda si se están asignando subjects o recordings
+        self.items: list[str] = []  # guarda elementos que hay que asignar
+        self.assignment_by_item: dict[str, str] = {}  # guarda a qué grupo se asigna cada elemento
+        self.current_target = "recordings"  # guarda si se están asignando subjects o recordings
 
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -131,10 +142,10 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         root.addWidget(self.title)
         root.addWidget(self.description)
 
-        root.addWidget(self._build_assignment_panel()) # panel principal
+        root.addWidget(self._build_assignment_panel())  # panel principal
         root.addStretch()
 
-        self.on_step_activated() # lee estado y refresca la pantalla a lo que exista de antes
+        self.on_step_activated()  # lee estado y refresca la pantalla a lo que exista de antes
 
     def _build_assignment_panel(self) -> QFrame:
         # Bloque de asignación
@@ -144,19 +155,20 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         layout.setContentsMargins(24, 22, 24, 22)
         layout.setSpacing(12)
 
-        search_row = QHBoxLayout() # Barra de búsqueda
+        search_row = QHBoxLayout()  # Barra de búsqueda
         search_row.setContentsMargins(0, 0, 0, 0)
         search_label = QLabel("Search")
         search_label.setObjectName("panelTitle")
-        self.search_input = QLineEdit() # Crea el cuadro de búsqueda
-        self.search_input.setPlaceholderText("Find items...") # Texto guía
-        self.search_input.setClearButtonEnabled(True) # Añade 'x' para borrar el texto
-        self.search_input.textChanged.connect(lambda text: _filter_table_items(self.table, text)) # Oculta filas que no coinciden con la búsqueda
+        self.search_input = QLineEdit()  # Crea el cuadro de búsqueda
+        self.search_input.setPlaceholderText("Find items...")  # Texto guía
+        self.search_input.setClearButtonEnabled(True)  # Añade 'x' para borrar el texto
+        self.search_input.textChanged.connect(
+            lambda text: _filter_table_items(self.table, text))  # Oculta filas que no coinciden con la búsqueda
         search_row.addWidget(search_label)
         search_row.addWidget(self.search_input, 1)
         layout.addLayout(search_row)
 
-        self.table = QTableWidget() # Tabla de asignación
+        self.table = QTableWidget()  # Tabla de asignación
         self.table.setProperty("role", "assignment-table")
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["Item", "Group"])
@@ -188,39 +200,40 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         return panel
 
     def on_step_activated(self) -> None:
-        analysis_mode = str(self.state.get("analysis_mode") or "within") # modo de análisis
+        analysis_mode = str(self.state.get("analysis_mode") or "within")  # modo de análisis
         target = _target_by_analysis_mode[analysis_mode]
         self.current_target = target
 
         target_title = _target_titles[target]
         item_name = _target_item_names[target]
-        self.items = _available_items_for_target(self.state, self.current_target) # Buscamos sujetos o recordings disponibles
+        self.items = _available_items_for_target(self.state,
+                                                 self.current_target)  # Buscamos sujetos o recordings disponibles
         self.description.setText(f"Assign {target_title.lower()} to the groups defined in the previous step.")
         self.instruction_label.setText(f"Select one or more {item_name}s, then right-click to assign them to a group.")
-        self.assignment_by_item = self._stored_assignment_for_target(target) # recupera asignaciones previas
-        self._populate_table() # rellena la tabla
+        self.assignment_by_item = self._stored_assignment_for_target(target)  # recupera asignaciones previas
+        self._populate_table()  # rellena la tabla
         self._sync(emit_changed=False)
 
     def _populate_table(self) -> None:
         self.table.blockSignals(True)
         try:
-            self.table.setRowCount(len(self.items)) # tantas filas como elementos existan
+            self.table.setRowCount(len(self.items))  # tantas filas como elementos existan
             target_title = _target_titles[self.current_target]
-            self.table.setHorizontalHeaderLabels([target_title[:-1], "Group"]) # título
-            for row, item_name in enumerate(self.items): # recorremos cada sujeto/recording y su índice de fila
-                item = QTableWidgetItem(item_name) # celda del nombre
+            self.table.setHorizontalHeaderLabels([target_title[:-1], "Group"])  # título
+            for row, item_name in enumerate(self.items):  # recorremos cada sujeto/recording y su índice de fila
+                item = QTableWidgetItem(item_name)  # celda del nombre
                 item.setData(Qt.ItemDataRole.UserRole, item_name)
-                group_item = QTableWidgetItem("") # celda del grupo
+                group_item = QTableWidgetItem("")  # celda del grupo
                 self.table.setItem(row, 0, item)
                 self.table.setItem(row, 1, group_item)
-                self._render_assignment_for_row(row) # si el elemento ya tenía el grupo asignado, lo dibuja
+                self._render_assignment_for_row(row)  # si el elemento ya tenía el grupo asignado, lo dibuja
         finally:
             self.table.blockSignals(False)
         _filter_table_items(self.table, self.search_input.text())
 
     def _show_context_menu(self, pos: Any) -> None:
         """Función que maneja el botón derecho"""
-        index = self.table.indexAt(pos) # fila sobre la que se hace click
+        index = self.table.indexAt(pos)  # fila sobre la que se hace click
         if index.isValid() and not self.table.selectionModel().isRowSelected(index.row()):
             self.table.selectRow(index.row())
         # Vemos cuales son todas las filas seleccionadas
@@ -230,29 +243,31 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         groups = _groups_from_state(self.state)
         if not groups:
             return
-        menu = QMenu(self) # creamos menú conceptual
-        for group_id, group in groups.items():# recorremos todos los grupos
+        menu = QMenu(self)  # creamos menú conceptual
+        for group_id, group in groups.items():  # recorremos todos los grupos
             # Añadimos una opción por grupo
             action = menu.addAction(str(group.get("group_name") or group_id))
-            action.triggered.connect(lambda checked=False, selected_group_id=group_id: self._assign_selected(selected_group_id))
+            action.triggered.connect(
+                lambda checked=False, selected_group_id=group_id: self._assign_selected(selected_group_id))
         menu.addSeparator()
-        reset_action = menu.addAction("Reset assignment") # opción de quitar asignación
+        reset_action = menu.addAction("Reset assignment")  # opción de quitar asignación
         reset_action.triggered.connect(lambda checked=False: self._assign_selected(None))
-        menu.exec(self.table.viewport().mapToGlobal(pos)) # muestra el menú en la posición del ratón
+        menu.exec(self.table.viewport().mapToGlobal(pos))  # muestra el menú en la posición del ratón
 
     def _assign_selected(self, group_id: str | None) -> None:
-        for row in sorted({index.row() for index in self.table.selectionModel().selectedRows()}): # recorremos filas seleccionadas
+        for row in sorted({index.row() for index in
+                           self.table.selectionModel().selectedRows()}):  # recorremos filas seleccionadas
             # Función para averiguar qué sujeto/archivo corresponde a una fila.
             item = self.table.item(row, 0)
             if item is None:
                 continue
             value = item.data(Qt.ItemDataRole.UserRole)
-            item_name = str(value) if value is not None else item.text() # obtiene el sujeto/archivo de esa fila
+            item_name = str(value) if value is not None else item.text()  # obtiene el sujeto/archivo de esa fila
             if group_id is None:
-                self.assignment_by_item.pop(item_name, None) # elimina la asignación
+                self.assignment_by_item.pop(item_name, None)  # elimina la asignación
             else:
-                self.assignment_by_item[item_name] = group_id # guardamos la asignación de cada elemento
-            self._render_assignment_for_row(row) # actualiza visualmente la fila
+                self.assignment_by_item[item_name] = group_id  # guardamos la asignación de cada elemento
+            self._render_assignment_for_row(row)  # actualiza visualmente la fila
         self._sync()
         self.table.clearSelection()
         self._render_all_assignments()
@@ -269,21 +284,21 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         if item is None:
             return
         value = item.data(Qt.ItemDataRole.UserRole)
-        item_name = str(value) if value is not None else item.text() # obtiene el elemento
+        item_name = str(value) if value is not None else item.text()  # obtiene el elemento
 
-        group_id = self.assignment_by_item.get(item_name) # mira qué grupo tiene asignado
+        group_id = self.assignment_by_item.get(item_name)  # mira qué grupo tiene asignado
         groups = _groups_from_state(self.state)
         group = groups.get(group_id or "")
-        group_name = str(group.get("group_name") or "") if group else "" # nombre del grupo
+        group_name = str(group.get("group_name") or "") if group else ""  # nombre del grupo
         background = _group_color_brush(group)
         foreground = _group_text_brush(group)
 
-        group_item = self.table.item(row, 1) # obtenemos la celda de la columna group
+        group_item = self.table.item(row, 1)  # obtenemos la celda de la columna group
         if group_item is None:
             group_item = QTableWidgetItem("")
             self.table.setItem(row, 1, group_item)
-        group_item.setText(group_name) # ponemos nombre del grupo
-        _set_table_row_background(self.table, row, background, foreground) # pintamos toda la fila del color del grupo
+        group_item.setText(group_name)  # ponemos nombre del grupo
+        _set_table_row_background(self.table, row, background, foreground)  # pintamos toda la fila del color del grupo
 
     def _refresh_assignment_summary(self) -> None:
         """Reconstruye las chips con el numero de elementos asignados a cada grupo."""
@@ -296,7 +311,7 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         item_name = _target_item_names[self.current_target]
         for group_id, group in groups.items():
             assigned_count = sum(1 for assigned_group_id in self.assignment_by_item.values()
-                if assigned_group_id == group_id)
+                                 if assigned_group_id == group_id)
             chip = self._build_group_summary_chip(group, assigned_count, item_name)
             self.summary_layout.addWidget(chip)
         self.summary_layout.addStretch()
@@ -321,21 +336,21 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         return chip
 
     def _sync(self, emit_changed: bool = True) -> None:
-        target = self.current_target # obtiene qué estamos asignando
+        target = self.current_target  # obtiene qué estamos asignando
 
         groups = _groups_from_state(self.state)
-        assignment_by_group = {group_id: [] for group_id in groups} # dic grupo - elemento
-        group_by_item: dict[str, str] = {} # dic elemento - grupo
-        for item_name in self.items: # recorremos todos los elementos
-            group_id = self.assignment_by_item.get(item_name) # mira su grupo
+        assignment_by_group = {group_id: [] for group_id in groups}  # dic grupo - elemento
+        group_by_item: dict[str, str] = {}  # dic elemento - grupo
+        for item_name in self.items:  # recorremos todos los elementos
+            group_id = self.assignment_by_item.get(item_name)  # mira su grupo
             if group_id in groups:
                 assignment_by_group[group_id].append(item_name)
                 group_by_item[item_name] = group_id
 
         self.assignment_by_item = dict(group_by_item)
         self.state["group_assignment"] = {"target": target,
-            "items_by_group": assignment_by_group,
-            "group_by_item": group_by_item}
+                                          "items_by_group": assignment_by_group,
+                                          "group_by_item": group_by_item}
         self._sync_groups_state(target, assignment_by_group)
         self._render_all_assignments()
         self._refresh_assignment_summary()
@@ -359,10 +374,16 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
         groups = _groups_from_state(self.state)
         # Comprueba que haya al menos un grupo
         errors.extend(self.validation.validate_many(groups, [("minimum_length", {"minimum": 1,
-            "item_name": "group", "action": "contain"})], label="Groups"))
+                                                                                 "item_name": "group",
+                                                                                 "action": "contain"})],
+                                                    label="Groups"))
         # Comprueba que haya al menos un sujeto o archivo disponible
-        errors.extend(self.validation.validate_many(self.items, [("minimum_length", {"minimum": 1,
-            "item_name": _target_item_names[target], "action": "contain"})], label=_target_titles[target]))
+        errors.extend(self.validation.validate_many(self.items, [("minimum_length", {"minimum": len(groups),
+                                                                                     "item_name": _target_item_names[
+                                                                                         target],
+                                                                                     "action": "contain",
+                                                                                     "minimum_text": "the number of groups defined"})],
+                                                    label=_target_titles[target]))
         # # Mira si queda algún elemento sin asignar
         # if [item_name for item_name in self.items if item_name not in self.assignment_by_item]:
         #     item_name = _target_item_names[target]
@@ -391,11 +412,12 @@ class PlotFeaturesGroupAssignmentWidget(QScrollArea):
 
         groups = _groups_from_state(self.state)
         return {str(item): str(group_id) for item, group_id in group_by_item.items()
-            if str(item) in self.items and str(group_id) in groups}
+                if str(item) in self.items and str(group_id) in groups}
 
     def can_continue(self) -> bool:
         self.validation_errors = self._validate_assignment()
         self._update_status_label()
         return not self.validation_errors
+
 
 __all__ = ["PlotFeaturesGroupAssignmentWidget"]

@@ -27,31 +27,31 @@
       "id": "group_definition",
       "title": "Group definition",
       "subtitle": "Create analysis groups and assign their display colors.",
-      "widget": "group_definition_widget.GroupDefinitionWidget"
+      "widget": "plot_features_group_definition_widget.GroupDefinitionWidget"
     },
     {
       "id": "group_assignment",
       "title": "Group assignment",
       "subtitle": "Assign recordings or subjects to the configured groups.",
-      "widget": "group_assignment_widget.PlotFeaturesGroupAssignmentWidget"
+      "widget": "plot_features_group_assignment_widget.PlotFeaturesGroupAssignmentWidget"
     },
     {
       "id": "data_assignment",
       "title": "Data assignment",
       "subtitle": "Select the remaining subjects or recordings for the analysis.",
-      "widget": "data_assignment_widget.PlotFeaturesDataAssignmentWidget"
+      "widget": "plot_features_data_assignment_widget.PlotFeaturesDataAssignmentWidget"
     },
     {
       "id": "feature_selection",
       "title": "Feature selection",
       "subtitle": "Select the computed features to plot.",
-      "widget": "feature_selection_widget.PlotFeaturesFeatureSelectionWidget"
+      "widget": "plot_features_feature_selection_widget.PlotFeaturesFeatureSelectionWidget"
     },
     {
       "id": "plot_visualization",
       "title": "Plot visualization",
       "subtitle": "Configure and export one plot per selected feature.",
-      "widget": "plot_visualization_widget.PlotFeaturesVisualizationWidget"
+      "widget": "plot_features_visualization_widget.PlotFeaturesVisualizationWidget"
     }
   ]
 }

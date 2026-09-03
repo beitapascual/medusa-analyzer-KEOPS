@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
-from .group_assignment_widget import (_available_items_for_target, _filter_table_items, _item_name_for_table_row,
+from .plot_features_group_assignment_widget import (_available_items_for_target, _filter_table_items, _item_name_for_table_row,
     _target_item_names, _target_titles)
 from medusa_analyzer.frontend.validation import Validation
 
@@ -95,6 +95,7 @@ class PlotFeaturesDataAssignmentWidget(QScrollArea):
         return panel
 
     def _refresh_from_state(self) -> None:
+
         """Actualiza la pantalla según toodo lo que haya en el state"""
         analysis_mode = str(self.state.get("analysis_mode") or "within")
         self.current_target = "subjects" if analysis_mode == "within" else "recordings"

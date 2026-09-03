@@ -238,7 +238,7 @@ class Validation:
         return message or f"{label} must match the expected format."
 
     def _validate_minimum_length(self, value: Any, *, label: str, minimum: int, item_name: str = "item",
-        action: str = "contain", **_: Any) -> str | None:
+                                 action: str = "contain", minimum_text: str | None = None, **_: Any) -> str | None:
         try:
             current_length = len(value)
         except TypeError:
@@ -246,11 +246,15 @@ class Validation:
         if current_length >= int(minimum):
             return None
 
+        # Si se proporciona minimum_text, se usa en el mensaje. Si no, se usa el número.
+        display_min = minimum_text if minimum_text is not None else str(int(minimum))
+
         if action == "select":
-            if int(minimum) == 1:
+            if int(minimum) == 1 and minimum_text is None:
                 return f"{label}: select at least one {item_name}."
-            return f"{label}: select at least {int(minimum)} {item_name}s."
-        return f"{label} must contain at least {int(minimum)} {item_name}(s)."
+            return f"{label}: select at least {display_min} {item_name}s."
+        return f"{label} must contain at least {display_min} {item_name}(s)."
+
 
     def _validate_custom(self, value: Any, *, label: str, validator: ValidationCallable,
         **options: Any) -> ValidationResult | str | None:

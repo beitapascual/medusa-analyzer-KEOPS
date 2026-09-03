@@ -2,8 +2,9 @@ import sys
 import logging
 from pathlib import Path
 
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget
+from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QSplashScreen
+from PySide6.QtCore import Qt # Importar Qt para los modificadores de escalado
 
 from medusa_analyzer.frontend.dashboard import DashboardPage, build_dashboard_catalog
 from medusa_analyzer.frontend.experiments import create_experiment_page, discover_experiments
@@ -72,8 +73,25 @@ def run() -> int:
     app.setStyle("Fusion")
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(_load_stylesheet()) # Carga el QSS y se lo aplicamos a toda la aplicación
+
+    # 1. Crear y mostrar el Splash Screen
+    pixmap = QPixmap("medusa_analyzer/frontend/styles/splash.png")
+    pixmap = pixmap.scaled(
+        400, 400,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation
+    )
+    splash = QSplashScreen(pixmap)
+    splash.show()
+    # 2. Forzar a Qt a procesar eventos (dibujar el splash) antes del trabajo pesado
+    app.processEvents()
+
     # Ejecutamos toodo el constructor de la MainWidow (crear el stack, router, descubrir experimentos, crear páginas,
     # registrar rutas y navegar al dashboard.
     window = MainWindow()
     window.show()
+
+    # 4. Cerrar el splash screen transicionando a la ventana principal
+    splash.finish(window)
+
     return app.exec()
