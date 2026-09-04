@@ -28,7 +28,7 @@
     ]
   },
   "group_definition": {
-    "min_groups": 1,
+    "min_groups": 2,
     "max_groups": 20,
     "default_group_count": 2,
     "default_color_hue_offset": 345,

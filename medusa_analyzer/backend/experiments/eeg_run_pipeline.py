@@ -374,7 +374,8 @@ def segment_signal(signal, times, fs, events, state,
         norm = state['normalization']['instant']['mode'] if state['normalization']['instant']['enabled'] else None
         n_samples = int(np.round((segment_length / 1000.0) * fs))
         times_epochs = np.linspace(epoch_window[0], epoch_window[1], n_samples) / 1000
-    norm = 'z' if norm == 'mean_std' else 'dc'
+    if norm is not None:
+        norm = 'z' if norm == 'mean_std' else 'dc'
 
     epochs = dict()
     for base_evt in state['event_groups']:
@@ -394,7 +395,7 @@ def segment_signal(signal, times, fs, events, state,
         for row_base in current_base_evt.itertuples(index=False):
             start_idx = np.searchsorted(times, row_base.onset)
             end_idx = np.searchsorted(times, row_base.onset + row_base.duration)
-            signal_base = signal[:, start_idx:end_idx]
+            signal_base = signal[start_idx:end_idx, :]
             times_base = times[start_idx:end_idx]
 
             # If segmentation type is 'condition'
@@ -411,7 +412,7 @@ def segment_signal(signal, times, fs, events, state,
                         if start_idx >= len(times_base) or end_idx > len(times_base):
                             continue  # Ignorar esta iteración y pasar al siguiente evento
 
-                        signal_evt = signal_base[:, start_idx:end_idx]
+                        signal_evt = signal_base[start_idx:end_idx, :]
 
                         # Get epochs for the current condition
                         epochs_tmp = segmentation.segment_signal(
