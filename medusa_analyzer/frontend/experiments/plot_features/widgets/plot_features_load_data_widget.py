@@ -101,7 +101,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         self.analysis_group.setExclusive(True) # agrupamos Rbuttons para que solo uno pueda estar seleccionado a la vez
         self.analysis_group.buttonToggled.connect(lambda _button, checked: self._sync_analysis_mode() if checked else None)
 
-        for mode in self.analysis_modes: # Creamos una opción para cada modo
+        for i, mode in enumerate(self.analysis_modes):
             option = QFrame()
             option.setProperty("role", "analysis-mode-option")
             option_layout = QVBoxLayout(option)
@@ -120,6 +120,14 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
 
             option_layout.addWidget(radio)
             option_layout.addWidget(detail)
+
+            # Línea justo encima del último modo
+            if i == len(self.analysis_modes) - 1:
+                line = QFrame()
+                line.setFrameShape(QFrame.Shape.HLine)
+                line.setFrameShadow(QFrame.Shadow.Sunken)
+                layout.addWidget(line)
+
             layout.addWidget(option)
             self.option_frames[str(mode["id"])] = option
 
@@ -349,11 +357,18 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         if len(available_recordings) > 1:
             stored_recording = str(self.state.get("plot_features_nocomparison_recording") or "")
             current_index = available_recordings.index(stored_recording) if stored_recording in available_recordings else 0
+            selected_subjects, accepted = QInputDialog.getItem(self, "Select recording",
+                "Subject:", self.state["plot_features_subjects"], 0, False)
+            if not accepted:
+                return False
+            self.state["plot_features_subjects"] = selected_subjects
+
             selected_recording, accepted = QInputDialog.getItem(self, "Select recording",
                 "Recording:", available_recordings, current_index, False)
             if not accepted:
                 return False
             selected_recording = str(selected_recording)
+
 
         saturation = int(self.group_definition_config.get("default_color_saturation", 175))
         value = int(self.group_definition_config.get("default_color_value", 235))
