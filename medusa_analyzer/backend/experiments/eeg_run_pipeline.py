@@ -214,7 +214,8 @@ def run_eeg_feature_extraction(state,
                             current_times_epochs = (np.arange(epochs[base_evt][evt].shape[1]) / current_fs) * 1000
 
                         # Logs
-                        progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a / total_steps * 100)
+                        # progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a / total_steps * 100)
+                        progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + ((offset_event_a / total_steps) * 100))
                         progress_callback(progress)
                         msg = f"[{subj_id}] Segmentation successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
                         log_callback(msg, "")
@@ -237,7 +238,8 @@ def run_eeg_feature_extraction(state,
                         save_outputs(params, file, band_name, base_evt + evt, 'parameters', state)
 
                         # Logs
-                        progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b / total_steps * 100)
+                        # progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b / total_steps * 100)
+                        progress = int(((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b) / total_steps * 100)
                         progress_callback(progress)
                         msg = f"[{subj_id}] Parameters successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
                         log_callback(msg, "")
@@ -299,6 +301,7 @@ def run_eeg_feature_extraction(state,
     msg = f"MEDUSA EEG FEATURES EXTRACTION successfully finished"
     log_callback(msg, "")
     execution_logs.append(msg)
+    progress_callback(100)
 
     if error_found:
         msg = f"Error(s) found during processing, please check logs"
