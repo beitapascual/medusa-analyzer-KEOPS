@@ -214,7 +214,8 @@ def run_eeg_feature_extraction(state,
                             current_times_epochs = (np.arange(epochs[base_evt][evt].shape[1]) / current_fs) * 1000
 
                         # Logs
-                        progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a / total_steps * 100)
+                        # progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a / total_steps * 100)
+                        progress = int(((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a) / total_steps * 100 )
                         progress_callback(progress)
                         msg = f"[{subj_id}] Segmentation successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
                         log_callback(msg, "")
@@ -237,7 +238,8 @@ def run_eeg_feature_extraction(state,
                         save_outputs(params, file, band_name, base_evt + evt, 'parameters', state)
 
                         # Logs
-                        progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b / total_steps * 100)
+                        # progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b / total_steps * 100)
+                        progress = int(((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b) / total_steps * 100)
                         progress_callback(progress)
                         msg = f"[{subj_id}] Parameters successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
                         log_callback(msg, "")
@@ -299,6 +301,7 @@ def run_eeg_feature_extraction(state,
     msg = f"MEDUSA EEG FEATURES EXTRACTION successfully finished"
     log_callback(msg, "")
     execution_logs.append(msg)
+    progress_callback(100)
 
     if error_found:
         msg = f"Error(s) found during processing, please check logs"
@@ -611,11 +614,11 @@ def compute_parameters(epochs, fs, band, state):
             print(e)
 
     ## SPECTRAL METRICS - RELATIVE POWER
-    if band['id'].lower() == 'broadband' and 'relative_power' in state['selected_features']:
+    if band['id'].lower() == 'broadband' and 'relative_band_power' in state['selected_features']:
         val = []
 
         # The bands will be different if band segmentation is enabled or not
-        selected_bands = state['feature_params']['relative_power']['selected_frequency_bands']
+        selected_bands = state['feature_params']['relative_band_power']['selected_frequency_bands']
 
         # Define broadband range based on the broadband limits
         min_val = band['low_cut']
@@ -630,11 +633,11 @@ def compute_parameters(epochs, fs, band, state):
                 val_band = spectral.band_power(psd, fs, band_range, 'relative',[min_val, max_val])
                 val.append({"band": band_rp["id"].lower(), "value": val_band})
 
-            params[f"relative_power"] = val
+            params[f"relative_band_power"] = val
 
     ## SPECTRAL METRICS - OTHERS
     spectral_funcs = {
-        "absolute_power": spectral.band_power,
+        "absolute_band_power": spectral.band_power,
         "median_frequency": spectral.median_frequency,
         "spectral_entropy": nonlinear.shannon_spectral_entropy
     }
@@ -646,7 +649,7 @@ def compute_parameters(epochs, fs, band, state):
             # Get the current band range
             band_range = [band['low_cut'], band['high_cut']]
             # Compute the metric
-            if name == 'absolute_power':
+            if name == 'absolute_band_power':
                 val = func(psd, fs, band_range, 'absolute')
             else:
                 val = func(psd, fs, band_range)
@@ -797,7 +800,7 @@ def compute_parameters(epochs, fs, band, state):
 #     params_widget.rpCBox.setChecked(bool(params_cfg['relative_power']))
 #     params_widget.controller.update_band_label('rp', params_cfg["selected_rp_bands"])
 #     params_widget.controller.loading_config = False
-#     params_widget.apCBox.setChecked(bool(params_cfg['absolute_power']))
+#     params_widget.apCBox.setChecked(bool(params_cfg['absolute_band_power']))
 #     params_widget.mfCBox.setChecked(bool(params_cfg['median_frequency']))
 #     params_widget.seCBox.setChecked(bool(params_cfg['spectral_entropy']))
 #     params_widget.ctmCBox.setChecked(bool(params_cfg['ctm']))
