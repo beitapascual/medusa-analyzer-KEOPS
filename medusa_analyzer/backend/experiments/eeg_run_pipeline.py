@@ -215,7 +215,9 @@ def run_eeg_feature_extraction(state,
 
                         # Logs
                         # progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a / total_steps * 100)
-                        progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + ((offset_event_a / total_steps) * 100))
+                        progress = int((((idx_file * steps_per_file) + offset_file + (
+                                    idx_band * steps_per_band) + offset_band + ((
+                                                                                            evt_counter - 1) * steps_per_event) + offset_event_a) / total_steps) * 100)
                         progress_callback(progress)
                         msg = f"[{subj_id}] Segmentation successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
                         log_callback(msg, "")
@@ -239,7 +241,9 @@ def run_eeg_feature_extraction(state,
 
                         # Logs
                         # progress = int((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b / total_steps * 100)
-                        progress = int(((idx_file * steps_per_file) + offset_file + (idx_band * steps_per_band) + offset_band + (evt_counter * steps_per_event) + offset_event_a + offset_event_b) / total_steps * 100)
+                        progress = int((((idx_file * steps_per_file) + offset_file + (
+                                    idx_band * steps_per_band) + offset_band + (
+                                                     evt_counter * steps_per_event)) / total_steps) * 100)
                         progress_callback(progress)
                         msg = f"[{subj_id}] Parameters successfully computed for event combination '{base_evt}' and '{evt}' in band '{band_name}'."
                         log_callback(msg, "")
