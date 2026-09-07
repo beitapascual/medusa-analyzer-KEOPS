@@ -349,11 +349,18 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         if len(available_recordings) > 1:
             stored_recording = str(self.state.get("plot_features_nocomparison_recording") or "")
             current_index = available_recordings.index(stored_recording) if stored_recording in available_recordings else 0
+            selected_subjects, accepted = QInputDialog.getItem(self, "Select recording",
+                "Subject:", self.state["plot_features_subjects"], 0, False)
+            if not accepted:
+                return False
+            self.state["plot_features_subjects"] = selected_subjects
+
             selected_recording, accepted = QInputDialog.getItem(self, "Select recording",
                 "Recording:", available_recordings, current_index, False)
             if not accepted:
                 return False
             selected_recording = str(selected_recording)
+
 
         saturation = int(self.group_definition_config.get("default_color_saturation", 175))
         value = int(self.group_definition_config.get("default_color_value", 235))
