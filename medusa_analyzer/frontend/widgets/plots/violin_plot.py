@@ -63,6 +63,24 @@ class ViolinPlot(BasePlot):
         if current_tab is not None and not hasattr(current_tab, "statistics"):
             self.prepare_stats_data(current_tab)
 
+    def load_prepared_data(self, prepared_data) -> None:
+        self._group_values.clear()
+
+        for group in getattr(prepared_data, "groups", []):
+            values = []
+            for observation in getattr(group, "observations", []):
+                value = self.prepared_scalar(getattr(observation, "values", None))
+                if value is not None:
+                    values.append(value)
+
+            if values:
+                self._group_values[getattr(group, "name", getattr(group, "group_id", "Group"))] = np.asarray(values,
+                    dtype=float)
+
+        current_tab = self.current_tab()
+        if current_tab is not None and not hasattr(current_tab, "statistics"):
+            self.prepare_stats_data(current_tab)
+
     def draw(self, colors: dict[str, str] | None = None) -> None:
         self.clear()
 
@@ -102,11 +120,18 @@ class ViolinPlot(BasePlot):
 
         plot_boxplot = bool(self.plot_params.get("plot_boxplot", True))
         if plot_boxplot:
-            # Boxplot overlay optional
-            sns.boxplot(data=df, x="group", y="value", order=group_order, ax=self.ax, width=0.15,
-                showcaps=True, showfliers=False, boxprops={"facecolor": "none", "zorder": 20},
-                medianprops={"color": "black", "linewidth": 1.5}, whiskerprops={"linewidth": 1},
-                capprops={"linewidth": 1, "zorder": 20})
+            # Boxplot overlay optional, colored with the exact group color when available.
+            for index, group in enumerate(group_order):
+                group_values = df.loc[df["group"] == group, "value"].dropna().to_numpy()
+                if group_values.size == 0:
+                    continue
+                color = colors.get(group, "#222222") if isinstance(colors, dict) else "#222222"
+                self.ax.boxplot(group_values, positions=[index], widths=0.15, patch_artist=True,
+                    showcaps=True, showfliers=False,
+                    boxprops={"facecolor": "none", "edgecolor": color, "linewidth": 1.2, "zorder": 20},
+                    medianprops={"color": color, "linewidth": 1.5, "zorder": 21},
+                    whiskerprops={"color": color, "linewidth": 1.1, "zorder": 20},
+                    capprops={"color": color, "linewidth": 1.1, "zorder": 20})
 
         # ---- Mean / Median lines (optional) ----
         plot_mean = bool(self.plot_params.get("plot_mean_line", False))

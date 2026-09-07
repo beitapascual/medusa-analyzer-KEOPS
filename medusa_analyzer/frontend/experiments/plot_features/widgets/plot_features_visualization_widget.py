@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
     QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QScrollArea, QSizePolicy, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout,
     QWidget)
+from medusa_analyzer.frontend.widgets.plots import BasePlot, PlotDataIndex, PSDPlot, ScatterPlot, ViolinPlot
 
 
 class PlotFeaturesVisualizationWidget(QScrollArea):
@@ -25,6 +26,8 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
         self.plot_types = list(self.config.get("available_plot_types", []))
         self.feature_tabs: dict[str, dict[str, Any]] = {}
         self._refreshing = False
+        self._data_index: PlotDataIndex | None = None
+        self._data_index_key = ""
 
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -192,9 +195,12 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
         band_label = QLabel("Band")
         band_label.setObjectName("panelTitle")
         band_combo = QComboBox()
-        bands = self._bands_from_config()
+        bands = self._bands_for_feature(feature_id)
         for band in bands:
             band_combo.addItem(str(band["title"]), str(band["id"]))
+        if not bands:
+            band_combo.addItem("No compatible band", "")
+            band_combo.setEnabled(False)
         general_layout.addWidget(band_label)
         general_layout.addWidget(band_combo)
         general_layout.addStretch()
@@ -411,6 +417,8 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
             channel_index = item.data(Qt.ItemDataRole.UserRole)
             if isinstance(channel_index, int):
                 selected_channels.append(channel_index)
+        selected_channels = sorted(set(selected_channels))
+        selected_band = tab["band_combo"].currentData()
 
         visualization = {}
         for param_id, data in tab["dynamic_controls"].items():
@@ -439,15 +447,75 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
 
         self.state.setdefault("plot_feature_configs", {})[feature_id] = {
             "plot_type": plot_id,
-            "selected_channels": sorted(set(selected_channels)),
-            "selected_band": tab["band_combo"].currentData(),
+            "selected_channels": selected_channels,
+            "selected_band": selected_band,
             "visualization": visualization,
         }
 
+        self._draw_feature_plot(feature_id, plot_id, str(selected_band or ""), selected_channels, visualization)
+        tab["canvas"].draw_idle()
+
+        if emit_changed:
+            self.changed.emit()
+
+    def _draw_feature_plot(self, feature_id: str, plot_id: str, band_id: str, selected_channels: list[int],
+        visualization: dict[str, Any]) -> None:
+        tab = self.feature_tabs[feature_id]
         figure = tab["figure"]
         figure.clear()
         ax = figure.add_subplot(111)
-        title = str(visualization.get("title") or self._feature_title(feature_id))
+
+        try:
+            if not plot_id:
+                self._draw_empty_plot(ax, visualization, "No compatible plot selected.")
+                return
+            if not band_id:
+                self._draw_empty_plot(ax, visualization, "Select a band before plotting.")
+                return
+            if not selected_channels:
+                self._draw_empty_plot(ax, visualization, "Select at least one channel before plotting.")
+                return
+
+            if plot_id == "scatter":
+                x_feature_id, x_band_id = self._parse_feature_band_value(visualization.get("x_feature"))
+                if not x_feature_id or not x_band_id:
+                    self._draw_empty_plot(ax, visualization, "Select an X parameter before plotting.")
+                    return
+
+                plot = ScatterPlot(ax, visualization)
+                data_index = self._data_index_for_state()
+                y_data = plot.prepare_grouped_data(self.state, feature_id, band_id, selected_channels, data_index)
+                x_data = plot.prepare_grouped_data(self.state, x_feature_id, x_band_id, selected_channels, data_index)
+                plot.load_prepared_data(y_data, x_data)
+                if not plot._points:
+                    self._draw_empty_plot(ax, visualization, "No paired observations found for this scatter plot.")
+                    return
+                plot.draw(y_data.colors_by_name())
+                return
+
+            if plot_id == "psd":
+                plot = PSDPlot(ax, visualization)
+            elif plot_id == "violin":
+                plot = ViolinPlot(ax, visualization)
+            else:
+                self._draw_empty_plot(ax, visualization, f"{plot_id} plotting is not available yet.")
+                return
+
+            prepared_data = plot.prepare_grouped_data(self.state, feature_id, band_id, selected_channels,
+                self._data_index_for_state())
+            if not prepared_data.has_observations():
+                self._draw_empty_plot(ax, visualization, "No observations found for this feature, band and selection.")
+                return
+
+            plot.load_prepared_data(prepared_data)
+            plot.draw(prepared_data.colors_by_name())
+        except Exception as error:
+            self._draw_empty_plot(ax, visualization, str(error))
+        finally:
+            figure.tight_layout()
+
+    def _draw_empty_plot(self, ax, visualization: dict[str, Any], message: str) -> None:
+        title = str(visualization.get("title") or "")
         x_label = str(visualization.get("x_label") or "")
         y_label = str(visualization.get("y_label") or "")
         ax.set_title(title, fontsize=int(visualization.get("title_size", 14)),
@@ -456,14 +524,24 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
             fontweight=str(visualization.get("font_weight", "normal")))
         ax.set_ylabel(y_label, fontsize=int(visualization.get("font_size", 10)),
             fontweight=str(visualization.get("font_weight", "normal")))
-        ax.text(0.5, 0.5, "Plot preview", transform=ax.transAxes, ha="center", va="center",
-            color="#756F77", fontsize=12)
+        ax.text(0.5, 0.5, message, transform=ax.transAxes, ha="center", va="center",
+            color="#756F77", fontsize=12, wrap=True)
         ax.grid(True, linestyle="--", alpha=0.3)
-        figure.tight_layout()
-        tab["canvas"].draw_idle()
 
-        if emit_changed:
-            self.changed.emit()
+    def _data_index_for_state(self) -> PlotDataIndex:
+        derivatives_path = str(self.state.get("derivatives_path") or "")
+        if self._data_index is None or self._data_index_key != derivatives_path:
+            self._data_index = BasePlot.data_index_from_state(self.state)
+            self._data_index_key = derivatives_path
+        return self._data_index
+
+    @staticmethod
+    def _parse_feature_band_value(value: Any) -> tuple[str, str]:
+        text = str(value or "")
+        if "|" not in text:
+            return "", ""
+        feature_id, band_id = text.split("|", 1)
+        return feature_id, band_id
 
     def _export_feature_figure(self, feature_id: str) -> None:
         tab = self.feature_tabs[feature_id]
@@ -600,9 +678,39 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
         bands = preprocessing.get("selected_frequency_bands") if isinstance(preprocessing, dict) else []
         if not isinstance(bands, list) or not bands:
             feature_params = config_data.get("feature_params") if isinstance(config_data, dict) else {}
-            relative_power = feature_params.get("relative_band_power") if isinstance(feature_params, dict) else {}
-            bands = relative_power.get("selected_frequency_bands") if isinstance(relative_power, dict) else []
+            relative_band_power = self._feature_params(feature_params, "relative_band_power")
+            bands = relative_band_power.get("selected_frequency_bands") if isinstance(relative_band_power, dict) else []
 
+        normalized = self._normalize_bands(bands)
+
+        if not normalized:
+            normalized.append({"id": "broadband", "title": "Broadband"})
+        return sorted(normalized, key=lambda band: 0 if band["id"].lower() == "broadband" else 1)
+
+    def _bands_for_feature(self, feature_id: str) -> list[dict[str, str]]:
+        if not self._is_relative_band_power(feature_id):
+            return self._bands_from_config()
+
+        config_data = self.state.get("plot_features_config")
+        feature_params = config_data.get("feature_params") if isinstance(config_data, dict) else {}
+        relative_band_power = self._feature_params(feature_params, "relative_band_power")
+        bands = relative_band_power.get("selected_frequency_bands") if isinstance(relative_band_power, dict) else []
+        normalized = self._normalize_bands(bands) or self._bands_from_config()
+        return [band for band in normalized if band["id"].lower() != "broadband"]
+
+    def _feature_band_options(self) -> list[dict[str, str]]:
+        features = [str(feature) for feature in self.state.get("plot_selected_features", [])]
+        options = []
+        for feature_id in features:
+            if feature_id == "psd":
+                continue
+            for band in self._bands_for_feature(feature_id):
+                title = f"{self._feature_title(feature_id)} - {band['title']}"
+                options.append({"value": f"{feature_id}|{band['id']}", "title": title})
+        return options
+
+    @staticmethod
+    def _normalize_bands(bands: Any) -> list[dict[str, str]]:
         normalized = []
         for band in bands if isinstance(bands, list) else []:
             if not isinstance(band, dict):
@@ -612,21 +720,21 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
                 continue
             title = str(band.get("title") or band_id.replace("_", " ").title())
             normalized.append({"id": band_id, "title": title})
-
-        if not normalized:
-            normalized.append({"id": "broadband", "title": "Broadband"})
         return sorted(normalized, key=lambda band: 0 if band["id"].lower() == "broadband" else 1)
 
-    def _feature_band_options(self) -> list[dict[str, str]]:
-        features = [str(feature) for feature in self.state.get("plot_selected_features", [])]
-        options = []
-        for feature_id in features:
-            if feature_id == "psd":
-                continue
-            for band in self._bands_from_config():
-                title = f"{self._feature_title(feature_id)} - {band['title']}"
-                options.append({"value": f"{feature_id}|{band['id']}", "title": title})
-        return options
+    @staticmethod
+    def _feature_params(feature_params: Any, *feature_ids: str) -> dict[str, Any]:
+        if not isinstance(feature_params, dict):
+            return {}
+        for feature_id in feature_ids:
+            params = feature_params.get(feature_id)
+            if isinstance(params, dict):
+                return params
+        return {}
+
+    @staticmethod
+    def _is_relative_band_power(feature_id: str) -> bool:
+        return str(feature_id) == "relative_band_power"
 
     def _select_channels(self, table: QTableWidget, channel_indices: list[int]) -> None:
         table.clearSelection()

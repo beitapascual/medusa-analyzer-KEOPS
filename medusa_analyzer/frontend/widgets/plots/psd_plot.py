@@ -93,6 +93,49 @@ class PSDPlot(BasePlot):
         if current_tab is not None and not hasattr(current_tab, "statistics"):
             self.prepare_stats_data(current_tab)
 
+    def load_prepared_data(self, prepared_data) -> None:
+        self._psd_data.clear()
+        self._psd_data_stats.clear()
+        self._freqs = None
+
+        reference_freqs = getattr(prepared_data, "freqs", None)
+        if reference_freqs is not None:
+            self._freqs = np.asarray(reference_freqs, dtype=float).squeeze()
+
+        for group in getattr(prepared_data, "groups", []):
+            curves = []
+            for observation in getattr(group, "observations", []):
+                curve = np.asarray(getattr(observation, "values", []), dtype=float).squeeze()
+                freqs = getattr(observation, "freqs", None)
+                if curve.ndim != 1 or curve.size == 0 or not np.isfinite(curve).any():
+                    continue
+
+                if self._freqs is None and freqs is not None:
+                    self._freqs = np.asarray(freqs, dtype=float).squeeze()
+                if self._freqs is None:
+                    continue
+
+                freqs = np.asarray(freqs if freqs is not None else self._freqs, dtype=float).squeeze()
+                if freqs.size != self._freqs.size or not np.allclose(freqs, self._freqs):
+                    curve = np.interp(self._freqs, freqs, curve)
+                curves.append(curve)
+
+            if not curves:
+                continue
+
+            subject_matrix = np.stack(curves)
+            group_name = getattr(group, "name", getattr(group, "group_id", "Group"))
+            self._psd_data[group_name] = {
+                "mean": np.nanmean(subject_matrix, axis=0),
+                "std": np.nanstd(subject_matrix, axis=0),
+                "n": subject_matrix.shape[0],
+            }
+            self._psd_data_stats[group_name] = subject_matrix
+
+        current_tab = self.current_tab()
+        if current_tab is not None and not hasattr(current_tab, "statistics"):
+            self.prepare_stats_data(current_tab)
+
     def _extract_psd_fields(self, psd_struct):
         freqs, values = None, None
         try:
