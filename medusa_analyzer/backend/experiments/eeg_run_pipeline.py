@@ -416,7 +416,7 @@ def segment_signal(signal, times, fs, events, state,
 
                         # Get epochs for the current condition
                         epochs_tmp = segmentation.segment_signal(
-                            signal_evt, segment_length, stride, norm=norm)
+                            signal_evt, (segment_length/1000) * fs, stride, norm=norm)
 
                         if epochs_tmp is not None:
                             if evt in epochs[base_evt['base_event']]:
