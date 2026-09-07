@@ -101,7 +101,7 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         self.analysis_group.setExclusive(True) # agrupamos Rbuttons para que solo uno pueda estar seleccionado a la vez
         self.analysis_group.buttonToggled.connect(lambda _button, checked: self._sync_analysis_mode() if checked else None)
 
-        for mode in self.analysis_modes: # Creamos una opción para cada modo
+        for i, mode in enumerate(self.analysis_modes):
             option = QFrame()
             option.setProperty("role", "analysis-mode-option")
             option_layout = QVBoxLayout(option)
@@ -120,6 +120,14 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
 
             option_layout.addWidget(radio)
             option_layout.addWidget(detail)
+
+            # Línea justo encima del último modo
+            if i == len(self.analysis_modes) - 1:
+                line = QFrame()
+                line.setFrameShape(QFrame.Shape.HLine)
+                line.setFrameShadow(QFrame.Shadow.Sunken)
+                layout.addWidget(line)
+
             layout.addWidget(option)
             self.option_frames[str(mode["id"])] = option
 

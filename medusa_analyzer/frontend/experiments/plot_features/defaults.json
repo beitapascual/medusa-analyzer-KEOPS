@@ -22,8 +22,8 @@
       },
       {
         "id": "nocomparison",
-        "title": "No comparison",
-        "description": "Inspect one participant or recording descriptively, without group or condition comparisons."
+        "title": "Single file",
+        "description": "Inspect the content of a single file."
       }
     ]
   },
