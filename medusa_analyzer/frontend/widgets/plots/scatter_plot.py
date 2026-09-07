@@ -61,6 +61,38 @@ class ScatterPlot(BasePlot):
             if x_vals and y_vals:
                 self._points[group] = (np.asarray(x_vals), np.asarray(y_vals))
 
+    def load_prepared_data(self, prepared_y, prepared_x) -> None:
+        self._points.clear()
+        x_groups = {getattr(group, "group_id", ""): group for group in getattr(prepared_x, "groups", [])}
+
+        for y_group in getattr(prepared_y, "groups", []):
+            x_group = x_groups.get(getattr(y_group, "group_id", ""))
+            if x_group is None:
+                continue
+
+            x_by_observation = {}
+            for observation in getattr(x_group, "observations", []):
+                scalar = self.prepared_scalar(getattr(observation, "values", None))
+                if scalar is not None:
+                    x_by_observation[getattr(observation, "id", "")] = scalar
+
+            x_vals = []
+            y_vals = []
+            for observation in getattr(y_group, "observations", []):
+                observation_id = getattr(observation, "id", "")
+                y_value = self.prepared_scalar(getattr(observation, "values", None))
+                x_value = x_by_observation.get(observation_id)
+                if x_value is None or y_value is None:
+                    continue
+                x_vals.append(x_value)
+                y_vals.append(y_value)
+
+            if x_vals and y_vals:
+                self._points[getattr(y_group, "name", getattr(y_group, "group_id", "Group"))] = (
+                    np.asarray(x_vals, dtype=float),
+                    np.asarray(y_vals, dtype=float),
+                )
+
     def draw(self, colors: dict[str, str] | None = None) -> None:
         self.clear()
 

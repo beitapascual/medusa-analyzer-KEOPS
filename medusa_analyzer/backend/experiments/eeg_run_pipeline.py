@@ -494,7 +494,7 @@ def save_outputs(data, file, band_name, evt, key, state):
         params_dict = dict(data)
 
         # 1) Store PSDs only in broadband
-        if band_name.lower() == 'broadband':
+        if band_name.lower() == 'broadband' and 'psd' in params_dict:
             output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-psd"
                                                 f"_band-{band_name.replace('-', '')}"
                                                 f"_segment-{evt.replace('-', '').replace('_', '')}")
@@ -567,9 +567,25 @@ def apply_preprocessing(signal, fs, state):
 
 ##################### COMPUTE PARAMS
 
+def _feature_params(state, feature_id):
+    params = state.get("feature_params", {})
+    if not isinstance(params, dict):
+        return {}
+    feature_params = params.get(feature_id)
+    return feature_params if isinstance(feature_params, dict) else {}
+
+
+def _band_label(band):
+    if not isinstance(band, dict):
+        return ""
+    label = str(band.get("id") or band.get("title") or "").strip()
+    return label.lower().replace(" ", "_")
+
+
 def compute_parameters(epochs, fs, band, state):
     # Initialize dict that will contain all the computed parameters
     params = {}
+    selected_features = {str(feature) for feature in state.get('selected_features', [])}
 
     ## BASIC STATISTICAL PARAMETERS
     stat_funcs = {
@@ -584,38 +600,47 @@ def compute_parameters(epochs, fs, band, state):
     # For each parameter...
     for name, func in stat_funcs.items():
         # If selected...
-        if name in state['selected_features']:
+        if name in selected_features:
             # Compute it
             val = func(epochs, axis=axis)
             # Store in the params dict
             params[f"{name}"] = val
 
     ## POWER SPECTRAL DENSITY (PSD)
-    # PSD would be computed if explicitly selected
-    if 'psd' in state['selected_features']:
+    # PSD is computed when it is selected or needed by another spectral metric.
+    needs_psd = (
+        'psd' in selected_features
+        or "absolute_band_power" in selected_features
+        or "relative_band_power" in selected_features
+        or any(feature in selected_features for feature in ("median_frequency", "spectral_entropy"))
+    )
+    if needs_psd:
         # Use user-defined parameters for segmenting and windowing
-        segment_psd = state['feature_params']['psd']['segment_percent'] / 100
-        overlap_psd = state['feature_params']['psd']['overlap_percent'] / 100
-        window_psd = state['feature_params']['psd']['window']
+        psd_params = _feature_params(state, "psd")
+        segment_psd = float(psd_params.get('segment_percent', 80)) / 100
+        overlap_psd = float(psd_params.get('overlap_percent', 50)) / 100
+        window_psd = psd_params.get('window', 'hamming')
 
         # Compute PSD using specified segment and window settings
         fxx, psd = transforms.power_spectral_density(epochs, fs, segment_psd, overlap_psd, window_psd)
 
         # Store PSD values
-        try:
-            params['psd'] = {
-                'values': psd,
-                'freqs': fxx
-            }
-        except Exception as e:
-            print(e)
+        if 'psd' in selected_features:
+            try:
+                params['psd'] = {
+                    'values': psd,
+                    'freqs': fxx
+                }
+            except Exception as e:
+                print(e)
 
     ## SPECTRAL METRICS - RELATIVE POWER
-    if band['id'].lower() == 'broadband' and 'relative_power' in state['selected_features']:
+    if band['id'].lower() == 'broadband' and "relative_band_power" in selected_features:
         val = []
 
         # The bands will be different if band segmentation is enabled or not
-        selected_bands = state['feature_params']['relative_power']['selected_frequency_bands']
+        relative_band_power_params = _feature_params(state, "relative_band_power")
+        selected_bands = relative_band_power_params.get('selected_frequency_bands', [])
 
         # Define broadband range based on the broadband limits
         min_val = band['low_cut']
@@ -623,18 +648,20 @@ def compute_parameters(epochs, fs, band, state):
 
         # Loop through each selected band
         for band_rp in selected_bands:
-            if band_rp["id"].lower() != 'broadband':
+            band_id = _band_label(band_rp)
+            if band_id and band_id != 'broadband':
                 # Define band parameters
                 band_range = [band_rp["low_cut"], band_rp["high_cut"]]
                 # Compute the metric
                 val_band = spectral.band_power(psd, fs, band_range, 'relative',[min_val, max_val])
-                val.append({"band": band_rp["id"].lower(), "value": val_band})
+                val.append({"band": band_id, "value": val_band})
 
-            params[f"relative_power"] = val
+        if val:
+            params["relative_band_power"] = val
 
     ## SPECTRAL METRICS - OTHERS
     spectral_funcs = {
-        "absolute_power": spectral.band_power,
+        "absolute_band_power": spectral.band_power,
         "median_frequency": spectral.median_frequency,
         "spectral_entropy": nonlinear.shannon_spectral_entropy
     }
@@ -642,11 +669,11 @@ def compute_parameters(epochs, fs, band, state):
     # For each parameter...
     for name, func in spectral_funcs.items():
         # If selected...
-        if name in state['selected_features']:
+        if name in selected_features:
             # Get the current band range
             band_range = [band['low_cut'], band['high_cut']]
             # Compute the metric
-            if name == 'absolute_power':
+            if name == 'absolute_band_power':
                 val = func(psd, fs, band_range, 'absolute')
             else:
                 val = func(psd, fs, band_range)
@@ -794,10 +821,8 @@ def compute_parameters(epochs, fs, band, state):
 #             'psdoverlap'])
 #     params_widget.psdcomboBox.setCurrentText(params_cfg['psd_window'])
 #     params_widget.controller.loading_config = True
-#     params_widget.rpCBox.setChecked(bool(params_cfg['relative_power']))
 #     params_widget.controller.update_band_label('rp', params_cfg["selected_rp_bands"])
 #     params_widget.controller.loading_config = False
-#     params_widget.apCBox.setChecked(bool(params_cfg['absolute_power']))
 #     params_widget.mfCBox.setChecked(bool(params_cfg['median_frequency']))
 #     params_widget.seCBox.setChecked(bool(params_cfg['spectral_entropy']))
 #     params_widget.ctmCBox.setChecked(bool(params_cfg['ctm']))
