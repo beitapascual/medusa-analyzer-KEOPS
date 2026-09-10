@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('medusa_analyzer/frontend', 'medusa_analyzer/frontend'),('medusa_analyzer/backend', 'medusa_analyzer/backend')],
+    datas=[('medusa_analyzer', 'medusa_analyzer')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

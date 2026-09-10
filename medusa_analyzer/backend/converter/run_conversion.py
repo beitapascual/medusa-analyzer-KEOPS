@@ -99,7 +99,7 @@ def file_to_bids(input_path: Path, output_path: Path):
             current_key = getattr(chann_data, key_tsv)
             if current_key:
                 try:
-                    df_tsv = pd.DataFrame(current_key).fillna('n/a')
+                    df_tsv = pd.DataFrame([vars(channel) for channel in current_key]).fillna('n/a')
                 except:
                     df_tsv = pd.DataFrame.from_dict({key: vars(sensor) for key, sensor in current_key.items()},orient='index').fillna('n/a')
                 df_tsv = df_tsv.rename(columns={
