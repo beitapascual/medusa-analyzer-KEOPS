@@ -4,3 +4,5 @@ scipy>=1.13
 matplotlib>=3.8
 pandas>=2.2
 seaborn>=0.13
+h5py>=3.11
+medusa-kernel @ git+https://github.com/medusabci/medusa-kernel.git@b599d868cd91210ba5df5bcb5844e0cda5741bb5
