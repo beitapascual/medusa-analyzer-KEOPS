@@ -31,9 +31,8 @@
     "min_groups": 1,
     "max_groups": 20,
     "default_group_count": 2,
-    "default_color_hue_offset": 345,
-    "default_color_saturation": 175,
-    "default_color_value": 235
+    "default_color_saturation": 220,
+    "default_color_value": 225
   },
   "group_assignment": {
     "within_target": "recordings",

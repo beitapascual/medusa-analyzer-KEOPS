@@ -370,10 +370,9 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
             selected_recording = str(selected_recording)
 
 
-        saturation = int(self.group_definition_config.get("default_color_saturation", 175))
-        value = int(self.group_definition_config.get("default_color_value", 235))
-        hue_offset = int(self.group_definition_config.get("default_color_hue_offset", 345))
-        group_color = QColor.fromHsv(hue_offset % 360, saturation, value).name().upper()
+        saturation = int(self.group_definition_config.get("default_color_saturation", 220))
+        value = int(self.group_definition_config.get("default_color_value", 225))
+        group_color = QColor.fromHsv(0, saturation, value).name().upper()
         group_id = "group_1"
 
         self.state["plot_features_nocomparison_recording"] = selected_recording

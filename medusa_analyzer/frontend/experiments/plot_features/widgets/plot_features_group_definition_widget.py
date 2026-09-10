@@ -10,6 +10,29 @@ from PySide6.QtWidgets import (QColorDialog, QFrame, QGridLayout, QHBoxLayout, Q
 from medusa_analyzer.frontend.validation import Validation
 
 
+_INITIAL_GROUP_HUES = (0, 120, 240)
+
+
+def _maximally_spaced_hues(count: int) -> list[int]:
+    """Build a stable red/green/blue-first hue sequence by splitting the largest gaps."""
+    if count <= 0:
+        return []
+
+    hues = [float(hue) for hue in _INITIAL_GROUP_HUES[:count]]
+    while len(hues) < count:
+        ordered_hues = sorted(hues)
+        gaps = []
+        for index, start_hue in enumerate(ordered_hues):
+            end_hue = ordered_hues[(index + 1) % len(ordered_hues)]
+            gap = (end_hue - start_hue) % 360
+            gaps.append((gap or 360, start_hue))
+
+        largest_gap, start_hue = max(gaps, key=lambda item: item[0])
+        hues.append((start_hue + largest_gap / 2) % 360)
+
+    return [int(round(hue)) % 360 for hue in hues]
+
+
 class GroupDefinitionWidget(QScrollArea):
     changed = Signal() # cada vez que cambie algo emitimos señal
 
@@ -111,10 +134,10 @@ class GroupDefinitionWidget(QScrollArea):
         self._rebuild_group_chips() # Creamos visualmente los grupos
 
     def _group_count_changed(self) -> None:
-        self._rebuild_group_chips() # Reconstruimos las chips
+        self._rebuild_group_chips(reassign_colors=True) # Reconstruimos las chips
         self._sync() # Actualizamos la interfaz
 
-    def _rebuild_group_chips(self) -> None:
+    def _rebuild_group_chips(self, reassign_colors: bool = False) -> None:
         while self.groups_grid.count(): # borramos widgets actuales
             item = self.groups_grid.takeAt(0)
             if item.widget():
@@ -130,6 +153,9 @@ class GroupDefinitionWidget(QScrollArea):
             stored_group = stored_groups.get(group_id, {}) # buscamos si ese grupo existía
             group_name = str(stored_group.get("group_name") or f"Group {index + 1}") # si tenía nombre, lo reutiliza
             group_color = str(stored_group.get("group_color") or default_colors[index]) # si tenía color, lo reutiliza
+
+            if reassign_colors:
+                group_color = default_colors[index]
 
             chip = self._create_group_chip(group_id, group_name, group_color) # creamos visualmente el grupo
             self.groups_grid.addWidget(chip, index // 2, index % 2)
@@ -233,15 +259,10 @@ class GroupDefinitionWidget(QScrollArea):
 
     def _default_colors(self, group_count: int) -> list[str]:
         """Genera automáticamente colores diferentes para cada grupo."""
-        saturation = int(self.config.get("default_color_saturation", 175))
-        value = int(self.config.get("default_color_value", 235))
-        hue_offset = int(self.config.get("default_color_hue_offset", 345))
-        colors: list[str] = []
-        for index in range(group_count): # Creamos un color por grupo
-            # Distribuimos los colores alrededor de all el círculo cromático
-            hue = int((hue_offset + (360 * index / max(1, group_count))) % 360)
-            colors.append(QColor.fromHsv(hue, saturation, value).name().upper())
-        return colors
+        saturation = int(self.config.get("default_color_saturation", 220))
+        value = int(self.config.get("default_color_value", 225))
+        return [QColor.fromHsv(hue, saturation, value).name().upper()
+            for hue in _maximally_spaced_hues(group_count)]
 
     def on_step_activated(self) -> None:
         self._sync()
