@@ -84,8 +84,18 @@ def _group_text_brush(group: dict[str, Any] | None) -> QBrush:
     if not color.isValid():
         return QBrush()
 
-    brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
-    return QBrush(QColor("#1F171B" if brightness > 150 else "#FFF7FA"))
+    luminance = _relative_luminance(color)
+    return QBrush(QColor("#1F171B" if luminance > 0.179 else "#FFF7FA"))
+
+
+def _relative_luminance(color: QColor) -> float:
+    channels = []
+    for component in (color.redF(), color.greenF(), color.blueF()):
+        if component <= 0.03928:
+            channels.append(component / 12.92)
+        else:
+            channels.append(((component + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
 
 
 def _set_table_row_background(table: QTableWidget, row: int, background: QBrush,
