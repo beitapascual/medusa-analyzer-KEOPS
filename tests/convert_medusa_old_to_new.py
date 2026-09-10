@@ -10,4 +10,4 @@ for file in files:
     subject = str(file.parent.name).split('-')[1]
     mds_new = recorder_recording_to_v2(mds_old)
     mds_new.bids.subject = subject
-    mds_new.save(rf'X:\Temps\braingym_new\sub-{mds_new.bids.subject}_task-{mds_new.bids.task}.json')
+    mds_new.save(rf'X:\Temps\braingym_new\sub-{mds_new.bids.subject}_task-{mds_new.bids.task}.h5', data_format='h5')

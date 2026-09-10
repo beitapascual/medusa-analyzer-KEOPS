@@ -5,6 +5,7 @@ import pandas as pd
 import shutil
 import time
 from medusa_analyzer.backend.converter.prune_output import prune_output
+from medusa.core import Recording
 
 SENSOR_NAMES = {'eeg': 'electrodes',
                 'fnirs': 'optodes'}
@@ -41,18 +42,19 @@ def file_to_bids(input_path: Path, output_path: Path):
     Lee un archivo JSON estructurado y lo exporta en un formato compatible con BIDS.
     """
 
-    with open(input_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    # with open(input_path, 'r', encoding='utf-8') as f:
+    #     data = json.load(f)
+    data = Recording.load(str(input_path))
 
-    if 'bids' not in data:
+    if not hasattr(data, "bids"):
         raise ValueError("The 'bids' key is missing from data.")
 
     # 1. Extracción de entidades BIDS
-    subject = data['bids'].get('subject')
-    session = data['bids'].get('session')
-    task = data['bids'].get('task')
-    acq = data['bids'].get('acquisition')
-    run = data['bids'].get('run')
+    subject = data.bids.subject
+    session = data.bids.session
+    task = data.bids.task
+    acq = data.bids.acquisition
+    run = data.bids.run
 
     entities = []
     entities.append(f"sub-{subject}")
@@ -69,11 +71,11 @@ def file_to_bids(input_path: Path, output_path: Path):
         subject_output_path = subject_output_path / f"ses-{session}"
 
     # Get experiment info
-    experiment = keys_to_pascal_case(data.get('experiment'))
-    experiment['TaskInformation'] = experiment.pop('ComponentData')
+    experiment = keys_to_pascal_case(data.experiment)
+    # experiment['TaskInformation'] = experiment
 
     # 2. Datos de Participant guardados en el participants.tsv raíz
-    sociodemographics = data['bids'].get('participant')
+    sociodemographics = data.bids.participant
     if sociodemographics is not None:
         sociodemographics_file = output_path / "participants.tsv"
         row = {"participant_id": f"sub-{subject}"}
@@ -87,16 +89,19 @@ def file_to_bids(input_path: Path, output_path: Path):
             df_part.to_csv(sociodemographics_file, sep='\t', index=False)
 
     # 3. Carpetas de data_type (eeg, emg, etc.) y Sidecars asociados
-    for data_type, content in data.get('data').items():
+    for data_type, content in data.data.items():
         full_output_path = subject_output_path / data_type
         full_output_path.mkdir(parents=True, exist_ok=True)
 
         # Guardado de metadata tabular como electrodes, channels o sensors en formato TSV
-        chann_data = content['component_data']['channel_set']
+        chann_data = content.channel_set
         for key_tsv in ['channels', 'sensors']:
-            current_key = chann_data.get(key_tsv)
+            current_key = getattr(chann_data, key_tsv)
             if current_key:
-                df_tsv = pd.DataFrame(current_key).fillna('n/a')
+                try:
+                    df_tsv = pd.DataFrame(current_key).fillna('n/a')
+                except:
+                    df_tsv = pd.DataFrame.from_dict({key: vars(sensor) for key, sensor in current_key.items()},orient='index').fillna('n/a')
                 df_tsv = df_tsv.rename(columns={
                     'uid': 'name',
                     'ch_type': 'type',
@@ -116,7 +121,7 @@ def file_to_bids(input_path: Path, output_path: Path):
                 df_tsv.to_csv(full_output_path / f"{base_name}_{key_tsv}.tsv", sep='\t', index=False)
 
         # Se genera el sidecar del datatype omitiendo el bloque pesado de la señal cruda
-        sidecar = {k: v for k, v in data['sidecars'][data_type].items()}
+        sidecar = {k: v for k, v in data.sidecars[data_type].items()}
         if experiment is not None:
             sidecar.update(experiment)
 
@@ -125,15 +130,14 @@ def file_to_bids(input_path: Path, output_path: Path):
             json.dump(sidecar, f, indent=4)
 
         # 3.5 Exportación de la señal cruda a formato EDF
-        component_data = content.get('component_data', {})
         # Extracción de nombres de canales
-        ch_names = [str(ch.get('label')) for ch in component_data.get('channel_set', {}).get('channels', [])]
+        ch_names = [str(ch.label) for ch in content.channel_set.channels]
         # Estructuración del diccionario de salida
         signal_export = {
-            "fs": component_data['fs'],
+            "fs": content.fs,
             "channels": ch_names,
-            "times": component_data['times'],
-            "signal": component_data['signal']
+            "times": content.times.tolist(),
+            "signal": content.signal.tolist()
         }
 
         # Se omite el parámetro 'indent' para evitar que el tamaño del archivo
@@ -142,18 +146,15 @@ def file_to_bids(input_path: Path, output_path: Path):
             json.dump(signal_export, f)
 
     # 4. Exportación de Eventos en TSV dentro de la misma jerarquía de la señal
-    events = data.get('events')
-    if events and 'data' in events:
-        df_events = pd.DataFrame(events['data'])
-        # Apply dtypes to the DataFrame
-        if 'dtypes' in events:
-            df_events = df_events.astype(events['dtypes'])
+    events = data.events
+    if events and hasattr(events, 'df'):
+        df_events = events.df
         # Export to TSV (BIDS uses 'n/a' for missing values)
         df_events.to_csv( subject_output_path / f"{base_name}_events.tsv", sep='\t', index=False, na_rep='n/a')
 
         # Generate and export JSON sidecar according to BIDS dictionary structure
         events_sidecar = {}
-        for col_name, desc_text in events['descriptions'].items():
+        for col_name, desc_text in events.descriptions.items():
             events_sidecar[to_pascal_case(col_name)] = desc_text
         events_sidecar = _remove_nulls(events_sidecar)  # Eliminación de campos null
         with open(subject_output_path / f"{base_name}_events.json", 'w', encoding='utf-8') as f:
