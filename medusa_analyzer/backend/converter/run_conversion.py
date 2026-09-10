@@ -44,6 +44,9 @@ def file_to_bids(input_path: Path, output_path: Path):
     with open(input_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
+    if 'bids' not in data:
+        raise ValueError("The 'bids' key is missing from data.")
+
     # 1. Extracción de entidades BIDS
     subject = data['bids'].get('subject')
     session = data['bids'].get('session')
