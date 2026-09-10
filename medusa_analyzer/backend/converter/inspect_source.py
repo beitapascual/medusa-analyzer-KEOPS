@@ -35,30 +35,7 @@ def inspect_converter_source(files: Path|List[Path], validation_type: str, path:
             valid_files.remove(file)
             continue
 
-        if validation_type == 'files':
-            is_valid = False
-
-            if file.suffix == '.mat':
-                # Cargar fichero .mat
-                data = scipy.io.loadmat(file)
-                is_valid = 'bids' in data
-            elif file.suffix in ['.h5','.hdf5']:
-                # Cargar fichero HDF5
-                with h5py.File(file, 'r') as hf:
-                    is_valid = 'bids' in hf
-            elif file.suffix == '.json':
-                with open(file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    is_valid = 'bids' in data
-
-            # Comprobar si 'BIDS' es una de las claves en el diccionario cargado
-            if not is_valid:
-                log_callback(
-                    f"[{file}] File does not contain a 'BIDS' field. Please, verify that you have recorded it with the proper MEDUSA version (≥2026).",
-                    "warning")
-                valid_files.remove(file)
-                continue
-        else:
+        if validation_type != 'files':
             relative_path = file.relative_to(path)
             relative_path_parts = relative_path.parts
 
