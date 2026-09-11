@@ -3,6 +3,10 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 
+app_icon = "medusa_analyzer/frontend/styles/medusa_task_icon.png"
+splash_image = "medusa_analyzer/frontend/styles/splash.png"
+
+
 data_patterns = [
     "**/*.json",
     "**/*.tsv",
@@ -15,14 +19,15 @@ data_patterns = [
     "**/*.otf",
 ]
 
-app_icon = "medusa_analyzer/frontend/styles/medusa_task_icon.png"
-
+# Include all package data files while preserving their package structure.
 datas = (
-    collect_data_files("medusa_analyzer", includes=data_patterns)
-    + collect_data_files("medusa", includes=data_patterns)
-    + collect_data_files("medusa_style", includes=data_patterns)
+    collect_data_files("medusa_analyzer")
+    + collect_data_files("medusa")
+    + collect_data_files("medusa_style")
 )
 
+
+# Include all package submodules.
 hiddenimports = (
     collect_submodules("medusa_analyzer")
     + collect_submodules("medusa_style")
@@ -45,11 +50,23 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# 1. Instanciar el objeto Splash
+splash = Splash(
+    splash_image,
+    binaries=a.binaries,
+    datas=a.datas,
+    text_pos=None,
+    text_size=12,
+    minify_script=True
+)
+
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.datas,
+    splash,              # Referencia al objeto Splash instanciado previamente
+    splash.binaries,     # Referencia a los binarios requeridos por Splash
     [],
     name="MedusaAnalyzer",
     debug=False,
@@ -62,5 +79,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=app_icon,
+    icon=app_icon
 )

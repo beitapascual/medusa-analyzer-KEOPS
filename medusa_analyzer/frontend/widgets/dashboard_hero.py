@@ -20,7 +20,7 @@ class DashboardHero(QFrame):
         eyebrow = QLabel("MEDUSA BCI FRAMEWORK") # etiqueta pequeña superior
         eyebrow.setObjectName("dashboardEyebrow")
 
-        title = QLabel("Medusa Analyzer KEOPS") # título principal
+        title = QLabel("Medusa Analyzer") # título principal
         title.setObjectName("dashboardHeroTitle")
         title.setWordWrap(True)
 

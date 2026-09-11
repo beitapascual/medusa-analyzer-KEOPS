@@ -10,6 +10,10 @@ from PySide6.QtCore import Qt # Importar Qt para los modificadores de escalado
 from medusa_analyzer.frontend.dashboard import DashboardPage, build_dashboard_catalog
 from medusa_analyzer.frontend.experiments import create_experiment_page, discover_experiments
 from medusa_analyzer.frontend.router import Router
+try:
+    import pyi_splash
+except ImportError:
+    pyi_splash = None
 
 logger = logging.getLogger(__name__) # logger para que cuando haya un error sea vea de dónde viene
 
@@ -135,16 +139,15 @@ def run() -> int:
 
     # 1. Crear y mostrar el Splash Screen
     pixmap = QPixmap(str(_style_asset_path("splash.png")))
-    pixmap = pixmap.scaled(
-        400, 400,
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation
-    )
     splash = QSplashScreen(pixmap)
     splash.setWindowIcon(icon)
     splash.show()
     # 2. Forzar a Qt a procesar eventos (dibujar el splash) antes del trabajo pesado
     app.processEvents()
+
+    # # Ya puedes cerrar el splash de PyInstaller
+    if pyi_splash is not None and pyi_splash.is_alive():
+        pyi_splash.close()
 
     # Ejecutamos toodo el constructor de la MainWidow (crear el stack, router, descubrir experimentos, crear páginas,
     # registrar rutas y navegar al dashboard.
