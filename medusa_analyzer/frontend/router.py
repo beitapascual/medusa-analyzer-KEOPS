@@ -1,4 +1,9 @@
-from PySide6.QtWidgets import QStackedWidget, QWidget
+import logging
+
+from PySide6.QtWidgets import QMessageBox, QStackedWidget, QWidget
+
+
+logger = logging.getLogger(__name__)
 
 # Controla qué página se ve dentro del QStackedWidget
 class Router:
@@ -12,7 +17,9 @@ class Router:
 
     def navigate(self, route: str) -> None:
         # Cambia la página visible
-        try:
-            self.stack.setCurrentWidget(self.routes[route])
-        except KeyError as exc:
-            raise ValueError(f"Unknown route: {route}") from exc
+        page = self.routes.get(route)
+        if page is None:
+            logger.error("Unknown route '%s'. Available routes: %s", route, sorted(self.routes))
+            QMessageBox.critical(self.stack, "Navigation error", f"Unknown route: {route}")
+            return
+        self.stack.setCurrentWidget(page)

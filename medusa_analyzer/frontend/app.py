@@ -1,5 +1,6 @@
 import sys
 import logging
+import os
 from pathlib import Path
 
 from PySide6.QtGui import QFont, QPixmap
@@ -15,6 +16,35 @@ logger = logging.getLogger(__name__) # logger para que cuando haya un error sea 
 # Punto de entrada visual de tu aplicación: crea la ventana principal, carga los experimentos disponibles,
 # monta el dashboard, registra rutas y arranca Qt. NOTA IMPORTANTE: el addWidget al stackWidget se hace dentro
 # del router
+def _log_file_path() -> Path:
+    base = os.environ.get("LOCALAPPDATA")
+    root = Path(base) if base else Path.home() / "AppData" / "Local"
+    return root / "MedusaAnalyzer" / "MedusaAnalyzer.log"
+
+
+def _configure_logging() -> Path:
+    log_path = _log_file_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        handlers=[
+            logging.FileHandler(log_path, encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
+        force=True,
+    )
+
+    def _handle_exception(exc_type, exc_value, exc_traceback):
+        logging.getLogger(__name__).exception(
+            "Unhandled exception",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+
+    sys.excepthook = _handle_exception
+    return log_path
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -31,6 +61,7 @@ class MainWindow(QMainWindow):
         self.pages = {} # diccionario para guardas las páginas de cada experimento
         # Buscamos todos los experimentos disponibles y los recorremos uno a uno
         for definition in discover_experiments():
+            logger.info("Loading experiment '%s' from %s", definition.id, definition.root)
             try:
                 # Creamos el WorkflowShell con los widget del experimento
                 page = create_experiment_page(definition)
@@ -56,17 +87,23 @@ class MainWindow(QMainWindow):
             self.router.register(route, page) # Registramos cada página del experimento en el router
             # Conectamos la señal de dashboard_dequested de cada página del workflow con volver al dashboard
             page.dashboard_requested.connect(lambda: self.router.navigate("dashboard"))
+        logger.info("Registered routes: %s", sorted(self.router.routes))
         self.router.navigate("dashboard") # Navegamos al dashboard para empezar ahí
 
 
 def _load_stylesheet() -> str:
-    # Función para cargar los estilos
     path = Path(__file__).resolve().parent / "styles" / "main.qss"
     return path.read_text(encoding="utf-8").replace("${STYLE_DIR}", path.parent.as_posix())
 
 
+def _style_asset_path(filename: str) -> Path:
+    return Path(__file__).resolve().parent / "styles" / filename
+
+
 def run() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    log_path = _configure_logging()
+    logger.info("Starting Medusa Analyzer. frozen=%s executable=%s cwd=%s log=%s",
+        bool(getattr(sys, "frozen", False)), sys.executable, Path.cwd(), log_path)
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("Medusa Analyzer KEOPS") # Ponemos el nombre de la aplicación
     app.setOrganizationName("Medusa BCI")
@@ -75,7 +112,7 @@ def run() -> int:
     app.setStyleSheet(_load_stylesheet()) # Carga el QSS y se lo aplicamos a toda la aplicación
 
     # 1. Crear y mostrar el Splash Screen
-    pixmap = QPixmap("medusa_analyzer/frontend/styles/splash.png")
+    pixmap = QPixmap(str(_style_asset_path("splash.png")))
     pixmap = pixmap.scaled(
         400, 400,
         Qt.AspectRatioMode.KeepAspectRatio,
