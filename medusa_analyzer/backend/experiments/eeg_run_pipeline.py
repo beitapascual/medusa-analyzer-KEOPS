@@ -468,6 +468,9 @@ def save_outputs(data, file, band_name, evt, key, state):
     selected_folder = Path(state["output_derivatives_path"])
     selected_folder.mkdir(exist_ok=True)
 
+    if evt is not None:
+        evt = evt.replace('-', '').replace('_', '').replace('fullrecording','')
+
     # Obtener info del sujeto y sesión desde el nombre del archivo base
     filename = file['relative_path']
     # --- Saving preprocessed signals (.rec.bson) ---
@@ -485,8 +488,7 @@ def save_outputs(data, file, band_name, evt, key, state):
         output_path = selected_folder / "segmented" / filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        output_path = output_path.with_stem(f"{output_path.stem}_band-{band_name.replace('-', '')}"
-                                            f"_segment-{evt.replace('-', '').replace('_', '')}")
+        output_path = output_path.with_stem(f"{output_path.stem}_band-{band_name.replace('-', '')}_segment-{evt}")
 
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
@@ -503,8 +505,7 @@ def save_outputs(data, file, band_name, evt, key, state):
         # 1) Store PSDs only in broadband
         if band_name.lower() == 'broadband' and 'psd' in params_dict:
             output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-psd"
-                                                f"_band-{band_name.replace('-', '')}"
-                                                f"_segment-{evt.replace('-', '').replace('_', '')}")
+                                                f"_band-{band_name.replace('-', '')}_segment-{evt}")
 
             save_struct = {
                 'psd': np.asarray(params_dict['psd']['values']),
@@ -522,8 +523,7 @@ def save_outputs(data, file, band_name, evt, key, state):
             metric_label = k.replace('_', '-')
 
             output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-{metric_label.replace('-', '')}"
-                                                f"_band-{band_name.replace('-', '')}"
-                                                f"_segment-{evt.replace('-', '').replace('_', '')}")
+                                                f"_band-{band_name.replace('-', '')}_segment-{evt}")
 
             if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict) and 'band' in v[0]:
                 for entry in v:
@@ -531,8 +531,7 @@ def save_outputs(data, file, band_name, evt, key, state):
                     val = np.asarray(entry.get('value'))
 
                     output_path = output_path_base.with_stem(f"{output_path_base.stem}_param-{metric_label.replace('-', '')}"
-                                                        f"_band-{bname.replace('-', '')}"
-                                                        f"_segment-{evt.replace('-', '').replace('_', '')}")
+                                                        f"_band-{bname.replace('-', '')}_segment-{evt}")
 
                     output_dict = {"param": _convert(val), "info": metric_label}
                     with open(output_path, 'w', encoding='utf-8') as f:
