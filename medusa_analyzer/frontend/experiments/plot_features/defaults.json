@@ -4,7 +4,8 @@
       ".json",
       ".csv",
       ".tsv",
-      ".mat"
+      ".mat",
+      ".mpl"
     ],
     "required_folder_name": "derivatives",
     "required_config_file": "config.json",

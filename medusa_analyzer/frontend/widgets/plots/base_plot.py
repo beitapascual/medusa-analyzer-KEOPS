@@ -8,14 +8,16 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 import warnings
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 from matplotlib.axes import Axes
 
+from .recording_ids import normalize_recording_base_id, normalize_recording_id, recording_ignored_prefixes_from_state
 
-_PARAM_RE = re.compile(r"_param-(.+?)(?:_band-|$)")
-_BAND_RE = re.compile(r"_band-(.+?)(?:_segment-|$)")
+
+_PARAM_RE = re.compile(r"_param-([^_]+)")
+_BAND_RE = re.compile(r"_band-([^_]+)")
 _SUBJECT_RE = re.compile(r"(?:^|[\\/])sub-([^_\\/]+)|(?:^|_)sub-([^_\\/]+)")
 _CONNECTIVITY_FEATURES = {"aec", "iac", "plv", "pli", "wpli"}
 _FEATURE_ALIASES = {
@@ -66,7 +68,9 @@ class _ParameterRecord:
     path: Path
     subject_id: str
     recording_id: str
+    recording_aliases: tuple[str, ...]
     feature_token: str
+    band_id: str
     band_token: str
 
 
@@ -79,13 +83,15 @@ class _LoadedParameter:
 class PlotDataIndex:
     """Index parameter files by feature, band, subject and recording."""
 
-    def __init__(self, records: list[_ParameterRecord]):
+    def __init__(self, records: list[_ParameterRecord], ignored_recording_prefixes: tuple[str, ...] = ()):
         self.records = records
+        self.ignored_recording_prefixes = ignored_recording_prefixes
         self._records_by_key: dict[tuple[str, str, str, str], list[_ParameterRecord]] = {}
         self._loaded_by_path: dict[Path, _LoadedParameter | None] = {}
         for record in records:
-            key = (record.feature_token, record.band_token, record.subject_id, record.recording_id)
-            self._records_by_key.setdefault(key, []).append(record)
+            for recording_id in (record.recording_id, *record.recording_aliases):
+                key = (record.feature_token, record.band_token, record.subject_id, recording_id)
+                self._records_by_key.setdefault(key, []).append(record)
 
     @classmethod
     def from_state(cls, state: dict[str, Any]) -> "PlotDataIndex":
@@ -93,25 +99,26 @@ class PlotDataIndex:
         parameters_path = derivatives_path / "parameters"
         search_path = parameters_path if parameters_path.is_dir() else derivatives_path
         records: list[_ParameterRecord] = []
+        ignored_recording_prefixes = recording_ignored_prefixes_from_state(state)
 
         if not search_path.is_dir():
-            return cls(records)
+            return cls(records, ignored_recording_prefixes)
 
         for path in search_path.rglob("*"):
             if not path.is_file():
                 continue
-            record = _parameter_record_from_path(path)
+            record = _parameter_record_from_path(path, ignored_recording_prefixes)
             if record is not None:
                 records.append(record)
 
-        return cls(records)
+        return cls(records, ignored_recording_prefixes)
 
     def values_for(self, feature_id: str, band_id: str, subject_id: str, recording_id: str,
         selected_channels: list[int], channel_count: int) -> list[PreparedValue]:
         feature_tokens = _feature_tokens(feature_id)
         band_token = _token(band_id)
         subject_key = _normalize_subject_id(subject_id)
-        recording_key = _normalize_recording_id(recording_id)
+        recording_key = self.normalize_recording_id(recording_id)
         values: list[PreparedValue] = []
 
         for feature_token in feature_tokens:
@@ -125,6 +132,20 @@ class PlotDataIndex:
                     values.append(reduced)
 
         return values
+
+    def available_band_tokens(self, feature_id: str) -> set[str]:
+        feature_tokens = _feature_tokens(feature_id)
+        return {record.band_token for record in self.records if record.feature_token in feature_tokens}
+
+    def available_band_ids(self, feature_id: str) -> set[str]:
+        feature_tokens = _feature_tokens(feature_id)
+        return {record.band_id for record in self.records if record.feature_token in feature_tokens}
+
+    def has_feature_band(self, feature_id: str, band_id: str) -> bool:
+        return _token(band_id) in self.available_band_tokens(feature_id)
+
+    def normalize_recording_id(self, value: Any) -> str:
+        return _normalize_recording_id(value, self.ignored_recording_prefixes)
 
     def _load(self, path: Path) -> _LoadedParameter | None:
         if path not in self._loaded_by_path:
@@ -327,34 +348,15 @@ def _prepare_grouped_plot_data(state: dict[str, Any], feature_id: str, band_id: 
     freqs: np.ndarray | None = None
 
     if analysis_mode == "between":
-        selected_recordings = [_normalize_recording_id(item) for item in _selected_recordings(state)]
-        observation_unit = "subject"
-        for group_id, group in groups.items():
-            prepared_group = _prepared_group_shell(group_id, group)
-            for subject_id in [_normalize_subject_id(item) for item in group.get("subjects", [])]:
-                averaged_values = []
-                for recording_id in selected_recordings:
-                    combo_values = data_index.values_for(feature_id, band_id, subject_id, recording_id, channels,
-                        channel_count)
-                    combo_value = _average_values(combo_values)
-                    if combo_value is not None:
-                        averaged_values.append(combo_value)
-
-                observation = _average_values(averaged_values)
-                if observation is not None:
-                    freqs = freqs if freqs is not None else observation.freqs
-                    prepared_group.observations.append(PreparedObservation(subject_id, observation.values,
-                        observation.freqs))
-            prepared_groups.append(prepared_group)
-
-    else:
-        selected_subjects = [_normalize_subject_id(item) for item in _selected_subjects(state)]
+        selected_recordings = _unique_ordered(
+            data_index.normalize_recording_id(item) for item in _selected_recordings(state))
         observation_unit = "recording"
         for group_id, group in groups.items():
             prepared_group = _prepared_group_shell(group_id, group)
-            for recording_id in [_normalize_recording_id(item) for item in group.get("files", [])]:
+            group_subjects = [_normalize_subject_id(item) for item in group.get("subjects", [])]
+            for recording_id in selected_recordings:
                 averaged_values = []
-                for subject_id in selected_subjects:
+                for subject_id in group_subjects:
                     combo_values = data_index.values_for(feature_id, band_id, subject_id, recording_id, channels,
                         channel_count)
                     combo_value = _average_values(combo_values)
@@ -368,11 +370,34 @@ def _prepare_grouped_plot_data(state: dict[str, Any], feature_id: str, band_id: 
                         observation.freqs))
             prepared_groups.append(prepared_group)
 
+    else:
+        selected_subjects = [_normalize_subject_id(item) for item in _selected_subjects(state)]
+        observation_unit = "subject"
+        for group_id, group in groups.items():
+            prepared_group = _prepared_group_shell(group_id, group)
+            group_recordings = _unique_ordered(
+                data_index.normalize_recording_id(item) for item in group.get("files", []))
+            for subject_id in selected_subjects:
+                averaged_values = []
+                for recording_id in group_recordings:
+                    combo_values = data_index.values_for(feature_id, band_id, subject_id, recording_id, channels,
+                        channel_count)
+                    combo_value = _average_values(combo_values)
+                    if combo_value is not None:
+                        averaged_values.append(combo_value)
+
+                observation = _average_values(averaged_values)
+                if observation is not None:
+                    freqs = freqs if freqs is not None else observation.freqs
+                    prepared_group.observations.append(PreparedObservation(subject_id, observation.values,
+                        observation.freqs))
+            prepared_groups.append(prepared_group)
+
     return PreparedPlotData(feature_id=feature_id, band_id=band_id, analysis_mode=analysis_mode,
         observation_unit=observation_unit, groups=prepared_groups, freqs=freqs)
 
 
-def _parameter_record_from_path(path: Path) -> _ParameterRecord | None:
+def _parameter_record_from_path(path: Path, ignored_recording_prefixes: tuple[str, ...] = ()) -> _ParameterRecord | None:
     stem = path.stem
     param_match = _PARAM_RE.search(stem)
     band_match = _BAND_RE.search(stem)
@@ -381,8 +406,12 @@ def _parameter_record_from_path(path: Path) -> _ParameterRecord | None:
 
     base_stem = stem[:param_match.start()]
     subject_id = _normalize_subject_id(str(path))
-    return _ParameterRecord(path=path, subject_id=subject_id, recording_id=_normalize_recording_id(base_stem),
-        feature_token=_token(param_match.group(1)), band_token=_token(band_match.group(1)))
+    recording_id = _normalize_recording_id(stem, ignored_recording_prefixes)
+    recording_base_id = normalize_recording_base_id(base_stem, ignored_recording_prefixes)
+    return _ParameterRecord(path=path, subject_id=subject_id,
+        recording_id=recording_id,
+        recording_aliases=(recording_base_id,) if recording_base_id and recording_base_id != recording_id else (),
+        feature_token=_token(param_match.group(1)), band_id=band_match.group(1), band_token=_token(band_match.group(1)))
 
 
 def _prepared_group_shell(group_id: str, group: dict[str, Any]) -> PreparedGroupData:
@@ -469,16 +498,12 @@ def _normalize_subject_id(value: Any) -> str:
     return f"sub-{subject.strip()}"
 
 
-def _normalize_recording_id(value: Any) -> str:
-    stem = Path(str(value)).stem
-    param_index = stem.find("_param-")
-    if param_index >= 0:
-        stem = stem[:param_index]
-    parts = stem.split("_")
-    ignored_prefixes = ("sub", "param", "band", "segment")
-    cleaned = [part for part in parts if part and not any(part.startswith(f"{prefix}-")
-        for prefix in ignored_prefixes)]
-    return "_".join(cleaned) or stem
+def _normalize_recording_id(value: Any, ignored_recording_prefixes: tuple[str, ...] = ()) -> str:
+    return normalize_recording_id(value, ignored_recording_prefixes)
+
+
+def _unique_ordered(values: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(value for value in values if value))
 
 
 def _feature_tokens(feature_id: str) -> set[str]:

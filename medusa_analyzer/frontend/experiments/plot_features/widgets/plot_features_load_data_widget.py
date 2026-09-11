@@ -9,6 +9,12 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
     QInputDialog, QLineEdit, QMessageBox, QPushButton, QRadioButton, QScrollArea, QVBoxLayout, QWidget)
 
+from medusa_analyzer.frontend.widgets.plots.recording_ids import (
+    is_parameter_recording_file,
+    normalize_recording_id,
+    recording_ignored_prefixes_from_recordings,
+)
+
 
 class PlotFeaturesLoadDataWidget(QScrollArea):
     changed = Signal()
@@ -227,8 +233,8 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         self.state["channel_names"] = channel_names
         self.state["feature_files"] = feature_files
         self.state["plot_features_metadata"] = metadata
-        # Guardamos los sujetos y recordings que vienen en el config
-        self._store_subjects_and_recordings_from_config(config_data)
+        # Guardamos los sujetos del config y los recordings analizados desde parameters cuando existen.
+        self._store_subjects_and_recordings_from_config(config_data, derivatives_path)
         self._sync_analysis_mode(emit_changed=False)
         self._show_metadata(metadata)
         self._set_status("Derivatives folder loaded.", "ready")
@@ -240,7 +246,8 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
         self.metadata_panel.hide()
         self.state["input_data"] = []
         for key in ("derivatives_path", "pipeline_config_path", "plot_features_config", "channel_names",
-            "feature_files", "plot_features_metadata", "plot_features_subjects", "plot_features_recordings"):
+            "feature_files", "plot_features_metadata", "plot_features_subjects", "plot_features_recordings",
+            "plot_features_recording_ignored_prefixes"):
             self.state.pop(key, None)
 
     def _sync_analysis_mode(self, emit_changed: bool = True) -> None:
@@ -315,7 +322,8 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
             files.append(str(file_path))
         return sorted(files)
 
-    def _store_subjects_and_recordings_from_config(self, config_data: dict[str, Any]) -> None:
+    def _store_subjects_and_recordings_from_config(self, config_data: dict[str, Any],
+        derivatives_path: Path | None = None) -> None:
         def subject_name(recording: dict[str, Any]) -> str:
             """Función para poner bien los nombres de los sujetos. """
             subject = str(recording.get("subject", "")).strip()
@@ -325,22 +333,34 @@ class PlotFeaturesLoadDataWidget(QScrollArea):
                 return subject
             return f"sub-{subject}"
 
-        def recording_name(path: str) -> str:
-            """Función para sacar el nombre del recording"""
-            stem = Path(path).stem
-            parts = stem.split("_")
-            ignored_prefixes = ("sub", "param", "band")
-            cleaned = [part for part in parts
-                if part and not any(part.startswith(f"{prefix}-") for prefix in ignored_prefixes)]
-            return "_".join(cleaned) or stem
-
         selected_recordings = config_data.get("selected_recordings", [])
+        ignored_prefixes = recording_ignored_prefixes_from_recordings(selected_recordings)
         subjects = [subject_name(recording) for recording in selected_recordings]
-        recordings = [recording_name(str(recording.get("relative_path") or recording.get("path") or ""))
-            for recording in selected_recordings]
+        recordings = self._recordings_from_parameter_files(derivatives_path, ignored_prefixes)
+        if not recordings:
+            recordings = [normalize_recording_id(str(recording.get("relative_path") or recording.get("path") or ""),
+                ignored_prefixes)
+                for recording in selected_recordings]
 
         self.state["plot_features_subjects"] = sorted({subject for subject in subjects if subject})
         self.state["plot_features_recordings"] = sorted({recording for recording in recordings if recording})
+        self.state["plot_features_recording_ignored_prefixes"] = list(ignored_prefixes)
+
+    @staticmethod
+    def _recordings_from_parameter_files(derivatives_path: Path | None,
+        ignored_prefixes: tuple[str, ...]) -> list[str]:
+        if derivatives_path is None:
+            return []
+
+        search_path = derivatives_path / "parameters"
+        if not search_path.is_dir():
+            return []
+
+        recordings = []
+        for file_path in search_path.rglob("*"):
+            if file_path.is_file() and is_parameter_recording_file(file_path):
+                recordings.append(normalize_recording_id(str(file_path), ignored_prefixes))
+        return sorted({recording for recording in recordings if recording})
 
     def before_next(self) -> bool:
         if str(self.state.get("analysis_mode") or "") != "nocomparison":

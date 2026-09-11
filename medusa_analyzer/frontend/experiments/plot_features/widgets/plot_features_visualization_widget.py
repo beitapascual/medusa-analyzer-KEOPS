@@ -530,9 +530,15 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
 
     def _data_index_for_state(self) -> PlotDataIndex:
         derivatives_path = str(self.state.get("derivatives_path") or "")
-        if self._data_index is None or self._data_index_key != derivatives_path:
+        ignored_prefixes = self.state.get("plot_features_recording_ignored_prefixes")
+        if isinstance(ignored_prefixes, list):
+            ignored_key = ",".join(str(prefix) for prefix in ignored_prefixes)
+        else:
+            ignored_key = ""
+        data_index_key = f"{derivatives_path}|{ignored_key}"
+        if self._data_index is None or self._data_index_key != data_index_key:
             self._data_index = BasePlot.data_index_from_state(self.state)
-            self._data_index_key = derivatives_path
+            self._data_index_key = data_index_key
         return self._data_index
 
     @staticmethod
@@ -688,15 +694,27 @@ class PlotFeaturesVisualizationWidget(QScrollArea):
         return sorted(normalized, key=lambda band: 0 if band["id"].lower() == "broadband" else 1)
 
     def _bands_for_feature(self, feature_id: str) -> list[dict[str, str]]:
-        if not self._is_relative_band_power(feature_id):
-            return self._bands_from_config()
+        if self._is_relative_band_power(feature_id):
+            config_data = self.state.get("plot_features_config")
+            feature_params = config_data.get("feature_params") if isinstance(config_data, dict) else {}
+            relative_band_power = self._feature_params(feature_params, "relative_band_power")
+            bands = relative_band_power.get("selected_frequency_bands") if isinstance(relative_band_power, dict) else []
+            normalized = self._normalize_bands(bands) or self._bands_from_config()
+            normalized = [band for band in normalized if band["id"].lower() != "broadband"]
+        else:
+            normalized = self._bands_from_config()
 
-        config_data = self.state.get("plot_features_config")
-        feature_params = config_data.get("feature_params") if isinstance(config_data, dict) else {}
-        relative_band_power = self._feature_params(feature_params, "relative_band_power")
-        bands = relative_band_power.get("selected_frequency_bands") if isinstance(relative_band_power, dict) else []
-        normalized = self._normalize_bands(bands) or self._bands_from_config()
-        return [band for band in normalized if band["id"].lower() != "broadband"]
+        return self._filter_bands_with_parameter_data(feature_id, normalized)
+
+    def _filter_bands_with_parameter_data(self, feature_id: str, bands: list[dict[str, str]]) -> list[dict[str, str]]:
+        data_index = self._data_index_for_state()
+        if not data_index.records:
+            return bands
+
+        if not data_index.available_band_ids(feature_id):
+            return []
+
+        return [band for band in bands if data_index.has_feature_band(feature_id, band["id"])]
 
     def _feature_band_options(self) -> list[dict[str, str]]:
         features = [str(feature) for feature in self.state.get("plot_selected_features", [])]
