@@ -15,7 +15,7 @@ data_patterns = [
     "**/*.otf",
 ]
 
-app_icon = "medusa_analyzer/frontend/styles/medusa_task_icon.ico"
+app_icon = "medusa_analyzer/frontend/styles/medusa_task_icon.png"
 
 datas = (
     collect_data_files("medusa_analyzer", includes=data_patterns)
