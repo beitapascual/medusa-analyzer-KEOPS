@@ -53,14 +53,14 @@ def _configure_windows_app_id() -> None:
         import ctypes
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            "MedusaBCI.MedusaAnalyzer.KEOPS"
+            "MedusaBCI.MedusaAnalyzer"
         )
     except Exception:
         logger.debug("Could not set Windows application ID", exc_info=True)
 
 
 def _application_icon() -> QIcon:
-    return QIcon(str(_style_asset_path("medusa_task_icon.ico")))
+    return QIcon(str(_style_asset_path("medusa_task_icon.png")))
 
 
 class MainWindow(QMainWindow):
@@ -118,16 +118,17 @@ def _load_stylesheet() -> str:
 def _style_asset_path(filename: str) -> Path:
     return Path(__file__).resolve().parent / "styles" / filename
 
-
 def run() -> int:
     log_path = _configure_logging()
     logger.info("Starting Medusa Analyzer. frozen=%s executable=%s cwd=%s log=%s",
         bool(getattr(sys, "frozen", False)), sys.executable, Path.cwd(), log_path)
     _configure_windows_app_id()
     app = QApplication.instance() or QApplication(sys.argv)
-    app.setApplicationName("Medusa Analyzer KEOPS") # Ponemos el nombre de la aplicación
+    app.setApplicationName("Medusa Analyzer") # Ponemos el nombre de la aplicación
     app.setOrganizationName("Medusa BCI")
-    app.setWindowIcon(_application_icon())
+    # Icono de toda la aplicación
+    icon = _application_icon()
+    app.setWindowIcon(icon)
     app.setStyle("Fusion")
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(_load_stylesheet()) # Carga el QSS y se lo aplicamos a toda la aplicación
@@ -140,6 +141,7 @@ def run() -> int:
         Qt.TransformationMode.SmoothTransformation
     )
     splash = QSplashScreen(pixmap)
+    splash.setWindowIcon(icon)
     splash.show()
     # 2. Forzar a Qt a procesar eventos (dibujar el splash) antes del trabajo pesado
     app.processEvents()
