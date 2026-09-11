@@ -3,7 +3,7 @@ import logging
 import os
 from pathlib import Path
 
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtGui import QFont, QIcon, QPixmap
 from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QSplashScreen
 from PySide6.QtCore import Qt # Importar Qt para los modificadores de escalado
 
@@ -45,10 +45,29 @@ def _configure_logging() -> Path:
     return log_path
 
 
+def _configure_windows_app_id() -> None:
+    if sys.platform != "win32":
+        return
+
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "MedusaBCI.MedusaAnalyzer.KEOPS"
+        )
+    except Exception:
+        logger.debug("Could not set Windows application ID", exc_info=True)
+
+
+def _application_icon() -> QIcon:
+    return QIcon(str(_style_asset_path("medusa_task_icon.ico")))
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Medusa Analyzer")
+        self.setWindowIcon(_application_icon())
         self.resize(1200, 800)
         self.setMinimumSize(1020, 700)
 
@@ -104,9 +123,11 @@ def run() -> int:
     log_path = _configure_logging()
     logger.info("Starting Medusa Analyzer. frozen=%s executable=%s cwd=%s log=%s",
         bool(getattr(sys, "frozen", False)), sys.executable, Path.cwd(), log_path)
+    _configure_windows_app_id()
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("Medusa Analyzer KEOPS") # Ponemos el nombre de la aplicación
     app.setOrganizationName("Medusa BCI")
+    app.setWindowIcon(_application_icon())
     app.setStyle("Fusion")
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(_load_stylesheet()) # Carga el QSS y se lo aplicamos a toda la aplicación

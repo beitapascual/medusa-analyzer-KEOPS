@@ -15,6 +15,8 @@ data_patterns = [
     "**/*.otf",
 ]
 
+app_icon = "medusa_analyzer/frontend/styles/medusa_task_icon.ico"
+
 datas = (
     collect_data_files("medusa_analyzer", includes=data_patterns)
     + collect_data_files("medusa", includes=data_patterns)
@@ -58,6 +60,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=app_icon,
 )
 
 coll = COLLECT(
